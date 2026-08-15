@@ -118,7 +118,7 @@ export class RiderController {
       this.lockTarget = null;
     }
 
-    if (input.pressed("dodge") && this.dodgeCooldown <= 0 && this.player.riderStamina >= this.player.riderDef.ground.dodgeCost) {
+    if (input.pressed("jump") && this.dodgeCooldown <= 0 && this.player.riderStamina >= this.player.riderDef.ground.dodgeCost) {
       this.player.riderStamina -= this.player.riderDef.ground.dodgeCost;
       this.dodgeTimer = 0.42;
       this.dodgeCooldown = 0.75;

@@ -32,6 +32,8 @@ export interface HudSnapshot {
   buildings: { x: number; z: number; collapsed: boolean }[];
   loot: { x: number; z: number }[];
   bounds: number;
+  lock: { x: number; y: number; kind: string } | null;
+  objectives: { desc: string; progress: number; need: number; completed: boolean }[];
 }
 
 /** DOM-based gameplay HUD: dragon mode, ground mode, minimap, toasts, indicators. */
@@ -62,6 +64,12 @@ export class HudController {
   private dmgDirContainer!: HTMLElement;
   private hitmarker!: HTMLElement;
   private healChargesEl!: HTMLElement;
+  private lockBracket!: HTMLElement;
+  private lockKindEl!: HTMLElement;
+  private hudHint!: HTMLElement;
+  private objectivesPanel!: HTMLElement;
+  private objectivesList!: HTMLElement;
+  private hintTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private parent: HTMLElement,
@@ -172,6 +180,26 @@ export class HudController {
     this.hitmarker = this.el("div", "hitmarker");
     this.root.appendChild(this.hitmarker);
 
+    // target lock bracket (X)
+    this.lockBracket = this.el("div", "lock-bracket", `<span class="lb-corner lb-tl"></span><span class="lb-corner lb-tr"></span><span class="lb-corner lb-bl"></span><span class="lb-corner lb-br"></span><span class="lb-kind"></span>`);
+    this.lockBracket.style.display = "none";
+    this.root.appendChild(this.lockBracket);
+    this.lockKindEl = this.lockBracket.querySelector(".lb-kind") as HTMLElement;
+
+    // transient gameplay hint (e.g. SUPER CHARGE NOT READY)
+    this.hudHint = this.el("div", "hud-hint", "");
+    this.hudHint.style.display = "none";
+    this.root.appendChild(this.hudHint);
+
+    // Tab objectives panel
+    this.objectivesPanel = this.el("div", "objectives-panel", `
+      <div class="op-title">MISSION OBJECTIVES</div>
+      <div class="op-list" id="op-list"></div>
+      <div class="op-hint">[ TAB ] — CLOSE</div>`);
+    this.objectivesPanel.style.display = "none";
+    this.root.appendChild(this.objectivesPanel);
+    this.objectivesList = this.objectivesPanel.querySelector("#op-list") as HTMLElement;
+
     this.root.appendChild(this.hudDragon);
     this.root.appendChild(this.hudGround);
 
@@ -195,6 +223,21 @@ export class HudController {
     });
     this.bus.on("hit-enemy", () => this.flashHitmarker(true));
     this.bus.on("relic-found", (e) => this.showRelicToast(e.relicId));
+    this.bus.on("hud-hint", (e) => this.showHint(e.text));
+    this.bus.on("toggle-objectives", (e) => {
+      this.objectivesPanel.style.display = e.visible ? "block" : "none";
+    });
+  }
+
+  private showHint(text: string): void {
+    this.hudHint.textContent = text;
+    this.hudHint.style.display = "block";
+    this.hudHint.classList.add("show");
+    if (this.hintTimer) clearTimeout(this.hintTimer);
+    this.hintTimer = setTimeout(() => {
+      this.hudHint.classList.remove("show");
+      this.hudHint.style.display = "none";
+    }, 1300);
   }
 
   show(v: boolean): void {
@@ -274,6 +317,26 @@ export class HudController {
       this.tutorialEl.innerHTML = s.tutorial.replace(/\[(.+?)\]/g, '<span class="key">$1</span>');
     } else {
       this.tutorialEl.style.display = "none";
+    }
+
+    // target lock bracket
+    if (s.lock) {
+      this.lockBracket.style.display = "block";
+      this.lockBracket.style.left = `${s.lock.x - 34}px`;
+      this.lockBracket.style.top = `${s.lock.y - 34}px`;
+      this.lockKindEl.textContent = s.lock.kind.toUpperCase();
+    } else {
+      this.lockBracket.style.display = "none";
+    }
+
+    // objectives panel (Tab)
+    if (this.objectivesPanel.style.display === "block") {
+      this.objectivesList.innerHTML = s.objectives
+        .map(
+          (o) =>
+            `<div class="op-row ${o.completed ? "done" : ""}"><span class="op-check">${o.completed ? "✓" : "○"}</span><span class="op-desc">${o.desc}</span><span class="op-count">${o.completed ? "" : `${Math.floor(o.progress)}/${o.need}`}</span></div>`
+        )
+        .join("");
     }
   }
 

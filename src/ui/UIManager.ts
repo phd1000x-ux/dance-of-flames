@@ -3,6 +3,7 @@ import { DRAGONS, type DragonDefinition } from "../data/dragons";
 import { MISSIONS, type MissionDefinition } from "../data/missions";
 import { DIFFICULTIES, type DifficultyId } from "../data/difficulty";
 import { SHOP_UPGRADES, type ShopUpgradeDef } from "../data/upgrades";
+import { MANUAL_SECTIONS } from "../data/manual";
 import type { GameSettings, SaveData } from "../save/SaveSystem";
 import type { MissionStats } from "../mission/Scoring";
 import { rankFor } from "../mission/Scoring";
@@ -46,6 +47,7 @@ export class UIManager {
   ) {
     this.buildScreens();
     this.hud = new HudController(root, bus, settings);
+    window.addEventListener("keydown", this.menuKeyHandler);
   }
 
   private buildScreens(): void {
@@ -57,6 +59,7 @@ export class UIManager {
     this.makeScreen("results", () => this.buildResults());
     this.makeScreen("settings", () => this.buildSettings());
     this.makeScreen("credits", () => this.buildCredits());
+    this.makeScreen("manual", () => this.buildManual());
   }
 
   private makeScreen(id: string, build: () => HTMLElement): void {
@@ -69,10 +72,214 @@ export class UIManager {
   }
 
   showScreen(id: string | null): void {
+    this.activeScreenId = id;
     for (const [k, el] of this.screens) {
       el.classList.toggle("visible", k === id);
     }
     this.hud.show(id === null);
+    if (id) {
+      this.kbGroup = 0;
+      this.kbIndex = 0;
+      this.applyFocus();
+    } else {
+      this.clearKbFocus();
+    }
+  }
+
+  /** currently visible screen id (null during gameplay) — used for input routing */
+  getActiveScreen(): string | null {
+    return this.activeScreenId;
+  }
+
+  // ---------------- keyboard menu navigation ----------------
+  private activeScreenId: string | null = null;
+  private kbGroup = 0;
+  private kbIndex = 0;
+  private focusedEl: HTMLElement | null = null;
+  private manualTab = 0;
+  private manualReturnTo = "main-menu";
+
+  private menuKeyHandler = (e: KeyboardEvent) => {
+    if (!this.activeScreenId) return;
+    const code = e.code;
+    const isUp = code === "KeyW" || code === "ArrowUp";
+    const isDown = code === "KeyS" || code === "ArrowDown";
+    const isLeft = code === "KeyA" || code === "ArrowLeft";
+    const isRight = code === "KeyD" || code === "ArrowRight";
+    const isConfirm = code === "Enter" || code === "NumpadEnter" || code === "Space";
+    const isBack = code === "Escape";
+    if (!isUp && !isDown && !isLeft && !isRight && !isConfirm && !isBack) return;
+    e.preventDefault();
+    if (this.activeScreenId === "manual") {
+      this.manualKey(isLeft, isRight, isUp || isDown ? (isUp ? -1 : 1) : 0, isConfirm, isBack);
+      return;
+    }
+    if (isBack) {
+      this.navSound();
+      this.navBack();
+      return;
+    }
+    if (isConfirm) {
+      this.activateFocused();
+      return;
+    }
+    if (isUp) this.move(-1);
+    if (isDown) this.move(1);
+    if (isLeft) this.adjust(-1);
+    if (isRight) this.adjust(1);
+  };
+
+  private focusGroupsFor(id: string): HTMLElement[][] {
+    const s = this.screens.get(id);
+    if (!s) return [];
+    const q = (sel: string) => Array.from(s.querySelectorAll(sel)) as HTMLElement[];
+    const enabled = (els: HTMLElement[]) => els.filter((el) => !(el as HTMLButtonElement).disabled);
+    switch (id) {
+      case "main-menu":
+        return [enabled(q(".menu-btn"))];
+      case "character-select":
+        return [
+          q("#rider-list .roster-item"),
+          q("#dragon-list .roster-item"),
+          enabled(q(".charselect-actions .btn")),
+        ];
+      case "mission-select":
+        return [
+          q(".map-marker:not(.locked)"),
+          [...q("#difficulty-picker .btn"), ...enabled(q(".charselect-actions .btn"))],
+        ];
+      case "shop":
+        return [enabled(q(".shop-item .btn")), enabled(q(".shop-header [data-act]"))];
+      case "pause":
+      case "results":
+      case "credits":
+        return [enabled(q(".modal-btns .btn"))];
+      case "settings":
+        return [q(".setting-row"), enabled(q(".settings-panel [data-act='back']"))];
+      default:
+        return [];
+    }
+  }
+
+  private applyFocus(): void {
+    const groups = this.focusGroupsFor(this.activeScreenId ?? "");
+    if (!groups.length) {
+      this.clearKbFocus();
+      return;
+    }
+    this.kbGroup = Math.min(this.kbGroup, groups.length - 1);
+    const g = groups[this.kbGroup];
+    if (!g.length) return;
+    this.kbIndex = Math.max(0, Math.min(this.kbIndex, g.length - 1));
+    const el = g[this.kbIndex];
+    if (el === this.focusedEl) return;
+    this.clearKbFocus();
+    this.focusedEl = el;
+    el.classList.add("kb-focused");
+    el.scrollIntoView({ block: "nearest" });
+    this.navSound();
+  }
+
+  private clearKbFocus(): void {
+    this.focusedEl?.classList.remove("kb-focused");
+    this.focusedEl = null;
+  }
+
+  private applyFocusIfActive(id: string): void {
+    if (this.activeScreenId === id) this.applyFocus();
+  }
+
+  private move(dir: 1 | -1): void {
+    const groups = this.focusGroupsFor(this.activeScreenId ?? "");
+    const g = groups[this.kbGroup];
+    if (!g || !g.length) return;
+    this.kbIndex = (this.kbIndex + dir + g.length) % g.length;
+    this.applyFocus();
+  }
+
+  private adjust(dir: 1 | -1): void {
+    const id = this.activeScreenId;
+    if (!id) return;
+    if (id === "settings") {
+      this.adjustSettingRow(dir);
+      return;
+    }
+    if (id === "mission-select" && this.focusedEl?.closest("#difficulty-picker")) {
+      // difficulty picker: A/D cycles the difficulty directly
+      const s = this.screens.get("mission-select");
+      const btns = Array.from(s?.querySelectorAll("#difficulty-picker .btn") ?? []) as HTMLElement[];
+      const idx = btns.indexOf(this.focusedEl);
+      const next = btns[Math.max(0, Math.min(btns.length - 1, (idx < 0 ? 0 : idx) + dir))];
+      next?.click();
+      return;
+    }
+    // multi-panel screens: A/D switches panel group
+    const groups = this.focusGroupsFor(id);
+    if (groups.length > 1) {
+      this.kbGroup = (this.kbGroup + dir + groups.length) % groups.length;
+      this.kbIndex = 0;
+      this.applyFocus();
+    }
+  }
+
+  private activateFocused(): void {
+    const el = this.focusedEl;
+    if (!el) return;
+    this.click();
+    if (el.classList.contains("setting-row")) {
+      const toggle = el.querySelector(".toggle-btn") as HTMLElement | null;
+      toggle?.click();
+      return;
+    }
+    el.click();
+  }
+
+  private adjustSettingRow(dir: 1 | -1): void {
+    const row = this.focusedEl;
+    if (!row || !row.classList.contains("setting-row")) return;
+    const range = row.querySelector("input[type='range']") as HTMLInputElement | null;
+    if (range) {
+      const step = parseFloat(range.step) || 0.1;
+      range.value = String(Math.max(parseFloat(range.min), Math.min(parseFloat(range.max), parseFloat(range.value) + step * dir)));
+      range.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+    const select = row.querySelector("select") as HTMLSelectElement | null;
+    if (select) {
+      select.selectedIndex = Math.max(0, Math.min(select.options.length - 1, select.selectedIndex + dir));
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+    const toggle = row.querySelector(".toggle-btn") as HTMLElement | null;
+    toggle?.click();
+  }
+
+  private navBack(): void {
+    switch (this.activeScreenId) {
+      case "character-select":
+      case "mission-select":
+      case "credits":
+        (window as any).__UI?.goBack?.();
+        break;
+      case "settings":
+        (window as any).__UI?.settingsBack?.();
+        break;
+      case "manual":
+        this.manualBack();
+        break;
+      case "pause":
+        this.cb.onResume();
+        break;
+      case "shop":
+        this.cb.onShopClose(false);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private navSound(): void {
+    (window as any).__UI?.onUiSound?.();
   }
 
   setRendererInfo(info: string): void {
@@ -90,8 +297,10 @@ export class UIManager {
       <button class="menu-btn" data-act="continue">CONTINUE</button>
       <button class="menu-btn" data-act="new">NEW CAMPAIGN</button>
       <button class="menu-btn" data-act="battle">BATTLE</button>
+      <button class="menu-btn" data-act="manual">MANUAL</button>
       <button class="menu-btn" data-act="settings">SETTINGS</button>
       <button class="menu-btn" data-act="credits">CREDITS</button>
+      <div class="menu-kb-hint"><span class="key">W / S</span> NAVIGATE &nbsp;&nbsp; <span class="key">ENTER</span> SELECT</div>
       <div class="menu-footer">A fan-made battle simulator inspired by the world of Westeros.<br>All assets procedural &amp; original.</div>`;
     d.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
@@ -101,6 +310,7 @@ export class UIManager {
         case "continue": this.cb.onContinue(); break;
         case "new": this.cb.onNewCampaign(); break;
         case "battle": this.cb.onBattle(); break;
+        case "manual": this.showManual("main-menu"); break;
         case "settings": this.cb.onSettings(); break;
         case "credits": this.cb.onCredits(); break;
       }
@@ -111,6 +321,8 @@ export class UIManager {
   setContinueEnabled(enabled: boolean): void {
     const btn = this.screens.get("main-menu")?.querySelector('[data-act="continue"]') as HTMLButtonElement | null;
     if (btn) btn.disabled = !enabled;
+    // if keyboard focus was on CONTINUE, move it to the next enabled item
+    this.applyFocusIfActive("main-menu");
   }
 
   // ---------------- character select ----------------
@@ -313,6 +525,7 @@ export class UIManager {
     refs?.set(save.unlockedMissions, save.bestScores);
     this.selectedDifficulty = (save.selectedDifficulty as DifficultyId) ?? "normal";
     this.refreshMissionDetails(save.unlockedMissions, save.bestScores);
+    this.applyFocusIfActive("mission-select");
   }
 
   private refreshMissionDetails(unlocked: string[], best: Record<string, number>): void {
@@ -411,6 +624,8 @@ export class UIManager {
         col.appendChild(item);
       }
     }
+    // re-apply keyboard focus after the DOM rebuild (keep position)
+    this.applyFocusIfActive("shop");
   }
 
   // ---------------- pause ----------------
@@ -421,6 +636,7 @@ export class UIManager {
         <div class="panel-title">PAUSED</div>
         <div class="modal-btns">
           <button class="btn" data-act="resume">RESUME</button>
+          <button class="btn ghost" data-act="controls">CONTROLS</button>
           <button class="btn ghost" data-act="settings">SETTINGS</button>
           <button class="btn ghost" data-act="restart">RESTART MISSION</button>
           <button class="btn danger" data-act="abandon">ABANDON MISSION</button>
@@ -432,12 +648,99 @@ export class UIManager {
       this.click();
       switch (t.dataset.act) {
         case "resume": this.cb.onResume(); break;
+        case "controls": this.showManual("pause"); break;
         case "settings": this.cb.onSettings(); break;
         case "restart": this.cb.onRestartMission(); break;
         case "abandon": this.cb.onAbandon(); break;
       }
     });
     return d;
+  }
+
+  // ---------------- manual (single source: data/manual.ts) ----------------
+  private buildManual(): HTMLElement {
+    const d = this.el("div", "");
+    d.innerHTML = `
+      <div class="manual-screen"><div class="panel manual-panel">
+        <div class="panel-title">MANUAL</div>
+        <div class="manual-tabs" id="manual-tabs"></div>
+        <div class="manual-content" id="manual-content"></div>
+        <div class="modal-btns"><button class="btn" data-act="manual-back">BACK</button></div>
+        <div class="manual-hint">[ A / D ] — SWITCH SECTION&nbsp;&nbsp;[ W / S ] — SCROLL&nbsp;&nbsp;[ ESC ] — BACK</div>
+      </div></div>`;
+    d.addEventListener("click", (e) => {
+      const back = (e.target as HTMLElement).closest("[data-act='manual-back']");
+      if (back) {
+        this.click();
+        this.manualBack();
+        return;
+      }
+      const tab = (e.target as HTMLElement).closest(".manual-tab") as HTMLElement | null;
+      if (tab?.dataset.tab !== undefined) {
+        this.click();
+        this.setManualTab(Number(tab.dataset.tab));
+      }
+    });
+    return d;
+  }
+
+  showManual(returnTo: string): void {
+    this.manualReturnTo = returnTo;
+    this.renderManualTabs();
+    this.setManualTab(0);
+    this.showScreen("manual");
+  }
+
+  manualBack(): void {
+    this.showScreen(this.manualReturnTo);
+  }
+
+  private manualKey(left: boolean, right: boolean, scroll: number, confirm: boolean, back: boolean): void {
+    if (back || confirm) {
+      this.click();
+      this.manualBack();
+      return;
+    }
+    if (left) this.setManualTab(this.manualTab - 1);
+    if (right) this.setManualTab(this.manualTab + 1);
+    if (scroll !== 0) {
+      const content = this.screens.get("manual")?.querySelector("#manual-content") as HTMLElement | null;
+      if (content) content.scrollTop += scroll * 60;
+    }
+  }
+
+  private renderManualTabs(): void {
+    const tabs = this.screens.get("manual")?.querySelector("#manual-tabs") as HTMLElement;
+    if (!tabs) return;
+    tabs.innerHTML = MANUAL_SECTIONS.map(
+      (s, i) => `<button class="manual-tab" data-tab="${i}">${s.tab}</button>`
+    ).join("");
+  }
+
+  private setManualTab(i: number): void {
+    this.manualTab = ((i % MANUAL_SECTIONS.length) + MANUAL_SECTIONS.length) % MANUAL_SECTIONS.length;
+    const sec = MANUAL_SECTIONS[this.manualTab];
+    const screen = this.screens.get("manual");
+    if (!screen) return;
+    screen.querySelectorAll(".manual-tab").forEach((t, idx) => {
+      (t as HTMLElement).classList.toggle("active", idx === this.manualTab);
+    });
+    const content = screen.querySelector("#manual-content") as HTMLElement;
+    content.innerHTML = `
+      <div class="manual-intro">${sec.intro ?? ""}</div>
+      <div style="font-family:var(--font-title);font-size:17px;letter-spacing:4px;color:var(--gold);margin-bottom:8px;">${sec.title}</div>
+      ${sec.entries
+        .map(
+          (en) =>
+            `<div class="man-row"><span class="man-keys">${en.keys}</span><span class="man-label">${en.label}</span></div>`
+        )
+        .join("")}
+      ${
+        sec.footer
+          ? `<div class="manual-footer">${sec.footer.map((f) => `<p>${f}</p>`).join("")}</div>`
+          : ""
+      }`;
+    content.scrollTop = 0;
   }
 
   // ---------------- results ----------------
@@ -510,6 +813,12 @@ export class UIManager {
         <div class="setting-row"><label>Effects Volume</label>
           <input type="range" id="set-fx" min="0" max="1" step="0.05"> <span class="setting-value" id="set-fx-v"></span></div>
         <div class="setting-row"><label>Show FPS</label><button class="btn ghost toggle-btn" id="set-fps">OFF</button></div>
+        <div class="setting-row"><label>Keyboard Look Speed</label>
+          <input type="range" id="set-kblook" min="0.4" max="2" step="0.1"> <span class="setting-value" id="set-kblook-v"></span></div>
+        <div class="setting-row"><label>Keyboard Turn Speed</label>
+          <input type="range" id="set-kbturn" min="0.5" max="1.5" step="0.05"> <span class="setting-value" id="set-kbturn-v"></span></div>
+        <div class="setting-row"><label>Target Assist</label>
+          <input type="range" id="set-assist" min="0" max="1" step="0.1"> <span class="setting-value" id="set-assist-v"></span></div>
         <div class="renderer-info" id="renderer-info">${this.rendererInfo}</div>
         <div class="modal-btns"><button class="btn" data-act="back">BACK</button></div>
       </div></div>`;
@@ -558,6 +867,15 @@ export class UIManager {
         case "set-fx":
           s.effectsVolume = parseFloat((el as HTMLInputElement).value);
           break;
+        case "set-kblook":
+          s.keyboardLookSpeed = parseFloat((el as HTMLInputElement).value);
+          break;
+        case "set-kbturn":
+          s.keyboardTurnSpeed = parseFloat((el as HTMLInputElement).value);
+          break;
+        case "set-assist":
+          s.targetAssist = parseFloat((el as HTMLInputElement).value);
+          break;
         default:
           return;
       }
@@ -591,6 +909,15 @@ export class UIManager {
     (d.querySelector("#set-fx-v") as HTMLElement).textContent = String(Math.round(s.effectsVolume * 100)) + "%";
     (d.querySelector("#set-fps") as HTMLElement).textContent = s.showFps ? "ON" : "OFF";
     (d.querySelector("#set-fps") as HTMLElement).className = `btn ghost toggle-btn ${s.showFps ? "on" : ""}`;
+    const kblook = d.querySelector("#set-kblook") as HTMLInputElement;
+    kblook.value = String(s.keyboardLookSpeed ?? 1);
+    (d.querySelector("#set-kblook-v") as HTMLElement).textContent = (s.keyboardLookSpeed ?? 1).toFixed(1);
+    const kbturn = d.querySelector("#set-kbturn") as HTMLInputElement;
+    kbturn.value = String(s.keyboardTurnSpeed ?? 1);
+    (d.querySelector("#set-kbturn-v") as HTMLElement).textContent = (s.keyboardTurnSpeed ?? 1).toFixed(2);
+    const assist = d.querySelector("#set-assist") as HTMLInputElement;
+    assist.value = String(s.targetAssist ?? 0.5);
+    (d.querySelector("#set-assist-v") as HTMLElement).textContent = String(Math.round((s.targetAssist ?? 0.5) * 100)) + "%";
   }
 
   // ---------------- credits ----------------
@@ -618,6 +945,7 @@ export class UIManager {
 
   private click(): void {
     (window as any).__UI?.onUiClick?.();
+    (window as any).__UI?.onUiSound?.();
   }
 
   private el(tag: string, cls: string): HTMLElement {

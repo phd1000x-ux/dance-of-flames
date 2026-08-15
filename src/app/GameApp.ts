@@ -104,12 +104,33 @@ export class GameApp {
 
     this.wireBus();
     this.buildDebugOverlay();
+    // instant pause on Escape (synchronous with the keydown — no frame-delay race
+    // where fast key sequences after Esc would be dropped before the pause screen exists)
+    this.input.onKeyDown = (code, event) => {
+      if (code === "Escape" && this.state.inGameplay && !this.paused) {
+        this.setPaused(true);
+        // this event opened the pause menu — the menu's own Esc handler must not see it
+        event.stopImmediatePropagation();
+      }
+    };
     this.state.transition(GameState.MENU);
     this.ui.showScreen("main-menu");
     this.ui.setContinueEnabled(this.hasProgress());
     this.openShowcase();
 
     window.addEventListener("resize", () => this.engine.resize());
+    // §19: if pointer lock is lost mid-gameplay (Esc / click outside), fall back to the pause menu
+    document.addEventListener("pointerlockchange", () => {
+      if (
+        !document.pointerLockElement &&
+        this.state.inGameplay &&
+        !this.paused &&
+        !this.opts.testMode &&
+        !this.opts.benchmark
+      ) {
+        this.setPaused(true);
+      }
+    });
     this.engine.runRenderLoop(() => this.frame());
 
     (window as any).__APP = this;
@@ -147,6 +168,7 @@ export class GameApp {
   private async loadMission(): Promise<void> {
     const cfg = this.missionCfg!;
     this.state.transition(GameState.LOADING);
+    this.input.resetAllInputs();
     const loading = document.getElementById("loading-screen")!;
     const fill = document.getElementById("loading-bar-fill")!;
     const status = document.getElementById("loading-status")!;
@@ -374,6 +396,7 @@ export class GameApp {
     this.state.transition(GameState.MENU);
     this.mission?.dispose();
     this.mission = null;
+    this.input.resetAllInputs();
     this.openShowcase();
     this.ui.showScreen("main-menu");
     this.ui.setContinueEnabled(this.hasProgress());
@@ -383,6 +406,7 @@ export class GameApp {
   setPaused(p: boolean): void {
     if (!this.state.inGameplay && p) return;
     this.paused = p;
+    this.input.resetAllInputs(); // §56: no stuck keys across context switches
     if (p) {
       this.state.transition(GameState.PAUSED);
       this.input.exitPointerLock();
@@ -402,11 +426,12 @@ export class GameApp {
     const frameMs = this.engine.getDeltaTime();
     this.governor.update(frameMs);
 
-    // global keys
-    if (this.input.pressed("pause")) {
-      if (this.state.inGameplay && !this.paused) this.setPaused(true);
-      else if (this.paused) this.setPaused(false);
-    }
+    // input context + smoothed keyboard look axes
+    this.input.setContext(this.state.inGameplay && !this.paused ? "gameplay" : "menu");
+    this.input.state.lookScale = this.settings.keyboardLookSpeed ?? 1;
+    this.input.update(clamp(frameMs / 1000, 0, 0.05));
+
+    // global keys (Escape is owned by the synchronous keydown hook + menu UI)
     if (this.input.pressed("debug")) {
       this.debugVisible = !this.debugVisible;
       this.debugEl?.classList.toggle("visible", this.debugVisible);
@@ -452,6 +477,8 @@ export class GameApp {
     if (!m) return;
     const p = m.player;
     const obj = m.tracker.current();
+    // live settings → mission systems
+    m.dragonCtrl.inputTurnScale = this.settings.keyboardTurnSpeed ?? 1;
     this.ui.hud.update({
       mode: m.phase === "ground" ? "ground" : m.phase === "dragonDying" ? "dying" : "dragon",
       dragonHp: p.dragonHp,
@@ -488,6 +515,13 @@ export class GameApp {
       buildings: m.buildings.buildings.map((b) => ({ x: b.pos.x, z: b.pos.z, collapsed: b.collapsed })),
       loot: m.loot.entities.map((l) => ({ x: l.pos.x, z: l.pos.z })),
       bounds: 760,
+      lock: m.getLockScreenPos(),
+      objectives: m.tracker.objectives().map((o) => ({
+        desc: o.description,
+        progress: o.progress,
+        need: o.type === "survive" ? o.seconds ?? 0 : o.count ?? 1,
+        completed: o.completed,
+      })),
     });
   }
 

@@ -68,6 +68,9 @@ export interface GameSettings {
   masterVolume: number; // 0..1
   effectsVolume: number; // 0..1
   showFps: boolean;
+  keyboardLookSpeed: number; // 0.4..2 arrow-key look multiplier
+  keyboardTurnSpeed: number; // 0.5..1.5 A/D + arrow turn multiplier
+  targetAssist: number; // 0..1 soft aim assist strength
 }
 
 export function defaultSettings(): GameSettings {
@@ -80,6 +83,9 @@ export function defaultSettings(): GameSettings {
     masterVolume: 0.8,
     effectsVolume: 0.9,
     showFps: false,
+    keyboardLookSpeed: 1,
+    keyboardTurnSpeed: 1,
+    targetAssist: 0.5,
   };
 }
 

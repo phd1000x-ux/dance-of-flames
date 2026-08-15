@@ -28,6 +28,8 @@ export class FireSystem {
   firing = false;
   superActive = 0;
   lastBeamHit: Vector3 | null = null;
+  /** optional aim override (target assist / lock-on) — falls back to dragon forward */
+  aimDir: Vector3 | null = null;
 
   // callbacks into combat systems
   onFireHit: ((origin: Vector3, dir: Vector3, range: number, halfAngle: number, dps: number, dt: number) => void) | null = null;
@@ -67,13 +69,14 @@ export class FireSystem {
     if (firing) {
       const stats = this.player.dragonStats;
       const origin = this.rig.headTip.getAbsolutePosition();
-      const dir = this.ctrl.forward;
+      const dir = this.aimDir ?? this.ctrl.forward;
+      const dirN = Vector3.Normalize(dir);
       const range = stats.fireRange ?? 60;
       const halfAngle = stats.fireCone ?? 0.34;
       let dps = stats.fireDamage ?? 50;
       if (this.player.fireBoostTimer > 0) dps *= 1.5;
-      this.onFireHit?.(origin, dir, range, halfAngle, dps, dt);
-      this.updateVisual(origin, dir, range, particleScale);
+      this.onFireHit?.(origin, dirN, range, halfAngle, dps, dt);
+      this.updateVisual(origin, dirN, range, particleScale);
       this.queryTimer += dt;
       if (this.queryTimer > 0.5) {
         this.queryTimer = 0;
@@ -91,7 +94,7 @@ export class FireSystem {
     this.player.superCharge = 0;
     this.player.superCooldown = stats.superCooldown ?? 14;
     const origin = this.rig.headTip.getAbsolutePosition();
-    const dir = this.ctrl.forward;
+    const dir = Vector3.Normalize(this.aimDir ?? this.ctrl.forward);
     this.superActive = 0.9;
     this.onBeamFire?.(origin, dir);
     this.effects.explosion(origin.add(dir.scale(8)), 2.2);

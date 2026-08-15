@@ -1,55 +1,17 @@
-export type GameAction =
-  | "accelerate"
-  | "decelerate"
-  | "turnLeft"
-  | "turnRight"
-  | "climb"
-  | "descend"
-  | "boost"
-  | "fire"
-  | "focus"
-  | "dodge"
-  | "interact"
-  | "super"
-  | "objectives"
-  | "pause"
-  | "debug"
-  | "lightAttack"
-  | "heavyAttack"
-  | "block"
-  | "jump" // shared with dodge on ground
-  | "sprint"
-  | "lockOn";
+import { GAMEPLAY_PREVENT_KEYS, InputState } from "./InputState";
+import type { GameAction } from "./InputState";
 
-export const DEFAULT_BINDINGS: Record<GameAction, string[]> = {
-  accelerate: ["KeyW"],
-  decelerate: ["KeyS"],
-  turnLeft: ["KeyA"],
-  turnRight: ["KeyD"],
-  climb: ["Space"],
-  descend: ["ControlLeft", "KeyC"],
-  boost: ["ShiftLeft", "ShiftRight"],
-  fire: ["Mouse0"],
-  focus: ["Mouse2"],
-  dodge: ["KeyQ"],
-  interact: ["KeyE"],
-  super: ["KeyR"],
-  objectives: ["Tab"],
-  pause: ["Escape"],
-  debug: ["F3"],
-  lightAttack: ["Mouse0"],
-  heavyAttack: ["KeyQ"],
-  block: ["Mouse2"],
-  jump: ["Space"],
-  sprint: ["ShiftLeft", "ShiftRight"],
-  lockOn: ["KeyF"],
-};
+export type { GameAction } from "./InputState";
+export { DEFAULT_BINDINGS, InputState } from "./InputState";
 
-/** Accumulates mouse deltas (works with or without pointer lock). */
+export type InputContext = "menu" | "gameplay";
+
+/**
+ * Browser input front-end: DOM events → InputState (pure) → gameplay consumers.
+ * Keyboard is the complete primary scheme; mouse remains an optional alternative.
+ */
 export class InputManager {
-  private down = new Set<string>();
-  private pressedThisFrame = new Set<string>();
-  private releasedThisFrame = new Set<string>();
+  readonly state = new InputState();
   mouseDX = 0;
   mouseDY = 0;
   /** non-destructive per-frame totals (cleared at endFrame) — for tutorials/stats */
@@ -61,26 +23,32 @@ export class InputManager {
   testMode = false;
   sensitivity = 1;
   invertY = false;
+  /** menu vs gameplay: controls browser-key suppression policy */
+  context: InputContext = "menu";
+  /** §44 debug mode: prove the game is playable with zero mouse input */
+  keyboardOnly = false;
+  /** synchronous keydown hook (e.g. instant pause — no frame-delay race) */
+  onKeyDown: ((code: string, event: KeyboardEvent) => void) | null = null;
 
   private keyDownHandler = (e: KeyboardEvent) => {
-    if (e.code === "Tab" || e.code === "F3") e.preventDefault();
+    // always suppress Tab/F3 focus-stealing; suppress scroll keys only during gameplay
+    if (this.context === "gameplay") {
+      if (GAMEPLAY_PREVENT_KEYS.has(e.code)) e.preventDefault();
+    } else if (e.code === "Tab" || e.code === "F3") {
+      e.preventDefault();
+    }
     if (e.repeat) return;
-    this.down.add(e.code);
-    this.pressedThisFrame.add(e.code);
+    this.state.keyDown(e.code);
+    this.onKeyDown?.(e.code, e);
   };
   private keyUpHandler = (e: KeyboardEvent) => {
-    this.down.delete(e.code);
-    this.releasedThisFrame.add(e.code);
+    this.state.keyUp(e.code);
   };
   private mouseDownHandler = (e: MouseEvent) => {
-    const code = `Mouse${e.button}`;
-    this.down.add(code);
-    this.pressedThisFrame.add(code);
+    this.state.keyDown(`Mouse${e.button}`);
   };
   private mouseUpHandler = (e: MouseEvent) => {
-    const code = `Mouse${e.button}`;
-    this.down.delete(code);
-    this.releasedThisFrame.add(code);
+    this.state.keyUp(`Mouse${e.button}`);
   };
   private mouseMoveHandler = (e: MouseEvent) => {
     if (this.pointerLocked || this.testMode || e.buttons !== 0 || this.freeMouse) {
@@ -94,7 +62,10 @@ export class InputManager {
     this.wheel += e.deltaY;
   };
   private blurHandler = () => {
-    this.down.clear();
+    this.resetAllInputs();
+  };
+  private visibilityHandler = () => {
+    if (document.hidden) this.resetAllInputs();
   };
   private pointerLockChange = () => {
     this.pointerLocked = document.pointerLockElement === this.canvas;
@@ -114,7 +85,7 @@ export class InputManager {
     this.mouseDY += dy;
   };
 
-  constructor(private canvas: HTMLCanvasElement, private target: HTMLElement = window as any) {
+  constructor(private canvas: HTMLCanvasElement) {
     window.addEventListener("keydown", this.keyDownHandler);
     window.addEventListener("keyup", this.keyUpHandler);
     window.addEventListener("mousedown", this.mouseDownHandler);
@@ -123,7 +94,25 @@ export class InputManager {
     window.addEventListener("mousemove", this.rawMoveHandler);
     window.addEventListener("wheel", this.wheelHandler, { passive: true });
     window.addEventListener("blur", this.blurHandler);
+    document.addEventListener("visibilitychange", this.visibilityHandler);
     document.addEventListener("pointerlockchange", this.pointerLockChange);
+  }
+
+  setContext(ctx: InputContext): void {
+    if (this.context !== ctx) {
+      this.context = ctx;
+      this.resetAllInputs();
+    }
+  }
+
+  /** §56 stuck-key safety: clear everything */
+  resetAllInputs(): void {
+    this.state.reset();
+    this.mouseDX = 0;
+    this.mouseDY = 0;
+    this.frameMouseDX = 0;
+    this.frameMouseDY = 0;
+    this.wheel = 0;
   }
 
   requestPointerLock(): void {
@@ -136,29 +125,41 @@ export class InputManager {
   }
 
   isDown(action: GameAction): boolean {
-    for (const code of DEFAULT_BINDINGS[action]) {
-      if (this.down.has(code)) return true;
-    }
-    return false;
+    return this.state.isDown(action);
   }
 
   isDownCode(code: string): boolean {
-    return this.down.has(code);
+    return this.state.isDownCode(code);
   }
 
   pressed(action: GameAction): boolean {
-    for (const code of DEFAULT_BINDINGS[action]) {
-      if (this.pressedThisFrame.has(code)) return true;
-    }
-    return false;
+    return this.state.pressed(action);
   }
 
   pressedCode(code: string): boolean {
-    return this.pressedThisFrame.has(code);
+    return this.state.pressedCode(code);
+  }
+
+  /** smoothed keyboard look axes (updated via update(dt)) */
+  get lookYaw(): number {
+    return this.state.lookYaw * this.state.lookScale;
+  }
+  get lookPitch(): number {
+    return this.state.lookPitch * this.state.lookScale;
+  }
+
+  update(dt: number): void {
+    this.state.keyboardOnly = this.keyboardOnly;
+    this.state.update(dt);
   }
 
   /** consume mouse delta (applies sensitivity & invert-Y), returns radians-ish units */
   consumeMouse(): { dx: number; dy: number } {
+    if (this.keyboardOnly) {
+      this.mouseDX = 0;
+      this.mouseDY = 0;
+      return { dx: 0, dy: 0 };
+    }
     const dx = (this.mouseDX / 900) * this.sensitivity;
     const dy = (this.mouseDY / 900) * this.sensitivity * (this.invertY ? -1 : 1);
     this.mouseDX = 0;
@@ -167,8 +168,7 @@ export class InputManager {
   }
 
   endFrame(): void {
-    this.pressedThisFrame.clear();
-    this.releasedThisFrame.clear();
+    this.state.endFrame();
     this.wheel = 0;
     this.frameMouseDX = 0;
     this.frameMouseDY = 0;
@@ -183,29 +183,24 @@ export class InputManager {
     window.removeEventListener("mousemove", this.rawMoveHandler);
     window.removeEventListener("wheel", this.wheelHandler);
     window.removeEventListener("blur", this.blurHandler);
+    document.removeEventListener("visibilitychange", this.visibilityHandler);
     document.removeEventListener("pointerlockchange", this.pointerLockChange);
   }
 
   // ---- test injection API ----
   injectKeyDown(code: string): void {
-    this.down.add(code);
-    this.pressedThisFrame.add(code);
+    this.state.keyDown(code);
   }
   injectKeyUp(code: string): void {
-    this.down.delete(code);
-    this.releasedThisFrame.add(code);
+    this.state.keyUp(code);
   }
   injectMouse(button: number, down: boolean): void {
     const code = `Mouse${button}`;
-    if (down) {
-      this.down.add(code);
-      this.pressedThisFrame.add(code);
-    } else {
-      this.down.delete(code);
-      this.releasedThisFrame.add(code);
-    }
+    if (down) this.state.keyDown(code);
+    else this.state.keyUp(code);
   }
   injectMouseMove(dx: number, dy: number): void {
+    if (this.keyboardOnly) return;
     this.mouseDX += dx;
     this.mouseDY += dy;
     this.frameMouseDX += dx;

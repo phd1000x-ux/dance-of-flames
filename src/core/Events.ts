@@ -22,4 +22,7 @@ export interface GameEvents {
   "melee-hit-rider": { amount: number };
   sfx: { name: string };
   "thunder": Record<string, never>;
+  "hud-hint": { text: string };
+  "toggle-objectives": { visible: boolean };
+  "target-lock-changed": { locked: boolean; kind: string | null };
 }

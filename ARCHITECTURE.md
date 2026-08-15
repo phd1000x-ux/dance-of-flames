@@ -56,29 +56,42 @@ src/
     StatBlock.ts              multiplicative stat composition
   save/SaveSystem.ts          IndexedDB storage, versioned save, best-score merge
   audio/AudioManager.ts       100% synthesized WebAudio SFX + wind/fire loops
-  input/InputManager.ts       bindings, pointer lock, mouse-look, test injection API
+  input/
+    InputState.ts           pure action state + DEFAULT_BINDINGS (single source of
+                            truth; unit-tested; feeds the manual)
+    InputManager.ts         browser front-end: DOM events → InputState, pointer lock,
+                            input contexts (menu/gameplay), preventDefault policy,
+                            keyboardOnly proof mode, resetAllInputs safety
   ui/
-    UIManager.ts              all DOM screens (menu, select, map, shop, pause, results, settings)
-    HudController.ts          dual-mode HUD + canvas minimap + toasts + damage indicators
+    UIManager.ts              all DOM screens (menu, select, map, shop, pause, results,
+                              settings, manual) + full keyboard menu navigation with
+                              visible focus
+    HudController.ts          dual-mode HUD + canvas minimap + toasts + damage
+                              indicators + target-lock bracket + Tab objectives panel
 ```
 
 ## Key design decisions
 
-1. **Pure-logic core** — damage math, loot tables, objectives, upgrades, scoring and
+1. **Keyboard-first input** — `InputState` (pure) maps physical keys to actions with
+   smoothed arrow-key look axes; the keyboard is a complete control scheme (flight,
+   aiming, combat, ground combat, every menu). Mouse bindings remain optional
+   alternatives on the same actions. Bindings are the single source of truth — the
+   in-game MANUAL renders from the same data and a unit test keeps them in sync.
+2. **Pure-logic core** — damage math, loot tables, objectives, upgrades, scoring and
    save are renderer-free modules with unit tests; Babylon types never leak into them.
-2. **Data-driven content** — riders, dragons (13 stat fields each), enemies, missions,
+3. **Data-driven content** — riders, dragons (13 stat fields each), enemies, missions,
    objectives, relics, shop items, difficulty are plain data modules; adding a rider or
    mission touches no gameplay code. Rider↔dragon pairing is data, not hardcoded — any
    rider can ride any dragon (canon pairs get a "BONDED" badge and synergy bonuses).
-3. **AI LOD** — a distance-based scheduler re-tiers soldiers every 0.5s; only ≤24
+4. **AI LOD** — a distance-based scheduler re-tiers soldiers every 0.5s; only ≤24
    nearest run full per-frame AI, medium ring at 4Hz, far ring at 1Hz, keeping 50–60
    visible soldiers cheap.
-4. **State-based destruction** — buildings swap intact→rubble meshes with dust/fire
+5. **State-based destruction** — buildings swap intact→rubble meshes with dust/fire
    bursts and camera shake; no rigid-body debris.
-5. **Test injection** — `InputManager` exposes `injectKeyDown/injectMouse/injectMouseMove`
+6. **Test injection** — `InputManager` exposes `injectKeyDown/injectMouse/injectMouseMove`
    and `main.ts` exposes `window.__GAME` in `?test=1` mode, so Playwright drives the
    actual game loop (no mocks of gameplay logic).
-6. **Frame budget discipline** — pooled projectiles/loot/particles, instanced trees/
+7. **Frame budget discipline** — pooled projectiles/loot/particles, instanced trees/
    rocks, merged meshes per soldier/building, one fire light, shadow casters limited to
    player + nearby key meshes.
 

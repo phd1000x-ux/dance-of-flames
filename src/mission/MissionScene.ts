@@ -83,10 +83,19 @@ export class MissionScene {
   private tutorialProgress = 0;
   private tutorialSteps = [
     { label: "[W] — Accelerate", key: "accelerate", need: 1.2 },
-    { label: "MOVE MOUSE — Steer", key: "mouse", need: 400 },
-    { label: "[LEFT CLICK] — Breathe Fire", key: "fire", need: 0.8 },
+    { label: "[A / D] — Turn Dragon", key: "turn", need: 1.0 },
+    { label: "[ARROW KEYS] — Aim", key: "look", need: 0.8 },
+    { label: "[F] — Breathe Fire", key: "fire", need: 0.8 },
     { label: "[SHIFT] — Boost", key: "boost", need: 0.8 },
   ];
+
+  // dragon target lock (X)
+  lockTargetPos: Vector3 | null = null;
+  lockTargetKind: string | null = null;
+  private lockSoldier: Soldier | null = null;
+  private lockBallista: import("../ai/EnemyManager").BallistaEntity | null = null;
+  private lockBuilding: import("../world/BuildingSystem").BuildingEntity | null = null;
+  objectivesOpen = false;
 
   private deathLandTimer = 0;
   private ended = false;
@@ -111,6 +120,7 @@ export class MissionScene {
       this.world.shadows?.addShadowCaster(m);
     }
     this.dragonCtrl = new DragonController(this.player, this.rig, this.world.terrain, d.bus, 760);
+    this.dragonCtrl.inputTurnScale = d.settings.keyboardTurnSpeed ?? 1;
     this.dragonCtrl.spawn(d.mission.id === "kingslanding"
       ? new Vector3(-80, 140, -420)
       : this.worldLayout.playerStart.clone(), this.worldLayout.playerStartYaw);
@@ -350,9 +360,19 @@ export class MissionScene {
     };
 
     if (this.phase === "dragon") {
+      // target lock toggle (X) + validation
+      this.updateDragonLock(d);
+      // aim direction with soft assist / lock magnetism
+      this.fire.aimDir = this.getFireAimDir();
       this.dragonCtrl.update(dt, d.input, d.input.isDown("fire") && this.player.fireEnergy.canFire());
-      // consumables
+      // Z recenter (level flight)
+      if (d.input.pressed("recenterCamera")) this.dragonCtrl.startRecenter();
+      // consumables (G)
       if (d.input.pressed("interact")) this.useConsumable();
+      // super with not-ready feedback (R)
+      if (d.input.pressed("super") && !(this.player.superCharge >= 100 && this.player.superCooldown <= 0)) {
+        d.bus.emit("hud-hint", { text: "SUPER CHARGE NOT READY" });
+      }
       this.fire.update(dt, d.input.isDown("fire"), d.input.pressed("super"), d.particleScale());
       // audio ambience by speed
       d.audio.setWind(clamp(this.dragonCtrl.speed / 60, 0.1, 1));
@@ -361,6 +381,7 @@ export class MissionScene {
       this.loot.update(dt, this.dragonCtrl.pos, 42, 10);
       this.stats.dragonSurvived = true;
     } else if (this.phase === "dragonDying") {
+      this.clearLock();
       this.dragonCtrl.update(dt, d.input, false);
       this.fire.update(dt, false, false, d.particleScale());
       d.audio.setFireLoop(false);
@@ -373,7 +394,9 @@ export class MissionScene {
         .getGroundEnemies()
         .map((s) => ({ pos: s.pos, yaw: s.yaw, hp: s.hp, alive: true, isShielded: s.def.role === "shield", staggered: s.staggered }));
       this.riderCtrl.update(dt, d.input, this.groundCam, groundEnemies);
-      this.groundCam.update(dt, this.riderCtrl.pos, this.riderCtrl.yaw, d.input, d.settings);
+      // Z recenter for ground camera
+      if (d.input.pressed("recenterCamera")) this.groundCam.startRecenter();
+      this.groundCam.update(dt, this.riderCtrl.pos, this.riderCtrl.yaw, d.input, d.settings, this.riderCtrl.lockTarget ? this.riderCtrl.lockTarget.pos : null);
       // rider melee hit callback wiring
       if (this.riderCtrl.onHitCallback === null) {
         this.riderCtrl.onHitCallback = (fwd, range, arc, dmg, heavy) => {
@@ -386,14 +409,20 @@ export class MissionScene {
           }
         };
       }
-      // interact also uses heal flask
-      if (d.input.pressed("interact")) this.useConsumable();
+      // interact: F (ground) or G
+      if (d.input.pressed("interactGround") || d.input.pressed("interact")) this.useConsumable();
       d.audio.setWind(0.1);
       this.loot.update(dt, this.riderCtrl.pos, 5, 2.2);
       if (!this.riderCtrl.alive) {
         this.endMission(false);
         return;
       }
+    }
+
+    // Tab objectives overlay
+    if (d.input.pressed("objectives")) {
+      this.objectivesOpen = !this.objectivesOpen;
+      d.bus.emit("toggle-objectives", { visible: this.objectivesOpen });
     }
 
     // world systems
@@ -404,7 +433,7 @@ export class MissionScene {
 
     // camera
     if (this.phase !== "ground") {
-      this.dragonCam.update(dt, this.dragonCtrl, d.input);
+      this.dragonCam.update(dt, this.dragonCtrl, d.input, this.lockTargetPos);
     }
 
     // tutorial progression
@@ -499,8 +528,16 @@ export class MissionScene {
       case "accelerate":
         contribution = input.isDown("accelerate") ? dt : 0;
         break;
-      case "mouse":
-        contribution = Math.abs(input.frameMouseDX) + Math.abs(input.frameMouseDY);
+      case "turn":
+        contribution = input.isDown("turnLeft") || input.isDown("turnRight") ? dt : 0;
+        break;
+      case "look":
+        contribution =
+          input.isDown("lookLeft") || input.isDown("lookRight") || input.isDown("lookUp") || input.isDown("lookDown")
+            ? dt
+            : Math.abs(input.frameMouseDX) + Math.abs(input.frameMouseDY) > 30
+              ? dt
+              : 0;
         break;
       case "fire":
         contribution = input.isDown("fire") ? dt : 0;
@@ -518,6 +555,170 @@ export class MissionScene {
       });
       if (this.tutorialStep >= this.tutorialSteps.length) this.tutorialStep = -1;
     }
+  }
+
+  // ---------------- target lock (X) ----------------
+
+  private updateDragonLock(d: MissionSceneDeps): void {
+    // invalidate dead/collapsed targets
+    if (this.lockTargetPos) {
+      const invalid =
+        (this.lockSoldier && this.lockSoldier.state === "dead") ||
+        (this.lockBallista && this.lockBallista.dead) ||
+        (this.lockBuilding && this.lockBuilding.collapsed) ||
+        (!this.lockSoldier && !this.lockBallista && !this.lockBuilding);
+      if (invalid) {
+        this.clearLock();
+      } else {
+        const src = this.lockSoldier ? this.lockSoldier.pos : this.lockBallista ? this.lockBallista.pos : this.lockBuilding!.pos;
+        this.lockTargetPos.copyFrom(src);
+      }
+    }
+    if (d.input.pressed("lockOn")) {
+      if (this.lockTargetPos) {
+        this.clearLock();
+      } else {
+        this.acquireLock();
+      }
+      d.bus.emit("target-lock-changed", { locked: !!this.lockTargetPos, kind: this.lockTargetKind });
+    }
+  }
+
+  private clearLock(): void {
+    this.lockTargetPos = null;
+    this.lockTargetKind = null;
+    this.lockSoldier = null;
+    this.lockBallista = null;
+    this.lockBuilding = null;
+  }
+
+  private acquireLock(): void {
+    const origin = this.dragonCtrl.pos;
+    const fwd = this.dragonCtrl.forward;
+    let bestPos: Vector3 | null = null;
+    let bestScore = Infinity;
+    let bestKind = "";
+    let bestSoldier: Soldier | null = null;
+    let bestBallista: import("../ai/EnemyManager").BallistaEntity | null = null;
+    let bestBuilding: import("../world/BuildingSystem").BuildingEntity | null = null;
+    const consider = (
+      pos: Vector3,
+      prio: number,
+      kind: string,
+      maxDist = 420
+    ) => {
+      const v = pos.subtract(origin);
+      const dist = v.length();
+      if (dist > maxDist || dist < 4) return;
+      const cosA = Vector3.Dot(v.scale(1 / dist), fwd);
+      if (cosA < Math.cos(0.75)) return; // must be roughly in front
+      const angle = Math.acos(Math.min(1, cosA));
+      const score = angle * 2.2 + dist / maxDist - prio;
+      if (score < bestScore) {
+        bestScore = score;
+        bestPos = pos.clone();
+        bestKind = kind;
+        bestSoldier = null;
+        bestBallista = null;
+        bestBuilding = null;
+      }
+    };
+    for (const s of this.enemies.soldiers) {
+      if (s.state === "dead") continue;
+      const prio = s.def.role === "commander" ? 0.45 : s.def.role === "elite" ? 0.4 : s.def.role === "archer" ? 0.15 : 0;
+      consider(s.pos, prio, s.def.name);
+      if (bestKind === s.def.name && bestSoldier === null && Vector3.DistanceSquared(s.pos, bestPos ?? origin) < 1) {
+        bestSoldier = s;
+      }
+    }
+    for (const b of this.enemies.ballistae) {
+      if (!b.dead) consider(b.pos, 0.5, "Ballista");
+      if (bestKind === "Ballista" && bestBallista === null && Vector3.DistanceSquared(b.pos, bestPos ?? origin) < 1) {
+        bestBallista = b;
+      }
+    }
+    for (const b of this.buildings.buildings) {
+      if (!b.collapsed) consider(b.pos, 0.1, "Structure", 300);
+      if (bestKind === "Structure" && bestBuilding === null && Vector3.DistanceSquared(b.pos, bestPos ?? origin) < 4) {
+        bestBuilding = b;
+      }
+    }
+    if (bestPos) {
+      this.clearLock();
+      this.lockTargetPos = bestPos;
+      this.lockTargetKind = bestKind;
+      this.lockSoldier = bestSoldier;
+      this.lockBallista = bestBallista;
+      this.lockBuilding = bestBuilding;
+      this.deps.audio.uiClick();
+    } else {
+      this.deps.bus.emit("hud-hint", { text: "NO TARGET" });
+    }
+  }
+
+  /** fire direction with soft target assist + lock magnetism (keyboard-friendly aiming) */
+  private getFireAimDir(): Vector3 | null {
+    const base = this.dragonCtrl.forward;
+    const head = this.rig.headTip.getAbsolutePosition();
+    const stats = this.player.dragonStats;
+    const cone = stats.fireCone ?? 0.34;
+    const assist = clamp(this.deps.settings.targetAssist ?? 0.5, 0, 1);
+
+    // locked target: strong magnetism toward it
+    if (this.lockTargetPos) {
+      const to = this.lockTargetPos.subtract(head);
+      const dist = to.length();
+      if (dist > 1) {
+        const cosA = Vector3.Dot(to.scale(1 / dist), base);
+        if (cosA > Math.cos(cone * 2.5)) {
+          return Vector3.Normalize(Vector3.Lerp(base, to.scale(1 / dist), 0.85));
+        }
+      }
+      return null;
+    }
+    if (assist <= 0.01) return null;
+
+    // soft assist: nearest target close to the nose
+    let bestPos: Vector3 | null = null;
+    let bestScore = Infinity;
+    const origin = this.dragonCtrl.pos;
+    for (const s of this.enemies.soldiers) {
+      if (s.state === "dead") continue;
+      const v = s.pos.subtract(origin);
+      const dist = v.length();
+      if (dist > 160 || dist < 4) continue;
+      const cosA = Vector3.Dot(v.scale(1 / dist), base);
+      if (cosA > Math.cos(cone * 0.8)) {
+        const score = Math.acos(Math.min(1, cosA)) + dist / 300;
+        if (score < bestScore) {
+          bestScore = score;
+          bestPos = s.pos;
+        }
+      }
+    }
+    if (!bestPos) return null;
+    const to = Vector3.Normalize(bestPos.subtract(head));
+    return Vector3.Normalize(Vector3.Lerp(base, to, 0.5 * assist));
+  }
+
+  /** lock indicator world position (dragon lock or rider lock) projected to canvas CSS px */
+  getLockScreenPos(): { x: number; y: number; kind: string } | null {
+    const world = this.phase === "ground" ? (this.riderCtrl?.lockTarget ? this.riderCtrl.lockTarget.pos : null) : this.lockTargetPos;
+    if (!world) return null;
+    const cam = this.activeCamera();
+    const canvas = this.deps.engine.getRenderingCanvas();
+    if (!canvas) return null;
+    const view = cam.getViewMatrix();
+    const p = Vector3.TransformCoordinates(world, view);
+    if (p.z < 1) return null; // behind camera
+    const ndcX = p.x / (p.z * Math.tan(cam.fov / 2) * (canvas.clientWidth / canvas.clientHeight));
+    const ndcY = p.y / (p.z * Math.tan(cam.fov / 2));
+    if (Math.abs(ndcX) > 1.15 || Math.abs(ndcY) > 1.15) return null;
+    return {
+      x: (ndcX * 0.5 + 0.5) * canvas.clientWidth,
+      y: (1 - (ndcY * 0.5 + 0.5)) * canvas.clientHeight,
+      kind: this.phase === "ground" ? "Enemy" : this.lockTargetKind ?? "Target",
+    };
   }
 
   currentTutorialLabel(): string | null {

@@ -25,9 +25,15 @@ export class DragonController {
   // dodge / stagger
   dodgeTimer = 0;
   dodgeCooldown = 0;
-  dodgeDir = 1;
+  dodgeDir = 1; // +1 = right, -1 = left
   invulnerable = 0;
   staggerTimer = 0;
+
+  // camera recenter (Z): level flight
+  recenterTimer = 0;
+
+  // user scaling for keyboard turning (settings)
+  inputTurnScale = 1;
 
   // death sequence
   deathTimer = 0;
@@ -102,38 +108,52 @@ export class DragonController {
 
     // ---- input ----
     const mouse = input.consumeMouse();
+    const lookYaw = input.lookYaw; // smoothed arrow-key axis (-1..1)
+    const lookPitch = input.lookPitch;
     const throttling = input.isDown("accelerate") ? 1 : input.isDown("decelerate") ? -0.6 : 0.25;
     const wantBoost = input.isDown("boost") && this.player.boost > 0.03;
     const bankInput = (input.isDown("turnRight") ? 1 : 0) - (input.isDown("turnLeft") ? 1 : 0);
+    const verticalInput = (input.isDown("climb") ? 1 : 0) - (input.isDown("descend") ? 1 : 0);
 
-    // dodge / barrel roll
-    if (input.pressed("dodge") && this.dodgeCooldown <= 0 && this.dodgeTimer <= 0) {
+    // dodge / barrel roll — Q = left, E = right
+    const dodgeSide = (input.pressed("dodgeRight") ? 1 : 0) - (input.pressed("dodgeLeft") ? 1 : 0);
+    if (dodgeSide !== 0 && this.dodgeCooldown <= 0 && this.dodgeTimer <= 0) {
       this.dodgeTimer = 0.55;
       this.dodgeCooldown = 2.2;
-      this.dodgeDir = bankInput !== 0 ? bankInput : mouse.dx >= 0 ? 1 : -1;
+      this.dodgeDir = dodgeSide;
       this.invulnerable = 0.55;
       this.bus.emit("sfx", { name: "dodge" });
     }
 
     let yawRate = 0;
     let pitchRate = 0;
+    let lateralVel = 0;
     if (this.dodgeTimer > 0) {
       this.dodgeTimer -= dt;
-      yawRate = this.dodgeDir * (Math.PI * 2 / 0.55) * 0.55;
-      this.roll += this.dodgeDir * (Math.PI * 2 / 0.55) * dt * 0.9;
+      const spin = (Math.PI * 2) / 0.55;
+      yawRate = this.dodgeDir * spin * 0.55;
+      this.roll += -this.dodgeDir * spin * dt * 0.9; // roll continues the bank direction
       this.speed = damp(this.speed, Math.min(maxSpeed * 1.15, this.speed + 16), 4, dt);
+      // small lateral displacement (sin envelope)
+      lateralVel = this.dodgeDir * 9 * Math.sin((1 - this.dodgeTimer / 0.55) * Math.PI);
     } else {
-      // roll relaxes to bank target
-      const rollTarget = -bankInput * this.bankAmount - clamp(mouse.dx * 14, -0.7, 0.7);
-      this.roll = damp(this.roll, rollTarget, 5, dt);
-      // bank feeds turn rate (bank turn)
-      yawRate = -this.roll * 1.9 + mouse.dx * 2.6;
-      pitchRate = mouse.dy * 2.1;
-      if (input.isDown("climb")) pitchRate += 1.0;
-      if (input.isDown("descend")) pitchRate -= 1.0;
-      yawRate = clamp(yawRate, -turnRate * 1.6, turnRate * 1.6);
+      // roll relaxes to bank target (A/D bank + keyboard-look coordinated bank)
+      const rollTarget = -bankInput * this.bankAmount - lookYaw * 0.22;
+      const recentering = this.recenterTimer > 0;
+      const rollGoal = recentering ? 0 : rollTarget;
+      this.roll = damp(this.roll, rollGoal, recentering ? 9 : 6, dt);
+      // bank turn + direct A/D response + arrow-key look steering
+      const turnScale = this.inputTurnScale;
+      yawRate = -this.roll * 1.9 + bankInput * turnRate * 0.45 * turnScale + mouse.dx * 2.6 + lookYaw * 2.4 * turnScale;
+      pitchRate = mouse.dy * 2.1 + lookPitch * 1.5 + verticalInput * 0.35;
+      if (recentering) {
+        this.pitch = damp(this.pitch, 0, 9, dt);
+        pitchRate = 0;
+      }
+      yawRate = clamp(yawRate, -turnRate * 1.6 * Math.max(1, turnScale), turnRate * 1.6 * Math.max(1, turnScale));
       pitchRate = clamp(pitchRate, -turnRate * 1.1, turnRate * 1.1);
     }
+    if (this.recenterTimer > 0) this.recenterTimer -= dt;
 
     this.yaw += yawRate * dt;
     this.pitch = clamp(this.pitch + pitchRate * dt, -1.25, 1.15);
@@ -163,13 +183,18 @@ export class DragonController {
     else if (diving && this.speed > maxSpeed * 1.05) this.state = "DIVE";
     else this.state = this.speed > maxSpeed * 0.6 ? "FLY" : "FLY";
 
-    // hover vertical control
-    if (this.state === "HOVER") {
-      let vy = 0;
-      if (input.isDown("climb")) vy = climbRate * 0.6;
-      if (input.isDown("descend")) vy = -climbRate * 0.6;
-      if (vy === 0) vy = -1.6; // gentle sink
-      this.pos.y += vy * dt;
+    // direct vertical control (Space climb / C descend) — works in all flight states
+    if (verticalInput !== 0) {
+      const vyRate = this.state === "HOVER" ? climbRate * 0.9 : climbRate * 0.62;
+      this.pos.y += verticalInput * vyRate * dt;
+    } else if (this.state === "HOVER") {
+      this.pos.y += -1.6 * dt; // gentle hover sink
+    }
+
+    // dodge lateral displacement (world-space side vector)
+    if (lateralVel !== 0) {
+      const side = new Vector3(this.forward.z, 0, -this.forward.x).normalize();
+      this.pos.addInPlace(side.scale(lateralVel * dt));
     }
 
     this.integrate(dt);
@@ -224,6 +249,11 @@ export class DragonController {
   enterStagger(duration: number): void {
     this.staggerTimer = Math.max(this.staggerTimer, duration);
     this.state = "STAGGER";
+  }
+
+  /** Z — smoothly level pitch/roll back to stable flight (~0.35s) */
+  startRecenter(): void {
+    this.recenterTimer = 0.35;
   }
 
   private updateDeath(dt: number): void {

@@ -8,6 +8,8 @@ import { rankFor, scoreMission } from "./mission/Scoring";
 const params = new URLSearchParams(location.search);
 const testMode = params.get("test") === "1";
 const benchmark = params.get("benchmark") === "1";
+/** §44 keyboard-only proof mode: gameplay ignores all mouse input */
+const keyboardOnly = params.get("keyboardOnly") === "1";
 
 async function boot(): Promise<void> {
   const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
@@ -15,6 +17,10 @@ async function boot(): Promise<void> {
   console.log(`[boot] renderer: ${renderer} (WebGPU ${"gpu" in navigator ? "available" : "unavailable"})`);
 
   const app = new GameApp({ engine, renderer }, canvas, { testMode, benchmark });
+  if (keyboardOnly) {
+    app.input.keyboardOnly = true;
+    console.log("[boot] keyboard-only test mode active — mouse gameplay input disabled");
+  }
   await app.init();
 
   // ---- global UI service locator used by screens for navigation ----
@@ -46,6 +52,7 @@ async function boot(): Promise<void> {
       void anyUi;
     },
     onUiClick: () => app.audio.unlock(),
+    onUiSound: () => app.audio.uiClick(),
     getSelection: () => {
       const selRider = document.querySelector("#rider-list .roster-item.selected") as HTMLElement | null;
       const selDragon = document.querySelector("#dragon-list .roster-item.selected") as HTMLElement | null;

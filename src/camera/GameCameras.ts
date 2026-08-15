@@ -33,7 +33,7 @@ export class DragonCamera {
     this.shake = Math.min(1.6, this.shake + amount);
   }
 
-  update(dt: number, ctrl: DragonController, input: InputManager): void {
+  update(dt: number, ctrl: DragonController, input: InputManager, biasTarget?: Vector3 | null): void {
     void input;
     const scale = ctrl.player.dragonDef.scale;
     const boosting = ctrl.state === "BOOST";
@@ -66,8 +66,16 @@ export class DragonCamera {
 
     this.camera.position.copyFrom(finalPos);
 
-    // look at point ahead of the dragon
+    // look at point ahead of the dragon; target lock gently biases the view
     const target = ctrl.pos.add(ctrl.forward.scale(14 * scale)).add(new Vector3(0, 1.2, 0));
+    if (biasTarget) {
+      const offset = biasTarget.subtract(target);
+      const len = offset.length();
+      if (len > 0.5) {
+        const pull = Math.min(len, 10) * 0.25;
+        target.addInPlace(offset.scale(pull / len));
+      }
+    }
 
     // partial roll via up-vector
     const worldUp = new Vector3(0, 1, 0);
@@ -99,13 +107,14 @@ interface SceneLike {
 }
 
 /**
- * Classic third-person shoulder camera for ground combat
- * (yaw/pitch controlled by mouse; movement is camera-relative).
+ * Classic third-person shoulder camera for ground combat.
+ * Mouse OR Arrow Keys rotate; Z recenters behind the rider; soft lock-on bias.
  */
 export class GroundCamera {
   readonly camera: UniversalCamera;
   yaw = 0;
   pitch = 0.18;
+  private recenterTimer = 0;
 
   constructor(scene: Scene, private terrain: Terrain) {
     this.camera = new UniversalCamera("groundCam", new Vector3(0, 5, -8), scene);
@@ -115,14 +124,37 @@ export class GroundCamera {
     this.camera.fov = 68 * (Math.PI / 180);
   }
 
-  update(dt: number, targetPos: Vector3, targetYaw: number, input: InputManager, settings: GameSettings): void {
-    void dt;
+  update(
+    dt: number,
+    targetPos: Vector3,
+    targetYaw: number,
+    input: InputManager,
+    settings: GameSettings,
+    lockTargetPos?: Vector3 | null
+  ): void {
     const mouse = input.consumeMouse();
     const sens = settings.mouseSensitivity;
     const invert = settings.invertY ? -1 : 1;
-    this.yaw += mouse.dx * 2.6 * sens;
-    this.pitch = clamp(this.pitch + mouse.dy * 2.0 * sens * invert, -0.55, 1.0);
-    void targetYaw;
+    // mouse + smoothed arrow-key look
+    this.yaw += mouse.dx * 2.6 * sens + input.lookYaw * 2.2;
+    this.pitch = clamp(this.pitch + mouse.dy * 2.0 * sens * invert - input.lookPitch * 1.7, -0.55, 1.0);
+
+    // Z recenter: smoothly return behind the rider
+    if (this.recenterTimer > 0) {
+      this.recenterTimer -= dt;
+      let d = targetYaw - this.yaw;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      this.yaw += d * Math.min(1, dt * 10);
+      this.pitch = damp(this.pitch, 0.18, 10, dt);
+    } else if (lockTargetPos) {
+      // gentle camera bias toward the locked target
+      const wantYaw = Math.atan2(lockTargetPos.x - targetPos.x, lockTargetPos.z - targetPos.z);
+      let d = wantYaw - this.yaw;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      this.yaw += d * Math.min(1, dt * 3.5);
+    }
 
     const dist = 4.6;
     const shoulder = 0.85;
@@ -141,6 +173,10 @@ export class GroundCamera {
     const look = targetPos.add(new Vector3(0, 1.5, 0)).add(dirH.scale(2));
     this.camera.setTarget(look);
     this.camera.upVector.copyFrom(Vector3.Up());
+  }
+
+  startRecenter(): void {
+    this.recenterTimer = 0.35;
   }
 
   /** forward direction projected on ground plane (movement reference) */

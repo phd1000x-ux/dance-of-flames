@@ -33,10 +33,11 @@ npm run dev
 Open http://localhost:5173 in Chrome.
 
 First launch shows the main menu. `NEW CAMPAIGN` (or `BATTLE`) → pick rider & dragon →
-`CONFIRM` → pick a mission + difficulty → `LAUNCH`.
+`CONFIRM` → pick a mission + difficulty → `LAUNCH`. Every step works via
+keyboard (`W/S` navigate, `Enter` select, `Esc` back) or mouse.
 
-> Tip: click once inside the game window to lock the mouse for flight controls.
-> `Esc` pauses and releases the cursor.
+> The game never requires the mouse: flight, aiming, fire, target lock, ground
+> combat, shops and settings are all keyboard-complete (see MANUAL in-game).
 
 ## Production Build
 
@@ -54,21 +55,36 @@ open -a "Google Chrome" http://localhost:4173
 
 ## Controls
 
-### Dragon flight
+The game is **fully playable with the keyboard alone** — no mouse or trackpad
+required for any menu or gameplay action. Mouse input remains available as an
+optional alternative (mouse-look, LMB fire, RMB block). The complete guide is
+in-game: **Main Menu → MANUAL** (also linked from the Pause Menu as CONTROLS).
+
+### Menu navigation (all screens)
+
+| Key | Action |
+|-----|--------|
+| `W / S` or `↑ / ↓` | Previous / next item |
+| `A / D` or `← / →` | Previous / next panel or option (cycles difficulty on the mission map) |
+| `Enter` / `Space` | Select |
+| `Esc` | Back |
+
+### Dragon flight (keyboard)
 
 | Key | Action |
 |-----|--------|
 | `W` / `S` | Accelerate / decelerate |
-| `A` / `D` | Bank + turn |
-| Mouse | Steer (pitch & yaw) |
-| `Space` / `Ctrl` | Climb / descend (strongest in hover) |
+| `A` / `D` | Turn dragon (bank left / right) |
+| `↑ ↓ ← →` | Look / aim (smoothed virtual camera axis) |
+| `Space` / `C` | Climb / descend |
 | `Shift` | Boost |
-| Left Click | Fire breath (uses fire energy) |
-| Right Click | Focus/aim |
-| `Q` | Barrel dodge (brief invulnerability) |
-| `R` | Super Charge beam (when meter is full) |
-| `E` | Use healing flask / consumable |
-| `Tab` | Objectives |
+| `Q` / `E` | Dodge left / right (i-frames) |
+| `F` | Fire breath (hold) — or Left Mouse |
+| `R` | Super Charge beam (feedback if not ready) |
+| `X` | Target lock on/off (gold bracket + aim assist) |
+| `Z` | Recenter camera / level flight |
+| `G` | Use healing flask / consumable |
+| `Tab` | Mission objectives panel |
 | `Esc` | Pause |
 | `F3` | Debug overlay (dev builds) |
 
@@ -77,14 +93,15 @@ open -a "Google Chrome" http://localhost:4173
 | Key | Action |
 |-----|--------|
 | `WASD` | Move (camera-relative) |
-| Mouse | Shoulder camera |
-| Left Click | Light attack (3-hit combo) |
-| `Q` | Heavy attack (breaks shields) |
-| Right Click | Block / parry (first 0.22s = parry) |
+| `↑ ↓ ← →` | Shoulder camera |
+| `J` | Light attack (3-hit combo) |
+| `K` | Heavy attack (breaks shields) |
+| `L` | Block / parry (tap = parry) |
 | `Space` | Dodge roll (i-frames) |
 | `Shift` | Sprint |
-| `F` | Soft lock-on toggle |
-| `E` | Use healing flask |
+| `X` | Target lock toggle |
+| `Z` | Recenter camera |
+| `F` / `G` | Use healing flask |
 
 ## Game Rules
 
@@ -116,7 +133,8 @@ Settings → Graphics Preset:
   particle budget and shadows to hold 60 FPS
 
 Also: camera-shake slider, speed-blur toggle, mouse sensitivity, invert-Y,
-master/effects volume, FPS display. Settings persist via IndexedDB.
+master/effects volume, FPS display, keyboard look speed, keyboard turn speed,
+target-assist strength. Settings persist via IndexedDB.
 
 ## Architecture Overview
 
@@ -128,15 +146,19 @@ dragons / enemies / missions / upgrades, IndexedDB save system.
 ## Testing
 
 ```bash
-npm run test        # 65 unit tests (vitest) — combat, loot, upgrades, objectives, save, scoring
-npm run test:e2e    # 7 Playwright browser tests — all six required gameplay flows + console cleanliness
+npm run test        # 85 unit tests (vitest) — input bindings & simultaneity, combat, loot, upgrades, objectives, save, scoring, manual accuracy
+npm run test:e2e    # 10 Playwright browser tests — 6 gameplay flows + console cleanliness + 3 keyboard-only suites (zero mouse input)
 npm run typecheck   # strict TypeScript, zero errors
 ```
 
 The E2E suite boots the real game in Chromium with a test-input API
 (`?test=1`) and verifies: menu flow, kill→coin→counter, healing pickup,
 building→relic→stat-up, dragon-death→ground-combat→sword kill, victory→shop
-purchase, and that the console stays error-free during combat.
+purchase, and that the console stays error-free during combat. The
+**keyboard-only suites** drive every menu and the full flight + ground combat
+control surface using nothing but `page.keyboard` (no `page.mouse`), proving
+the MacBook keyboard-only requirement. `?keyboardOnly=1` additionally disables
+mouse gameplay input for manual keyboard-purity testing.
 
 ## Performance Benchmark
 
