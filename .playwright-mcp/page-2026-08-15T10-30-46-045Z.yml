@@ -1,0 +1,36 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e5]:
+    - generic [ref=f6e6]: DEFEAT
+    - generic [ref=f6e7]:
+      - generic [ref=f6e8]:
+        - generic [ref=f6e9]: Enemies Defeated
+        - generic [ref=f6e10]: "0"
+      - generic [ref=f6e11]:
+        - generic [ref=f6e12]: Buildings Destroyed
+        - generic [ref=f6e13]: "0"
+      - generic [ref=f6e14]:
+        - generic [ref=f6e15]: Coins Collected
+        - generic [ref=f6e16]: "0"
+      - generic [ref=f6e17]:
+        - generic [ref=f6e18]: Hidden Relics Found
+        - generic [ref=f6e19]: "0"
+      - generic [ref=f6e20]:
+        - generic [ref=f6e21]: Damage Taken
+        - generic [ref=f6e22]: "452"
+      - generic [ref=f6e23]:
+        - generic [ref=f6e24]: Dragon Survived
+        - generic [ref=f6e25]: Fallen
+      - generic [ref=f6e26]:
+        - generic [ref=f6e27]: Completion Time
+        - generic [ref=f6e28]: 0:18
+      - generic [ref=f6e29]:
+        - generic [ref=f6e30]: Score
+        - generic [ref=f6e31]: —
+      - generic [ref=f6e32]:
+        - generic [ref=f6e33]: Coins Earned
+        - generic [ref=f6e34]: "+0"
+    - button "CONTINUE" [ref=f6e36] [cursor=pointer]
+  - generic:
+    - generic: DANCE OF FLAMES
+    - generic: DRAGONRIDER
+    - generic: Preparing Battlefield…

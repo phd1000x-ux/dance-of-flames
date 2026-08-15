@@ -1,0 +1,89 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e15]:
+    - generic [ref=f1e16]:
+      - generic [ref=f1e17]: CHOOSE RIDER
+      - generic [ref=f1e18]:
+        - generic [ref=f1e113] [cursor=pointer]:
+          - generic [ref=f1e114]: R
+          - generic [ref=f1e115]:
+            - generic [ref=f1e116]: Rhaenyra Targaryen
+            - generic [ref=f1e117]: The Realm's Delight
+        - generic [ref=f1e118] [cursor=pointer]:
+          - generic [ref=f1e119]: D
+          - generic [ref=f1e120]:
+            - generic [ref=f1e121]: Daemon Targaryen
+            - generic [ref=f1e122]: The Rogue Prince
+          - generic [ref=f1e123]: BONDED
+        - generic [ref=f1e124] [cursor=pointer]:
+          - generic [ref=f1e125]: A
+          - generic [ref=f1e126]:
+            - generic [ref=f1e127]: Aemond Targaryen
+            - generic [ref=f1e128]: One-Eye
+        - generic [ref=f1e129] [cursor=pointer]:
+          - generic [ref=f1e130]: A
+          - generic [ref=f1e131]:
+            - generic [ref=f1e132]: Aegon II Targaryen
+            - generic [ref=f1e133]: The Golden King
+        - generic [ref=f1e134] [cursor=pointer]:
+          - generic [ref=f1e135]: R
+          - generic [ref=f1e136]:
+            - generic [ref=f1e137]: Rhaenys Targaryen
+            - generic [ref=f1e138]: The Queen Who Never Was
+        - generic [ref=f1e139] [cursor=pointer]:
+          - generic [ref=f1e140]: B
+          - generic [ref=f1e141]:
+            - generic [ref=f1e142]: Baela Targaryen
+            - generic [ref=f1e143]: Wing and Wolf-Blood
+    - generic: DRAG TO ROTATE — dragon shown at true scale
+    - generic [ref=f1e50]:
+      - generic [ref=f1e51]: CARAXES
+      - generic [ref=f1e52]: DRAGON
+      - generic [ref=f1e53]:
+        - generic [ref=f1e144] [cursor=pointer]:
+          - generic [ref=f1e145]: S
+          - generic [ref=f1e146]:
+            - generic [ref=f1e147]: Syrax
+            - generic [ref=f1e148]: The Queen's Dragon
+        - generic [ref=f1e149] [cursor=pointer]:
+          - generic [ref=f1e150]: C
+          - generic [ref=f1e151]:
+            - generic [ref=f1e152]: Caraxes
+            - generic [ref=f1e153]: The Blood Wyrm
+          - generic [ref=f1e154]: BONDED
+        - generic [ref=f1e155] [cursor=pointer]:
+          - generic [ref=f1e156]: V
+          - generic [ref=f1e157]:
+            - generic [ref=f1e158]: Vhagar
+            - generic [ref=f1e159]: The Last Ember of the Conquest
+        - generic [ref=f1e160] [cursor=pointer]:
+          - generic [ref=f1e161]: S
+          - generic [ref=f1e162]:
+            - generic [ref=f1e163]: Sunfyre
+            - generic [ref=f1e164]: The Golden
+        - generic [ref=f1e165] [cursor=pointer]:
+          - generic [ref=f1e166]: M
+          - generic [ref=f1e167]:
+            - generic [ref=f1e168]: Meleys
+            - generic [ref=f1e169]: The Red Queen
+        - generic [ref=f1e170] [cursor=pointer]:
+          - generic [ref=f1e171]: M
+          - generic [ref=f1e172]:
+            - generic [ref=f1e173]: Moondancer
+            - generic [ref=f1e174]: The Pale Huntress
+      - generic [ref=f1e85]: BATTLE STATS
+      - generic [ref=f1e86]:
+        - generic [ref=f1e175]: HEALTH
+        - generic [ref=f1e179]: FIRE
+        - generic [ref=f1e183]: SPEED
+        - generic [ref=f1e187]: ARMOR
+        - generic [ref=f1e191]: AGILITY
+      - generic [ref=f1e107]: Daemon Targaryen
+      - generic [ref=f1e108]: The Rogue Prince
+      - generic [ref=f1e109]: Lean and merciless. Long-reaching flames and a devastating dive.
+      - generic [ref=f1e110]:
+        - button "BACK" [ref=f1e111] [cursor=pointer]
+        - button "CONFIRM" [ref=f1e112] [cursor=pointer]
+  - generic:
+    - generic: DANCE OF FLAMES
+    - generic: DRAGONRIDER
+    - generic: Awakening the dragons…

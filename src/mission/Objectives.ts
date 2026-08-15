@@ -64,7 +64,7 @@ export class ObjectiveTracker {
   notifyBuildingDestroyed(tag: string): void {
     const cur = this.current();
     if (!cur || cur.type !== "destroy") return;
-    if (cur.targetTag !== tag) return;
+    if (cur.targetTag !== tag && cur.targetTag !== "any") return;
     cur.progress++;
     this.checkDone(cur);
   }

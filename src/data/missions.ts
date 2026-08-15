@@ -58,7 +58,7 @@ export interface MissionDefinition {
 const groundKillSoldiers = (n: number): ObjectiveDef => ({
   id: "g-kill",
   type: "kill",
-  description: `Cut down ${n} enemy soldiers on foot`,
+  description: `Cut down ${Math.max(2, Math.ceil(n / 2))} enemy soldiers on foot`,
   targetType: "soldier",
   count: Math.max(2, Math.ceil(n / 2)),
 });
@@ -220,9 +220,9 @@ export const MISSIONS: MissionDefinition[] = [
     },
     spawns: { swordsmen: 18, archers: 18, spearmen: 8, shieldmen: 10, elites: 3, ballistae: 4 },
     buildings: [
-      { kind: "fort", tag: "keep", count: 1, relicIds: ["dragonheartEssence", "valyrianSaddle"] },
+      { kind: "fort", tag: "keep", count: 1, relicIds: ["dragonheartEssence"] },
       { kind: "house", tag: "ruin", count: 5 },
-      { kind: "barracks", tag: "camp", count: 2, relicIds: ["emberCapacitor"] },
+      { kind: "barracks", tag: "camp", count: 2, relicIds: ["emberCapacitor", "valyrianSaddle"] },
     ],
     objectives: [
       {

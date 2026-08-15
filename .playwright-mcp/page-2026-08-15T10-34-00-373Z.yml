@@ -1,0 +1,24 @@
+- generic [active] [ref=f10e1]:
+  - generic:
+    - generic:
+      - generic: Survive the counterattack (45s)5/45
+      - generic:
+        - generic: W
+        - text: — Accelerate
+      - generic:
+        - generic: HIDDEN RELIC FOUND
+        - generic: —
+        - generic: —
+      - generic:
+        - generic:
+          - generic: C
+          - generic:
+            - generic:
+              - generic:
+                - generic: RIDER
+                - generic: 220/220
+            - generic: STAMINA
+  - generic:
+    - generic: DANCE OF FLAMES
+    - generic: DRAGONRIDER
+    - generic: Preparing Battlefield…
