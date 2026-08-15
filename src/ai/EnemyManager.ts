@@ -271,7 +271,7 @@ export class EnemyManager {
       }
       hit = true;
       this.damageSoldier(s, damage, false);
-      if (s.state !== "dead") {
+      if ((s.state as SoldierState) !== "dead") {
         // knockback + stagger for lighter enemies that survived
         const kb = heavy ? 2.4 : 1.2;
         s.pos.addInPlace(v.scale(-kb / Math.max(1, dist)));
