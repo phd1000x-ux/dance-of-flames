@@ -52,7 +52,7 @@ async function boot(): Promise<void> {
       void anyUi;
     },
     onUiClick: () => app.audio.unlock(),
-    onUiSound: () => app.audio.uiClick(),
+    onUiSound: () => app.audio.uiMove(),
     getSelection: () => {
       const selRider = document.querySelector("#rider-list .roster-item.selected") as HTMLElement | null;
       const selDragon = document.querySelector("#dragon-list .roster-item.selected") as HTMLElement | null;
@@ -103,6 +103,15 @@ async function boot(): Promise<void> {
         },
         collapseBuildingWithTag(tag: string) {
           app.mission?.testCollapseBuildingWithTag(tag);
+        },
+        collapseBuildingsWithTag(tag: string, n: number) {
+          app.mission?.testCollapseBuildingsWithTag(tag, n);
+        },
+        killBallistae(n: number) {
+          app.mission?.testKillBallistae(n);
+        },
+        killByType(type: string, n: number) {
+          app.mission?.testKillByType(type, n);
         },
         getObjective() {
           const cur = app.mission?.tracker.current();

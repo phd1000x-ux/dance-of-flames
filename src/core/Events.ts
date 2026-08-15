@@ -20,9 +20,11 @@ export interface GameEvents {
   "bounds-warning": { distance: number };
   "hit-enemy": { killed: boolean };
   "melee-hit-rider": { amount: number };
-  sfx: { name: string };
+  sfx: { name: string; intensity?: number };
   "thunder": Record<string, never>;
   "hud-hint": { text: string };
   "toggle-objectives": { visible: boolean };
   "target-lock-changed": { locked: boolean; kind: string | null };
+  "dragon-fallen": Record<string, never>;
+  "ground-begun": Record<string, never>;
 }

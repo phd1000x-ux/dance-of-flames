@@ -199,14 +199,27 @@ export class DragonController {
 
     this.integrate(dt);
 
-    // wing animation params
-    this.flapRate = lerp(7.2, 1.1, clamp(this.speed / (maxSpeed * 1.1), 0, 1));
-    this.flapAmp = clamp(1.15 - this.speed / 42, 0.18, 1);
+    // wing animation params (low HP → heavier, more labored wingbeats)
+    const hpFrac = this.player.dragonHp / Math.max(1, this.player.maxDragonHp);
+    const strain = hpFrac < 0.3 ? 1.3 : 1;
+    this.flapRate = lerp(7.2, 1.1, clamp(this.speed / (maxSpeed * 1.1), 0, 1)) * strain;
+    this.flapAmp = clamp(1.15 - this.speed / 42, 0.18, 1) * (hpFrac < 0.3 ? 1.15 : 1);
     this.sweep = this.state === "DIVE" ? 0.72 : this.state === "BOOST" ? 0.5 : 0.06;
     this.jawOpen = damp(this.jawOpen, firing ? 1 : 0, 10, dt);
 
+    // wingbeat audio on each downstroke (varies with flap intensity + airspeed)
+    const flapSin = Math.sin(this.rig.flapPhase);
+    if (this.lastFlapSin > 0 && flapSin <= 0 && this.flapAmp > 0.3) {
+      this.flapIntensityOut = this.flapAmp * (0.5 + this.speed / (maxSpeed * 2));
+      this.bus.emit("sfx", { name: "flapBeat", intensity: this.flapIntensityOut });
+    }
+    this.lastFlapSin = flapSin;
+
     this.syncRig(dt);
   }
+
+  private lastFlapSin = 0;
+  flapIntensityOut = 0;
 
   private integrate(dt: number): void {
     const m = Matrix.RotationYawPitchRoll(this.yaw, this.pitch, this.roll);
@@ -285,12 +298,17 @@ export class DragonController {
   private syncRig(dt: number): void {
     this.rig.root.position.copyFrom(this.pos);
     this.rig.root.rotationQuaternion = Quaternion.FromEulerAngles(this.pitch, this.yaw, this.roll);
+    const maxSpeed = this.player.dragonStats.boostSpeed ?? 60;
     this.rig.animate({
       flapRate: this.state === "DYING" || this.player.mode === "dying" ? 2 : this.flapRate,
       flapAmp: this.player.mode === "dying" ? 0.4 : this.flapAmp,
       sweep: this.player.mode === "dying" ? 0.8 : this.sweep,
       jawOpen: this.jawOpen,
       dt,
+      riderRoll: this.roll,
+      riderPitchIn: this.pitch,
+      riderSpeedT: Math.min(1, this.speed / maxSpeed),
+      riderBoost: this.state === "BOOST",
     });
   }
 }

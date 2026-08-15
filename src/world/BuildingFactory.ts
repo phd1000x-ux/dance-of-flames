@@ -9,7 +9,7 @@ import {
 } from "@babylonjs/core";
 import { SeededRng } from "../core/SeededRng";
 
-export type BuildingKind = "house" | "tower" | "barracks" | "fort" | "wall" | "gate";
+export type BuildingKind = "house" | "tower" | "barracks" | "fort" | "wall" | "gate" | "keep" | "grandTower";
 
 export interface BuildingSpec {
   kind: BuildingKind;
@@ -23,7 +23,9 @@ export const BUILDING_SPECS: Record<BuildingKind, BuildingSpec> = {
   barracks: { kind: "barracks", hp: 1200, size: { w: 12, h: 4.5, d: 6 } },
   fort: { kind: "fort", hp: 2500, size: { w: 14, h: 10, d: 14 } },
   wall: { kind: "wall", hp: 2500, size: { w: 20, h: 8, d: 3 } },
-  gate: { kind: "gate", hp: 1800, size: { w: 10, h: 11, d: 8 } },
+  gate: { kind: "gate", hp: 2600, size: { w: 13, h: 14, d: 9 } },
+  keep: { kind: "keep", hp: 4200, size: { w: 36, h: 46, d: 36 } },
+  grandTower: { kind: "grandTower", hp: 1600, size: { w: 15, h: 30, d: 15 } },
 };
 
 export interface BuiltBuilding {
@@ -102,6 +104,47 @@ export class BuildingFactory {
           cren.position.set(-w / 2 + 2 + i * (w - 4) / 4, h / 2 + 0.45, 0);
           parts.push(cren);
         }
+        break;
+      }
+      case "keep": {
+        // colossal central keep: tiered mass + side wings + crown
+        parts.push(MeshBuilder.CreateBox("k-main", { width: w * 0.78, height: h * 0.82, depth: d * 0.78 }, this.scene));
+        const tier2 = MeshBuilder.CreateBox("k-t2", { width: w * 0.5, height: h * 0.3, depth: d * 0.5 }, this.scene);
+        tier2.position.y = h * 0.45;
+        parts.push(tier2);
+        for (const [cx2, cz2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+          const turret = MeshBuilder.CreateCylinder("k-tur", { diameter: w * 0.24, height: h * 0.95, tessellation: 8 }, this.scene);
+          turret.position.set(cx2 * (w / 2 - w * 0.14), 0, cz2 * (d / 2 - d * 0.14));
+          parts.push(turret);
+          const cap = MeshBuilder.CreateCylinder("k-cap", { diameterTop: 0, diameterBottom: w * 0.3, height: h * 0.18, tessellation: 8 }, this.scene);
+          cap.position.set(cx2 * (w / 2 - w * 0.14), h * 0.55, cz2 * (d / 2 - d * 0.14));
+          parts.push(cap);
+        }
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const cren = MeshBuilder.CreateBox("k-cren", { width: 2, height: 1.6, depth: 2 }, this.scene);
+          cren.position.set(Math.cos(a) * w * 0.4, h * 0.44, Math.sin(a) * d * 0.4);
+          parts.push(cren);
+        }
+        const gate = MeshBuilder.CreateBox("k-gate", { width: 4, height: 6, depth: 1 }, this.scene);
+        gate.position.set(0, -h / 2 + 3, d / 2);
+        parts.push(gate);
+        break;
+      }
+      case "grandTower": {
+        parts.push(MeshBuilder.CreateCylinder("gt-body", { diameter: w, height: h, tessellation: 9 }, this.scene));
+        const top = MeshBuilder.CreateCylinder("gt-top", { diameter: w * 1.25, height: 1.4, tessellation: 9 }, this.scene);
+        top.position.y = h / 2 + 0.7;
+        parts.push(top);
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2;
+          const cren = MeshBuilder.CreateBox("gt-cren", { width: 1.1, height: 1.4, depth: 1.1 }, this.scene);
+          cren.position.set(Math.cos(a) * w * 0.56, h / 2 + 1.8, Math.sin(a) * w * 0.56);
+          parts.push(cren);
+        }
+        const troof = MeshBuilder.CreateCylinder("gt-roof", { diameterTop: 0, diameterBottom: w * 1.15, height: h * 0.3, tessellation: 8 }, this.scene);
+        troof.position.y = h / 2 + h * 0.15 + 1.6;
+        parts.push(troof);
         break;
       }
       case "gate": {

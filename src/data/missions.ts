@@ -21,7 +21,7 @@ export interface EnvironmentDef {
 }
 
 export interface BuildingSpawnDef {
-  kind: "house" | "tower" | "barracks" | "fort" | "wall" | "gate";
+  kind: "house" | "tower" | "barracks" | "fort" | "wall" | "gate" | "keep" | "grandTower";
   tag: string;
   count: number;
   /** relics hidden inside — distributed across buildings of this group */
@@ -331,6 +331,99 @@ export const MISSIONS: MissionDefinition[] = [
         type: "survive",
         description: "Survive the final counterattack (90s)",
         seconds: 90,
+        groundAlternative: groundSurvive(60),
+      },
+    ],
+  },
+  {
+    id: "blackstone",
+    name: "The Blackstone Citadel",
+    location: "Blackstone",
+    description: "A colossal fortress of dark stone. Walls within walls, towers like teeth, and a keep that scratches the sky.",
+    brief:
+      "The greatest stronghold of the war. Silence their scorpions, shatter the walls, take the gate — and end their command in the courtyard beyond.",
+    seed: 505,
+    enemyPower: 3.2,
+    recommendedPower: 5,
+    coinBonus: 320,
+    environment: {
+      skyTop: "#1c2028",
+      skyBottom: "#4a4038",
+      fogColor: "#3a3833",
+      fogDensity: 0.0028,
+      sunColor: "#c8b8a0",
+      sunDirection: [-0.5, -0.6, -0.4],
+      groundColor: "#3c3a34",
+      groundAccent: "#484438",
+      treeCount: 90,
+      treeColor: "#24301f",
+      rockCount: 120,
+      silhouette: "ruins",
+      ambient: 0.5,
+    },
+    spawns: {
+      swordsmen: 26,
+      archers: 26,
+      spearmen: 12,
+      shieldmen: 14,
+      elites: 5,
+      ballistae: 6,
+      commander: true,
+    },
+    buildings: [
+      { kind: "grandTower", tag: "wallTower", count: 8 },
+      { kind: "gate", tag: "gatehouse", count: 1 },
+      { kind: "barracks", tag: "barracks", count: 1 },
+      { kind: "barracks", tag: "supply", count: 1, relicIds: ["emberCapacitor"] },
+      { kind: "keep", tag: "keep", count: 1, relicIds: ["dragonheartEssence"] },
+    ],
+    objectives: [
+      {
+        id: "bs-defenses",
+        type: "kill",
+        description: "Silence the outer ballistae",
+        targetType: "ballista",
+        count: 6,
+        hint: "Scorpions defend the walls — destroy them first",
+        groundAlternative: groundKillSoldiers(10),
+      },
+      {
+        id: "bs-breach",
+        type: "destroy",
+        description: "Shatter the wall towers",
+        targetTag: "wallTower",
+        count: 4,
+        groundAlternative: groundSurvive(60),
+      },
+      {
+        id: "bs-gate",
+        type: "destroy",
+        description: "Breach the gatehouse",
+        targetTag: "gatehouse",
+        count: 1,
+        groundAlternative: groundSurvive(60),
+      },
+      {
+        id: "bs-courtyard",
+        type: "kill",
+        description: "Clear the courtyard defenders",
+        targetType: "soldier",
+        count: 12,
+        groundAlternative: groundKillSoldiers(12),
+      },
+      {
+        id: "bs-commander",
+        type: "kill",
+        description: "Eliminate the castellan",
+        targetType: "commander",
+        count: 1,
+        groundAlternative: { id: "bs-cmd-g", type: "kill", description: "Eliminate the castellan", targetType: "commander", count: 1 },
+      },
+      {
+        id: "bs-final",
+        type: "survive",
+        description: "Survive the counterattack (75s)",
+        seconds: 75,
         groundAlternative: groundSurvive(60),
       },
     ],

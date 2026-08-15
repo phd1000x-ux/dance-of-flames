@@ -1,20 +1,36 @@
 import type { GameSettings } from "../save/SaveSystem";
 
 /**
- * Fully procedural WebAudio sound engine — no external audio assets.
- * All sounds are synthesized (noise bursts, filtered noise, FM pings, sub sines).
+ * Layered procedural sound engine (no external assets).
+ * Buses: master → { sfx, ambient, music } with ducking support.
+ * Every "realistic" sound is built from multiple synchronized synthesis layers
+ * (sub + formant + noise), randomized per play to avoid repetition.
  */
 export class AudioManager {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private sfx: GainNode | null = null;
-  private windGain: GainNode | null = null;
-  private windSource: AudioBufferSourceNode | null = null;
-  private fireGain: GainNode | null = null;
-  private fireSource: AudioBufferSourceNode | null = null;
+  private ambient: GainNode | null = null;
+  private musicBus: GainNode | null = null;
+
   private noiseBuffer: AudioBuffer | null = null;
   private activeVoices = 0;
   private lastPlay = new Map<string, number>();
+
+  // wind
+  private windGain: GainNode | null = null;
+  private windFilter: BiquadFilterNode | null = null;
+  private windWhistleGain: GainNode | null = null;
+
+  // fire loop layers
+  private fireNodes: { rumble: GainNode; body: GainNode; hiss: GainNode; any: AudioNode } | null = null;
+  private fireCrackleTimer: ReturnType<typeof setInterval> | null = null;
+
+  // ambient zone layers
+  private zoneGains: Record<string, GainNode> = {};
+  private zoneScheduler: ReturnType<typeof setInterval> | null = null;
+  private currentZone = "field";
+  private battleBed: GainNode | null = null;
 
   constructor(private settings: GameSettings) {}
 
@@ -32,21 +48,36 @@ export class AudioManager {
       this.sfx = this.ctx.createGain();
       this.sfx.gain.value = this.settings.effectsVolume;
       this.sfx.connect(this.master);
-      this.noiseBuffer = this.makeNoise(2);
+      this.ambient = this.ctx.createGain();
+      this.ambient.gain.value = this.settings.effectsVolume * 0.8;
+      this.ambient.connect(this.master);
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.gain.value = this.settings.musicVolume ?? 0.7;
+      this.musicBus.connect(this.master);
+      this.noiseBuffer = this.makeNoise(2.5);
       this.startWindLoop();
+      this.startAmbientZones();
+      this.startBattleBed();
     } catch (e) {
       console.warn("[audio] init failed", e);
     }
   }
 
+  /** MusicSystem connects its output here */
+  get musicInput(): AudioNode | null {
+    return this.musicBus;
+  }
+
   applySettings(): void {
     if (this.master) this.master.gain.value = this.settings.masterVolume;
     if (this.sfx) this.sfx.gain.value = this.settings.effectsVolume;
+    if (this.ambient) this.ambient.gain.value = this.settings.effectsVolume * 0.8;
+    if (this.musicBus) this.musicBus.gain.value = this.settings.musicVolume ?? 0.7;
   }
 
   private makeNoise(seconds: number): AudioBuffer {
     const ctx = this.ctx!;
-    const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     return buf;
@@ -60,209 +91,492 @@ export class AudioManager {
     return false;
   }
 
-  private noiseBurst(
+  // ============ primitive layers ============
+  private noise(
     dur: number,
-    filterType: BiquadFilterType,
-    freqStart: number,
-    freqEnd: number,
+    filter: BiquadFilterType,
+    f0: number,
+    f1: number,
     gain: number,
-    q = 1
+    q = 1,
+    dest?: AudioNode,
+    when = 0
   ): void {
-    if (!this.ctx || !this.sfx || this.activeVoices > 14) return;
+    if (!this.ctx || !this.sfx || this.activeVoices > 24) return;
     const ctx = this.ctx;
+    const t = ctx.currentTime + when;
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     src.loop = true;
-    src.playbackRate.value = 0.7 + Math.random() * 0.6;
-    const filter = ctx.createBiquadFilter();
-    filter.type = filterType;
-    filter.Q.value = q;
-    filter.frequency.setValueAtTime(freqStart, ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(Math.max(30, freqEnd), ctx.currentTime + dur);
+    src.playbackRate.value = 0.8 + Math.random() * 0.4;
+    const bq = ctx.createBiquadFilter();
+    bq.type = filter;
+    bq.Q.value = q;
+    bq.frequency.setValueAtTime(f0, t);
+    bq.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
     const g = ctx.createGain();
-    g.gain.setValueAtTime(gain, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-    src.connect(filter).connect(g).connect(this.sfx);
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bq).connect(g).connect(dest ?? this.sfx);
     this.activeVoices++;
     src.onended = () => this.activeVoices--;
-    src.start();
-    src.stop(ctx.currentTime + dur + 0.05);
+    src.start(t);
+    src.stop(t + dur + 0.05);
   }
 
   private tone(
-    freqStart: number,
-    freqEnd: number,
+    f0: number,
+    f1: number,
     dur: number,
     type: OscillatorType,
     gain: number,
-    delay = 0
+    opts: { when?: number; dest?: AudioNode; attack?: number; am?: number; detune?: number } = {}
   ): void {
-    if (!this.ctx || !this.sfx || this.activeVoices > 14) return;
+    if (!this.ctx || !this.sfx || this.activeVoices > 24) return;
     const ctx = this.ctx;
-    const t = ctx.currentTime + delay;
+    const t = ctx.currentTime + (opts.when ?? 0);
     const osc = ctx.createOscillator();
     osc.type = type;
-    osc.frequency.setValueAtTime(freqStart, t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), t + dur);
+    osc.frequency.setValueAtTime(f0, t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    if (opts.detune) osc.detune.value = opts.detune;
     const g = ctx.createGain();
+    const atk = opts.attack ?? 0.005;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(gain, t + dur * 0.15);
+    g.gain.exponentialRampToValueAtTime(gain, t + atk);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(this.sfx);
+    let out: AudioNode = g;
+    if (opts.am) {
+      // amplitude modulation (growl)
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = opts.am;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = gain * 0.55;
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(gain, t + atk);
+      lfo.connect(lfoGain).connect(g.gain);
+      lfo.start(t);
+      lfo.stop(t + dur);
+      out = g;
+    }
+    osc.connect(g);
+    g.connect(opts.dest ?? this.sfx);
     this.activeVoices++;
     osc.onended = () => this.activeVoices--;
     osc.start(t);
     osc.stop(t + dur + 0.05);
+    void out;
   }
 
-  // ---- ambient loops ----
+  // ============ ducking ============
+  impactDuck(scale = 0.35, seconds = 1.6): void {
+    if (!this.ctx || !this.musicBus || !this.ambient) return;
+    const t = this.ctx.currentTime;
+    const m = this.settings.musicVolume ?? 0.7;
+    this.musicBus.gain.cancelScheduledValues(t);
+    this.musicBus.gain.setTargetAtTime(m * scale, t, 0.08);
+    this.musicBus.gain.setTargetAtTime(m, t + seconds, 0.5);
+    const a = this.settings.effectsVolume * 0.8;
+    this.ambient.gain.setTargetAtTime(a * (scale + 0.3), t, 0.1);
+    this.ambient.gain.setTargetAtTime(a, t + seconds * 0.7, 0.5);
+  }
+
+  // ============ dragon ============
+  /** layered roar: sub body + formant growl + noise texture */
+  roar(big = false): void {
+    if (this.throttled("roar", 1500)) return;
+    const p = 0.9 + Math.random() * 0.2;
+    const dur = big ? 1.9 : 1.2;
+    // 1) sub body with growl AM
+    this.tone(58 * p, 36 * p, dur, "sine", big ? 0.4 : 0.28, { am: 26, attack: 0.05 });
+    this.tone(29 * p, 22 * p, dur, "sine", big ? 0.22 : 0.12, { attack: 0.06 });
+    // 2) formant layer (distorted saw through moving bandpasses)
+    if (this.ctx && this.sfx) {
+      const ctx = this.ctx;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(105 * p, t);
+      osc.frequency.linearRampToValueAtTime(165 * p, t + dur * 0.3);
+      osc.frequency.linearRampToValueAtTime(82 * p, t + dur);
+      const shaper = ctx.createWaveShaper();
+      const curve = new Float32Array(256);
+      for (let i = 0; i < 256; i++) {
+        const x = (i / 255) * 2 - 1;
+        curve[i] = Math.tanh(x * 3.2);
+      }
+      shaper.curve = curve;
+      const f1 = ctx.createBiquadFilter();
+      f1.type = "bandpass";
+      f1.Q.value = 2.2;
+      f1.frequency.setValueAtTime(340, t);
+      f1.frequency.linearRampToValueAtTime(720, t + dur * 0.4);
+      const f2 = ctx.createBiquadFilter();
+      f2.type = "bandpass";
+      f2.Q.value = 2.8;
+      f2.frequency.setValueAtTime(950, t);
+      f2.frequency.linearRampToValueAtTime(1500, t + dur * 0.5);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(big ? 0.2 : 0.13, t + 0.09);
+      g.gain.setValueAtTime(big ? 0.2 : 0.13, t + dur * 0.6);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(shaper);
+      shaper.connect(f1).connect(g);
+      shaper.connect(f2).connect(g);
+      g.connect(this.sfx);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+    }
+    // 3) high growl texture
+    this.noise(dur * 0.8, "bandpass", 1700 * p, 900, 0.09, 1.6);
+    this.impactDuck(0.5, 1.2);
+  }
+
+  /** wingbeat — size-appropriate thump + leather snap, varies every beat */
+  flapBeat(intensity = 1): void {
+    if (this.throttled("flap", 170)) return;
+    const p = 0.85 + Math.random() * 0.3;
+    const g = 0.1 + 0.12 * Math.min(1, intensity);
+    this.tone(64 * p, 34 * p, 0.22, "sine", g, { attack: 0.012 });
+    this.noise(0.16, "lowpass", 480 * p, 140, g * 0.7, 0.7);
+    if (Math.random() < 0.8) this.noise(0.045, "bandpass", 700 + Math.random() * 300, 500, g * 0.35, 2.5);
+  }
+
+  fireStart(): void {
+    this.noise(0.4, "lowpass", 2600, 500, 0.22);
+    this.tone(90, 45, 0.35, "sine", 0.18);
+  }
+
+  /** continuous fire: rumble + roar body + hiss + scheduled crackle */
+  setFireLoop(active: boolean): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (active && !this.fireNodes) {
+      const rumbleSrc = ctx.createBufferSource();
+      rumbleSrc.buffer = this.noiseBuffer;
+      rumbleSrc.loop = true;
+      rumbleSrc.playbackRate.value = 0.4;
+      const rumbleF = ctx.createBiquadFilter();
+      rumbleF.type = "lowpass";
+      rumbleF.frequency.value = 160;
+      const rumbleG = ctx.createGain();
+      rumbleG.gain.value = 0;
+      rumbleG.gain.setTargetAtTime(0.3, ctx.currentTime, 0.12);
+      rumbleSrc.connect(rumbleF).connect(rumbleG).connect(this.sfx!);
+
+      const bodySrc = ctx.createBufferSource();
+      bodySrc.buffer = this.noiseBuffer;
+      bodySrc.loop = true;
+      bodySrc.playbackRate.value = 0.75;
+      const bodyF = ctx.createBiquadFilter();
+      bodyF.type = "bandpass";
+      bodyF.frequency.value = 640;
+      bodyF.Q.value = 0.7;
+      const bodyG = ctx.createGain();
+      bodyG.gain.value = 0;
+      bodyG.gain.setTargetAtTime(0.22, ctx.currentTime, 0.15);
+      bodySrc.connect(bodyF).connect(bodyG).connect(this.sfx!);
+
+      const hissSrc = ctx.createBufferSource();
+      hissSrc.buffer = this.noiseBuffer;
+      hissSrc.loop = true;
+      hissSrc.playbackRate.value = 1.3;
+      const hissF = ctx.createBiquadFilter();
+      hissF.type = "bandpass";
+      hissF.frequency.value = 2400;
+      hissF.Q.value = 1.8;
+      const hissG = ctx.createGain();
+      hissG.gain.value = 0;
+      hissG.gain.setTargetAtTime(0.05, ctx.currentTime, 0.2);
+      hissSrc.connect(hissF).connect(hissG).connect(this.sfx!);
+
+      rumbleSrc.start();
+      bodySrc.start();
+      hissSrc.start();
+      this.fireNodes = { rumble: rumbleG, body: bodyG, hiss: hissG, any: rumbleSrc };
+
+      // ember crackle scheduler
+      this.fireCrackleTimer = setInterval(() => {
+        if (!this.fireNodes) return;
+        if (Math.random() < 0.65) {
+          this.noise(0.03 + Math.random() * 0.03, "highpass", 1800, 2600, 0.05 + Math.random() * 0.05, 1);
+        }
+      }, 110);
+    } else if (!active && this.fireNodes) {
+      const t = ctx.currentTime;
+      const nodes = this.fireNodes;
+      this.fireNodes = null;
+      if (this.fireCrackleTimer) {
+        clearInterval(this.fireCrackleTimer);
+        this.fireCrackleTimer = null;
+      }
+      nodes.rumble.gain.setTargetAtTime(0, t, 0.09);
+      nodes.body.gain.setTargetAtTime(0, t, 0.09);
+      nodes.hiss.gain.setTargetAtTime(0, t, 0.09);
+      setTimeout(() => {
+        try {
+          (nodes.any as AudioBufferSourceNode).stop();
+        } catch {
+          /* already stopped */
+        }
+      }, 500);
+    }
+  }
+
+  /** parameterized wind: volume + filter follow flight speed */
+  setWind(intensity: number): void {
+    if (!this.windGain || !this.windFilter || !this.windWhistleGain || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const i = Math.max(0, Math.min(1.2, intensity));
+    this.windGain.gain.setTargetAtTime(0.018 + i * 0.15, t, 0.25);
+    this.windFilter.frequency.setTargetAtTime(260 + i * 740, t, 0.25);
+    this.windWhistleGain.gain.setTargetAtTime(Math.max(0, i - 0.62) * 0.16, t, 0.3);
+  }
+
   private startWindLoop(): void {
     const ctx = this.ctx!;
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     src.loop = true;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = 400;
-    filter.Q.value = 0.6;
+    this.windFilter = ctx.createBiquadFilter();
+    this.windFilter.type = "bandpass";
+    this.windFilter.frequency.value = 400;
+    this.windFilter.Q.value = 0.55;
     this.windGain = ctx.createGain();
     this.windGain.gain.value = 0.03;
-    src.connect(filter).connect(this.windGain).connect(this.master!);
+    src.connect(this.windFilter).connect(this.windGain).connect(this.master!);
+
+    const wSrc = ctx.createBufferSource();
+    wSrc.buffer = this.noiseBuffer;
+    wSrc.loop = true;
+    wSrc.playbackRate.value = 1.1;
+    const wf = ctx.createBiquadFilter();
+    wf.type = "bandpass";
+    wf.frequency.value = 2300;
+    wf.Q.value = 3.5;
+    this.windWhistleGain = ctx.createGain();
+    this.windWhistleGain.gain.value = 0;
+    wSrc.connect(wf).connect(this.windWhistleGain).connect(this.master!);
     src.start();
-    this.windSource = src;
+    wSrc.start();
   }
 
-  /** wind intensity by flight speed 0..1 */
-  setWind(intensity: number): void {
-    if (this.windGain) {
-      this.windGain.gain.setTargetAtTime(0.02 + intensity * 0.14, this.ctx!.currentTime, 0.3);
-    }
-  }
-
-  setFireLoop(active: boolean): void {
-    const ctx = this.ctx;
-    if (!ctx) return;
-    if (active && !this.fireSource) {
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuffer;
-      src.loop = true;
-      src.playbackRate.value = 0.5;
-      const filter = ctx.createBiquadFilter();
-      filter.type = "lowpass";
-      filter.frequency.value = 900;
+  // ============ ambient zones ============
+  private startAmbientZones(): void {
+    const ctx = this.ctx!;
+    const mkZone = (type: BiquadFilterType, freq: number, q: number, rate: number) => {
+      const s = ctx.createBufferSource();
+      s.buffer = this.noiseBuffer!;
+      s.loop = true;
+      s.playbackRate.value = rate;
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = freq;
+      f.Q.value = q;
       const g = ctx.createGain();
-      g.gain.value = 0.0;
-      g.gain.setTargetAtTime(0.22, ctx.currentTime, 0.08);
-      src.connect(filter).connect(g).connect(this.sfx!);
-      src.start();
-      this.fireSource = src;
-      this.fireGain = g;
-    } else if (!active && this.fireSource) {
-      const src = this.fireSource;
-      this.fireGain!.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
-      setTimeout(() => src.stop(), 400);
-      this.fireSource = null;
-      this.fireGain = null;
+      g.gain.value = 0;
+      s.connect(f).connect(g).connect(this.ambient!);
+      s.start();
+      return g;
+    };
+    this.zoneGains.field = mkZone("lowpass", 520, 0.4, 0.55); // open air
+    this.zoneGains.village = mkZone("lowpass", 300, 0.6, 0.4); // warm rumble
+    this.zoneGains.castle = mkZone("bandpass", 760, 0.8, 0.7); // stone wind
+    this.setAmbientZone("field");
+
+    // zone-flavored one-shot scheduler
+    this.zoneScheduler = setInterval(() => {
+      if (!this.fireNodes) return; // don't stack during dragon fire
+      const z = this.currentZone;
+      const r = Math.random();
+      if (z === "castle") {
+        if (r < 0.28) this.flagFlap();
+        else if (r < 0.5) this.brazierCrackle();
+        else if (r < 0.62) this.distantVoices();
+      } else if (z === "village") {
+        if (r < 0.25) this.brazierCrackle();
+        else if (r < 0.38) this.distantVoices();
+      }
+    }, 1600);
+  }
+
+  setAmbientZone(zone: "field" | "village" | "castle"): void {
+    if (!this.ctx || this.currentZone === zone) return;
+    this.currentZone = zone;
+    const t = this.ctx.currentTime;
+    for (const [name, g] of Object.entries(this.zoneGains)) {
+      g.gain.setTargetAtTime(name === zone ? (name === "field" ? 0.05 : 0.075) : 0, t, 0.9);
     }
   }
 
-  // ---- one-shots ----
-  roar(big = false): void {
-    if (this.throttled("roar", 1500)) return;
-    const base = big ? 70 : 110;
-    this.tone(base, base * 2.6, big ? 1.6 : 1.0, "sawtooth", 0.25);
-    this.tone(base * 1.5, base * 0.7, big ? 1.4 : 0.9, "square", 0.06);
-    this.noiseBurst(big ? 1.6 : 1.0, "lowpass", 1400, 200, 0.18);
+  /** faint battle crowd bed, 0..1 */
+  setBattleIntensity(v: number): void {
+    if (!this.battleBed || !this.ctx) return;
+    this.battleBed.gain.setTargetAtTime(Math.max(0, Math.min(1, v)) * 0.045, this.ctx.currentTime, 1.2);
   }
-  flap(): void {
-    if (this.throttled("flap", 260)) return;
-    this.noiseBurst(0.22, "lowpass", 500, 120, 0.16);
+
+  private startBattleBed(): void {
+    const ctx = this.ctx!;
+    const s = ctx.createBufferSource();
+    s.buffer = this.noiseBuffer!;
+    s.loop = true;
+    s.playbackRate.value = 0.3;
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = 460;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.23;
+    const lfoG = ctx.createGain();
+    lfoG.gain.value = 0.012;
+    this.battleBed = ctx.createGain();
+    this.battleBed.gain.value = 0;
+    lfo.connect(lfoG).connect(this.battleBed.gain);
+    s.connect(f).connect(this.battleBed).connect(this.ambient!);
+    s.start();
+    lfo.start();
   }
-  fireStart(): void {
-    this.noiseBurst(0.5, "lowpass", 2400, 700, 0.2);
+
+  private flagFlap(): void {
+    this.noise(0.16, "bandpass", 900 + Math.random() * 400, 300, 0.035, 1.4, this.ambient!);
+    this.noise(0.1, "bandpass", 1500, 700, 0.02, 2, this.ambient!);
   }
+  private brazierCrackle(): void {
+    for (let i = 0; i < 3; i++) {
+      this.noise(0.025, "highpass", 1600, 2400, 0.02 + Math.random() * 0.02, 1, this.ambient!, i * 0.05);
+    }
+  }
+  private distantVoices(): void {
+    this.noise(0.7, "bandpass", 300 + Math.random() * 200, 220, 0.02, 3, this.ambient!);
+  }
+
+  // ============ combat ============
   arrowWhistle(): void {
     if (this.throttled("whistle", 120)) return;
     this.tone(2100, 900, 0.4, "sine", 0.05);
+    this.noise(0.3, "bandpass", 1800, 900, 0.02, 4);
   }
   arrowHit(): void {
-    this.noiseBurst(0.12, "highpass", 2000, 4000, 0.12);
+    this.noise(0.1, "highpass", 2200, 3800, 0.1);
+    this.tone(300, 120, 0.08, "triangle", 0.07);
   }
   ballistaFire(): void {
-    this.noiseBurst(0.3, "lowpass", 900, 150, 0.3);
-    this.tone(160, 60, 0.3, "square", 0.12);
+    // mechanical: click + spring + heavy launch
+    this.tone(1300, 900, 0.03, "square", 0.06);
+    this.tone(420, 90, 0.11, "sawtooth", 0.08);
+    this.tone(140, 55, 0.3, "sine", 0.22);
+    this.noise(0.28, "lowpass", 900, 160, 0.22);
   }
   ballistaTelegraph(): void {
     if (this.throttled("bt", 800)) return;
-    this.tone(300, 420, 0.5, "sawtooth", 0.04);
+    this.tone(300, 430, 0.5, "sawtooth", 0.035);
   }
   explosion(): void {
     if (this.throttled("explosion", 100)) return;
-    this.noiseBurst(0.9, "lowpass", 3000, 100, 0.4);
-    this.tone(120, 30, 0.8, "sine", 0.3);
+    this.noise(0.9, "lowpass", 3200, 90, 0.34);
+    this.tone(110, 28, 0.85, "sine", 0.3);
+    this.noise(0.25, "highpass", 2500, 3500, 0.08);
+    this.impactDuck(0.45, 1.0);
   }
   buildingCollapse(): void {
-    this.noiseBurst(1.6, "lowpass", 700, 60, 0.35);
-    this.tone(70, 25, 1.4, "sine", 0.22);
+    if (this.throttled("collapse", 150)) return;
+    // crack → rumble → debris patter
+    this.noise(0.22, "highpass", 900, 1400, 0.16);
+    this.tone(65, 26, 1.5, "sine", 0.28, { attack: 0.02 });
+    this.noise(1.4, "lowpass", 620, 70, 0.3);
+    for (let i = 0; i < 7; i++) {
+      this.noise(0.03, "bandpass", 1300 + Math.random() * 1800, 900, 0.045, 3, undefined, 0.25 + Math.random() * 0.85);
+    }
+    this.impactDuck(0.5, 1.4);
   }
   coin(): void {
     if (this.throttled("coin", 70)) return;
-    this.tone(1400, 1400, 0.07, "sine", 0.1);
-    this.tone(2100, 2100, 0.1, "sine", 0.08, 0.06);
+    this.tone(1450, 1450, 0.06, "sine", 0.08);
+    this.tone(2150, 2150, 0.09, "sine", 0.06, { when: 0.055 });
   }
   heal(): void {
-    this.tone(520, 780, 0.25, "sine", 0.12);
-    this.tone(780, 1170, 0.3, "sine", 0.1, 0.12);
+    this.tone(520, 780, 0.22, "sine", 0.1);
+    this.tone(780, 1170, 0.28, "sine", 0.08, { when: 0.11 });
   }
   relic(): void {
-    this.tone(392, 392, 0.3, "triangle", 0.14);
-    this.tone(587, 587, 0.3, "triangle", 0.12, 0.15);
-    this.tone(784, 784, 0.5, "triangle", 0.12, 0.3);
+    this.tone(392, 392, 0.3, "triangle", 0.12);
+    this.tone(587, 587, 0.3, "triangle", 0.1, { when: 0.14 });
+    this.tone(784, 784, 0.5, "triangle", 0.1, { when: 0.28 });
   }
   swordSwing(): void {
-    if (this.throttled("swing", 90)) return;
-    this.noiseBurst(0.16, "bandpass", 900, 3000, 0.14, 2);
+    if (this.throttled("swing", 80)) return;
+    this.noise(0.15, "bandpass", 1400, 260, 0.13, 1.6);
+    this.tone(620, 240, 0.13, "sine", 0.02); // doppler body
   }
-  swordHit(): void {
-    if (this.throttled("shit", 80)) return;
-    this.tone(2400, 1600, 0.09, "square", 0.05);
-    this.noiseBurst(0.1, "bandpass", 2500, 1200, 0.16, 3);
+  /** blade into armor/ flesh: metallic partials + crunch */
+  swordHitArmor(): void {
+    if (this.throttled("shit", 70)) return;
+    this.tone(1950, 1700, 0.13, "sine", 0.06);
+    this.tone(2740, 2500, 0.09, "sine", 0.045);
+    this.tone(3900, 3600, 0.06, "sine", 0.03);
+    this.noise(0.05, "highpass", 3000, 4000, 0.09);
+    this.tone(210, 130, 0.07, "triangle", 0.09);
+  }
+  /** blade into shield: wooden knock + rattle */
+  swordHitShield(): void {
+    if (this.throttled("shsh", 70)) return;
+    this.tone(640, 560, 0.1, "triangle", 0.12);
+    this.tone(185, 150, 0.09, "sine", 0.1);
+    for (let i = 0; i < 3; i++) {
+      this.noise(0.04, "bandpass", 900 + Math.random() * 500, 700, 0.05, 2.5, undefined, 0.05 + i * 0.055);
+    }
+  }
+  /** successful parry: bright ring */
+  parry(): void {
+    this.tone(1560, 1520, 0.4, "sine", 0.07);
+    this.tone(2320, 2280, 0.32, "sine", 0.05);
+    this.noise(0.04, "highpass", 3500, 4500, 0.08);
   }
   playerHurt(): void {
-    this.noiseBurst(0.18, "lowpass", 800, 200, 0.2);
+    this.tone(150, 90, 0.16, "sine", 0.16);
+    this.noise(0.14, "lowpass", 700, 250, 0.12);
+    this.noise(0.2, "bandpass", 500, 350, 0.04, 2); // breath
   }
   dodge(): void {
-    this.noiseBurst(0.2, "bandpass", 600, 1800, 0.1, 1.5);
+    this.noise(0.18, "bandpass", 650, 1900, 0.09, 1.4);
   }
   superCharge(): void {
-    this.tone(150, 1200, 0.8, "sawtooth", 0.12);
+    this.tone(150, 1200, 0.8, "sawtooth", 0.1);
+    this.noise(0.8, "bandpass", 400, 2400, 0.05, 2);
   }
   superBlast(): void {
-    this.noiseBurst(1.2, "lowpass", 5000, 150, 0.4);
-    this.tone(400, 40, 1.0, "sawtooth", 0.2);
+    this.noise(1.1, "lowpass", 5000, 160, 0.36);
+    this.tone(380, 38, 1.0, "sawtooth", 0.18);
+    this.tone(95, 30, 1.1, "sine", 0.28);
+    this.impactDuck(0.4, 1.2);
   }
   uiClick(): void {
-    this.tone(800, 640, 0.06, "sine", 0.06);
+    this.tone(760, 620, 0.06, "sine", 0.06);
+    this.tone(1520, 1240, 0.05, "sine", 0.025, { when: 0.01 });
+  }
+  uiMove(): void {
+    if (this.throttled("uimove", 40)) return;
+    this.tone(520, 500, 0.035, "sine", 0.035);
   }
   objective(): void {
-    this.tone(523, 523, 0.16, "triangle", 0.1);
-    this.tone(784, 784, 0.3, "triangle", 0.1, 0.14);
+    this.tone(523, 523, 0.16, "triangle", 0.09);
+    this.tone(784, 784, 0.3, "triangle", 0.09, { when: 0.13 });
   }
   victory(): void {
-    this.tone(523, 523, 0.35, "triangle", 0.12);
-    this.tone(659, 659, 0.35, "triangle", 0.12, 0.3);
-    this.tone(784, 784, 0.6, "triangle", 0.14, 0.6);
+    this.tone(523, 523, 0.35, "triangle", 0.1);
+    this.tone(659, 659, 0.35, "triangle", 0.1, { when: 0.28 });
+    this.tone(784, 784, 0.6, "triangle", 0.12, { when: 0.56 });
   }
   defeat(): void {
-    this.tone(392, 392, 0.5, "triangle", 0.12);
-    this.tone(311, 311, 0.5, "triangle", 0.12, 0.45);
-    this.tone(233, 233, 1.0, "triangle", 0.13, 0.9);
+    this.tone(392, 392, 0.5, "triangle", 0.1);
+    this.tone(311, 311, 0.5, "triangle", 0.1, { when: 0.42 });
+    this.tone(233, 233, 1.0, "triangle", 0.11, { when: 0.84 });
   }
 
   dispose(): void {
     try {
-      this.windSource?.stop();
-      this.fireSource?.stop();
+      if (this.fireCrackleTimer) clearInterval(this.fireCrackleTimer);
+      if (this.zoneScheduler) clearInterval(this.zoneScheduler);
       this.ctx?.close();
     } catch {
       /* noop */

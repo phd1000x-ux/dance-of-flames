@@ -14,6 +14,12 @@ WebGPU backend, 1440×900 viewport.
 | Riverlands 30s stress | WebGPU | **74** | 70 | 69 | 480ms (one-time shader compile) | 36 | 0 |
 | Harrenhal 20s stress (rain+fog) | WebGPU | **75** | 69 | 68 | 29ms | 57 | 0 |
 | Dragonstone gameplay (manual) | WebGPU | 75–90 | — | — | — | 14 | 0 |
+| Riverlands 20s (after density+visual upgrade) | WebGPU | **75** | 70 | 69 | 15.1ms | 36 | 0 |
+| **Blackstone Citadel 20s** (castle, 52 NPCs, 180 props, dragon PBR materials) | WebGPU | **75** | 69 | 64 | 19.9ms | 52 | 0 |
+
+Targets from the brief (60 FPS typical, ≥35 FPS large combat) are met with the
+quality governor never needing to leave tier 0 (full quality), including the new
+castle mission with the full world-density and dragon/rider visual upgrades.
 
 Targets from the brief (60 FPS typical, ≥35 FPS large combat) are met with the
 quality governor never needing to leave tier 0 (full quality).
@@ -33,11 +39,18 @@ starts at tier 1 and self-adjusts.
 ## Rendering budget & techniques
 
 - Soldier = one merged mesh (torso+head+weapon) + cloned material; ballista ≈ 6 meshes
-- Trees/rocks are instanced meshes with frozen world matrices
+- Trees/rocks and all ~20 battlefield prop templates are instanced meshes with frozen
+  world matrices (per-instance frustum culling); density scales with the graphics
+  preset (LOW 50% / MEDIUM 75% / HIGH 100% / AUTO 85%) and the governor culls far
+  decorative props at tier ≥ 2
+- Castle is sectorized (per-wall meshes, merged towers, static keep crown) — never one
+  giant mesh; destructible targets use the shared state-based destruction system
+- Dragon/rider textures are procedural 256px sets cached per dragon (normal +
+  roughness + albedo variation), generated once
 - Projectiles, loot pickups and particle bursts are pooled; nothing per-frame is
   allocated in steady state
 - One dynamic fire light (flicker), shadow map 1024 with PCF, casters: player + near buildings
-- Fog + horizon silhouettes replace distant geometry; mission bounds ~1.5km
+- Fog + horizon silhouettes + cheap distant landmarks replace distant geometry; mission bounds ~1.5km
 - GlowLayer at minimal samples for fire/embers
 - HUD updates at 30Hz; minimap canvas redrawn in the same tick
 

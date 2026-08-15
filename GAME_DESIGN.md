@@ -38,7 +38,7 @@ hitbox). Canon pairs get a "BONDED" synergy bonus (e.g. Daemon+Caraxes: fire dam
 
 ## Missions
 
-1. **Dragonstone Coast** (tutorial) — volcanic shore; teaches W/mouse/fire/boost via
+1. **Dragonstone Coast** (tutorial) — volcanic shore; teaches W/turn/aim/fire/boost via
    input-reactive prompts; burn 8 soldiers, raze the watchtower.
 2. **Riverlands Raid** — villages & camps; introduces **ballistae** and commander
    kill; relic towers.
@@ -46,6 +46,15 @@ hitbox). Canon pairs get a "BONDED" synergy bonus (e.g. Daemon+Caraxes: fire dam
    significantly harder.
 4. **King's Landing Assault** — walls, gatehouses, 5 scorpions, commander, 90s final
    survive wave.
+5. **The Blackstone Citadel** — large fortified castle assault. Outer curtain 220m
+   square with 8 towers and battlemented walls, gatehouse with approach bridge and
+   banners, inner ward (110m), 46m central keep with corner turrets, great hall,
+   barracks/supply (destructible, relic-bearing), courtyards dressed with braziers,
+   weapon racks, carts and banner rings; outside: village, military camp, siege
+   towers and scorched siege lines. Six phases: silence 6 ballistae → shatter 4 wall
+   towers → breach the gatehouse → clear 12 courtyard defenders → eliminate the
+   castellan → survive a 75s counterattack. Ground continuation after dragon death
+   uses the gate → courtyard → keep-gate route with wall collision.
 
 Difficulty (Story/Normal/Hard) scales enemy damage, accuracy, count, ballista count,
 heal drop rate and aggression.

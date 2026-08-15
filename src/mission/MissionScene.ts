@@ -77,6 +77,13 @@ export class MissionScene {
   readonly rng: SeededRng;
   phase: MissionPhase = "dragon";
   time = 0;
+  /** 0..1 combat heat driving adaptive music + battle ambience */
+  musicIntensity = 0;
+  private recentDamageT = 0;
+
+  get missionId(): string {
+    return this.deps.mission.id;
+  }
 
   // tutorial
   tutorialStep = -1;
@@ -101,6 +108,11 @@ export class MissionScene {
   private ended = false;
   private glow: GlowLayer;
   private shakeListener: ((pos: Vector3, strength: number) => void) | null = null;
+  /** Bug B: idempotent guard — dragon death handled exactly once */
+  private dragonDeathHandled = false;
+  private deathStartedAt = 0;
+  /** cinematic slow-motion window (seconds of real time remaining) */
+  private slowmoT = 0;
 
   constructor(private deps: MissionSceneDeps) {
     const d = deps;
@@ -108,7 +120,11 @@ export class MissionScene {
     this.rng = new SeededRng(d.mission.seed + 17);
 
     const builder = new WorldBuilder(this.scene);
-    this.world = builder.build(d.mission);
+    const densityByPreset: Record<string, number> = { low: 0.5, medium: 0.75, high: 1, auto: 0.85 };
+    this.world = builder.build(d.mission, densityByPreset[d.settings.graphicsPreset] ?? 0.85);
+    this.castleZone = this.world.layout.castleZone;
+    this.villageZones = this.world.layout.villageZones;
+    this.castleAabbs = this.world.layout.castleAabbs;
 
     this.player = new PlayerState(d.dragon, d.rider, d.shopMods);
     this.player.healCharges = d.consumables.heal;
@@ -281,6 +297,7 @@ export class MissionScene {
     });
     d.bus.on("player-damaged", (p) => {
       this.stats.damageTaken += p.amount;
+      this.recentDamageT = 3.5;
     });
   }
 
@@ -314,9 +331,39 @@ export class MissionScene {
     return this.dragonCtrl.pos;
   }
 
+  /** ambient audio zone from player position */
+  getAmbientZone(): "field" | "village" | "castle" {
+    const p = this.playerPosition();
+    if (this.castleZone && Vector3.DistanceSquared(p, this.castleZone.center) < this.castleZone.radiusSq) {
+      return "castle";
+    }
+    for (const z of this.villageZones) {
+      if (Vector3.DistanceSquared(p, z.center) < z.radiusSq) return "village";
+    }
+    return "field";
+  }
+
+  /** zones for ambience (populated by WorldBuilder for this mission) */
+  castleZone: { center: Vector3; radiusSq: number } | null = null;
+  villageZones: { center: Vector3; radiusSq: number }[] = [];
+  castleAabbs: { x: number; z: number; hx: number; hz: number }[] = [];
+
   update(dt: number): void {
     if (this.ended) return;
     const d = this.deps;
+    // Deterministic death transition: ANY path that zeroes dragon HP lands here.
+    // (projectile hits call beginDragonDeath directly, but e.g. terrain-crash
+    //  stagger damage previously set mode=dying without transitioning — silent death.)
+    if (this.phase === "dragon" && this.player.mode === "dying") {
+      this.beginDragonDeath();
+    }
+    // cinematic slow-motion during the dragon death transition
+    let simDt = dt;
+    if (this.slowmoT > 0) {
+      this.slowmoT -= dt;
+      simDt = dt * 0.35;
+    }
+    dt = simDt;
     this.time += dt;
     this.stats.timeSeconds = this.time;
 
@@ -386,7 +433,9 @@ export class MissionScene {
       this.fire.update(dt, false, false, d.particleScale());
       d.audio.setFireLoop(false);
       this.deathLandTimer += dt;
-      if (this.dragonCtrl.landed || this.deathLandTimer > 4.2) {
+      // wall-clock fallback: the death sequence must never stall on slow pipelines
+      const wallElapsed = (performance.now() - this.deathStartedAt) / 1000;
+      if (this.dragonCtrl.landed || this.deathLandTimer > 4.2 || wallElapsed > 5.5) {
         this.spawnRider();
       }
     } else if (this.phase === "ground" && this.riderCtrl) {
@@ -402,13 +451,14 @@ export class MissionScene {
         this.riderCtrl.onHitCallback = (fwd, range, arc, dmg, heavy) => {
           const res = this.enemies.applyMeleeHit(this.riderCtrl!.pos, fwd, range, arc, dmg, heavy);
           if (res.hit) {
-            d.audio.swordHit();
+            d.audio.swordHitArmor();
             d.bus.emit("hit-enemy", { killed: false });
           } else if (res.blocked) {
-            d.audio.swordHit();
+            d.audio.swordHitShield();
           }
         };
       }
+      this.riderCtrl.onParry = () => d.audio.parry();
       // interact: F (ground) or G
       if (d.input.pressed("interactGround") || d.input.pressed("interact")) this.useConsumable();
       d.audio.setWind(0.1);
@@ -430,6 +480,37 @@ export class MissionScene {
     this.buildings.update(dt);
     this.projectiles.update(dt);
     this.tracker.update(dt);
+
+    // combat heat for adaptive music: recent damage > active fire > nearby enemies
+    this.recentDamageT = Math.max(0, this.recentDamageT - dt);
+    const ppos = this.playerPosition();
+    let nearby = 0;
+    for (const s of this.enemies.soldiers) {
+      if (s.state === "dead") continue;
+      if (Vector3.DistanceSquared(s.pos, ppos) < 140 * 140) nearby++;
+    }
+    const heat =
+      (this.recentDamageT > 0 ? 0.7 : 0) +
+      (this.fire.firing ? 0.3 : 0) +
+      Math.min(0.5, nearby / 14);
+    this.musicIntensity = Math.max(heat, this.musicIntensity - dt * 0.12);
+
+    // ambient prop animation (banners, birds) + static-castle collision for the rider
+    this.world.props.update(dt);
+    if (this.phase === "ground" && this.riderCtrl) {
+      const p = this.riderCtrl.pos;
+      for (const a of this.castleAabbs) {
+        const dx = p.x - a.x;
+        const dz = p.z - a.z;
+        if (Math.abs(dx) < a.hx + 0.6 && Math.abs(dz) < a.hz + 0.6) {
+          const px = a.hx + 0.6 - Math.abs(dx);
+          const pz = a.hz + 0.6 - Math.abs(dz);
+          if (px < pz) p.x = a.x + Math.sign(dx || 1) * (a.hx + 0.6);
+          else p.z = a.z + Math.sign(dz || 1) * (a.hz + 0.6);
+        }
+      }
+      this.buildings.collideRider(p, 0.5);
+    }
 
     // camera
     if (this.phase !== "ground") {
@@ -465,13 +546,20 @@ export class MissionScene {
   }
 
   private beginDragonDeath(): void {
-    if (this.phase !== "dragon") return;
+    // idempotent: projectiles/stagger/terrain may each report lethal damage
+    if (this.phase !== "dragon" || this.dragonDeathHandled) return;
+    this.dragonDeathHandled = true;
+    this.deathStartedAt = performance.now();
     this.phase = "dragonDying";
     this.stats.dragonSurvived = false;
     this.player.mode = "dying";
     this.deathLandTimer = 0;
+    this.slowmoT = 1.2; // brief cinematic slow-motion
+    this.clearLock();
     this.deps.audio.roar(true);
     this.deps.audio.setFireLoop(false);
+    this.deps.audio.impactDuck(); // duck music for the death moment
+    this.deps.bus.emit("dragon-fallen", {});
     this.deps.bus.emit("dragon-death-start", {
       pos: { x: this.dragonCtrl.pos.x, y: this.dragonCtrl.pos.y, z: this.dragonCtrl.pos.z },
     });
@@ -514,6 +602,7 @@ export class MissionScene {
     // convert objectives so the mission remains completable
     this.tracker.convertToGround();
     this.deps.bus.emit("ground-mode-start", { pos: { x: spawn.x, y: spawn.y, z: spawn.z } });
+    this.deps.bus.emit("ground-begun", {});
   }
 
   private updateTutorial(dt: number): void {
@@ -758,6 +847,7 @@ export class MissionScene {
     this.buildings.disposeAll();
     this.loot.dispose();
     this.projectiles.dispose();
+    this.world.props.dispose();
     this.glow.dispose();
     this.scene.dispose();
   }
@@ -791,5 +881,35 @@ export class MissionScene {
   testCollapseBuildingWithTag(tag: string): void {
     const b = this.buildings.buildings.find((x) => !x.collapsed && x.tag === tag);
     if (b) this.buildings.damageBuilding(b, b.maxHp + 1);
+  }
+
+  testCollapseBuildingsWithTag(tag: string, n: number): void {
+    for (let i = 0; i < n; i++) this.testCollapseBuildingWithTag(tag);
+  }
+
+  /** E2E: destroy n alive ballistae */
+  testKillBallistae(n: number): void {
+    let killed = 0;
+    for (const b of this.enemies.ballistae) {
+      if (killed >= n) break;
+      if (!b.dead) {
+        this.enemies.damageBallista(b, b.maxHp + 1, true);
+        killed++;
+      }
+    }
+  }
+
+  /** E2E: kill n soldiers matching an enemy id or "soldier"/"commander" role */
+  testKillByType(type: string, n: number): void {
+    let killed = 0;
+    const match = (id: string) =>
+      type === "soldier" ? ["swordsman", "archer", "spearman", "shieldman"].includes(id) : id === type;
+    for (const s of this.enemies.soldiers) {
+      if (killed >= n) break;
+      if (s.state !== "dead" && match(s.def.id)) {
+        this.enemies.damageSoldier(s, 99999, false);
+        killed++;
+      }
+    }
   }
 }

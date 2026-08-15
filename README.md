@@ -115,8 +115,11 @@ in-game: **Main Menu → MANUAL** (also linked from the Pause Menu as CONTROLS).
   instantly on destruction (+15% fire damage, +30% armor, lifesteal, etc.).
 - **Loot**: soldiers drop coins (magnetic pickup) and healing flasks (instant
   heal, no inventory).
-- **Dragon death is not the end**: the mission converts its remaining objectives
-  so it can always be completed on foot (kill squads / survive / reach victory).
+- **Dragon death is not the end**: a cinematic **DRAGON FALLEN** transition
+  (slow-motion, vignette, cello stinger) hands you to the rider; the mission
+  converts its remaining objectives so it can always be completed on foot
+  (kill squads / survive / reach victory). True **DEFEAT** occurs only when the
+  rider also falls (offering RETRY / MISSION SELECT / MAIN MENU).
 - **Economy**: coins persist between missions; spend them in the Armory shop
   (dragon & rider stat upgrades, consumable charges). Prices 50/120/250/500.
 - **Score & ranks**: C/B/A/S based on kills, destruction, relics, damage taken,
@@ -126,11 +129,30 @@ in-game: **Main Menu → MANUAL** (also linked from the Pause Menu as CONTROLS).
 
 Settings → Graphics Preset:
 
-- `LOW` — reduced particles, shadows off, 1.5× hardware scaling
-- `MEDIUM` — balanced
-- `HIGH` — full quality
+- `LOW` — reduced particles, shadows off, 1.5× hardware scaling, 50% decorative props
+- `MEDIUM` — balanced (75% props)
+- `HIGH` — full quality (100% props)
 - `AUTO` (default) — dynamic PerformanceGovernor adjusts render scale,
-  particle budget and shadows to hold 60 FPS
+  particle budget, shadows and far-prop culling to hold 60 FPS
+
+The minimap is **north-up** (N marker on the rim): the map stays fixed and the
+player arrow rotates — A/D always turn the dragon left/right and the arrow,
+enemies and landmarks agree with the world (verified by automated tests).
+
+## Audio & Music
+
+All audio is original and generated at runtime (see THIRD_PARTY_ASSETS.md):
+
+- **Layered SFX** — dragon roar (sub body + formant growl + noise), size-appropriate
+  wingbeats synced to the flap animation, multi-layer fire breath with ember crackle,
+  speed-parameterized wind, differentiated sword impacts (armor / shield / parry),
+  multi-stage building collapse, mechanical ballista fire.
+- **Ambient zones** — field / village / castle crossfade by position, plus a battle
+  crowd bed that follows combat intensity.
+- **Adaptive soundtrack** — an original cello + violin score (menu, exploration,
+  combat low/high, castle assault, ground combat, dragon-fallen stinger, victory,
+  defeat) that transitions at musical bar boundaries; music ducks for major impacts.
+- Volume sliders: **Master / Music / Effects** (Settings, persisted).
 
 Also: camera-shake slider, speed-blur toggle, mouse sensitivity, invert-Y,
 master/effects volume, FPS display, keyboard look speed, keyboard turn speed,
@@ -181,7 +203,11 @@ procedurally at runtime** — no external art or audio files. Details:
 
 ## Known Limitations
 
-- Placeholder low-poly procedural dragons/soldiers (silhouette-first art)
+- Procedural low-poly art direction (silhouette-first); the new scale-normal
+  dragon materials are stylized, not photoreal
+- The soundtrack is a synthesized cello/violin approximation (bowed-string
+  synthesis), not recorded orchestral sampling — the cue system is structured so
+  higher-quality rendered stems can replace the synth voices later
 - Rider ground combat is deliberately arcade-shallow (no stamina-gated combos)
 - Relic upgrades last for the current mission (architecture supports persistence)
 - One save slot per browser profile

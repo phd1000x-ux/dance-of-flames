@@ -13,6 +13,8 @@ import type { MissionDefinition } from "../data/missions";
 import { SeededRng } from "../core/SeededRng";
 import { Terrain, buildSkyAndHorizon } from "./Terrain";
 import type { BuildingKind } from "./BuildingFactory";
+import { PropLibrary } from "./PropLibrary";
+import { CastleBuilder, type CastleAabb } from "./CastleBuilder";
 
 export interface BuildingPlacement {
   kind: BuildingKind;
@@ -34,6 +36,11 @@ export interface BallistaPlacement {
   yaw: number;
 }
 
+export interface AmbientZonePlacement {
+  center: Vector3;
+  radiusSq: number;
+}
+
 export interface WorldLayout {
   buildings: BuildingPlacement[];
   squads: SquadPlacement[];
@@ -41,6 +48,11 @@ export interface WorldLayout {
   commanderPos: Vector3 | null;
   playerStart: Vector3;
   playerStartYaw: number;
+  /** ambient audio zones */
+  castleZone: { center: Vector3; radiusSq: number } | null;
+  villageZones: AmbientZonePlacement[];
+  /** static castle wall collision for ground mode */
+  castleAabbs: CastleAabb[];
 }
 
 export interface WorldContext {
@@ -49,6 +61,7 @@ export interface WorldContext {
   hemi: HemisphericLight;
   shadows: ShadowGenerator | null;
   layout: WorldLayout;
+  props: PropLibrary;
 }
 
 /**
@@ -58,7 +71,7 @@ export interface WorldContext {
 export class WorldBuilder {
   constructor(private scene: Scene) {}
 
-  build(def: MissionDefinition): WorldContext {
+  build(def: MissionDefinition, density = 1): WorldContext {
     const env = def.environment;
     const rng = new SeededRng(def.seed);
 
@@ -99,9 +112,15 @@ export class WorldBuilder {
       // rain is attached by MissionScene (needs camera follow target)
     }
     this.buildProps(def, rng, terrain);
-    const layout = this.generateLayout(def, rng, terrain);
 
-    return { terrain, sun, hemi, shadows, layout };
+    // ---- prop library: reusable density system ----
+    const props = new PropLibrary(this.scene);
+    props.begin({ scene: this.scene, terrain: terrain.sampler, rng, density });
+
+    const layout = this.generateLayout(def, rng, terrain, props);
+    this.decorate(def, rng, props, layout);
+
+    return { terrain, sun, hemi, shadows, layout, props };
   }
 
   private buildWater(level: number, color: string): void {
@@ -173,11 +192,16 @@ export class WorldBuilder {
   }
 
   /** Data-driven battlefield layout generated from the mission seed. */
-  private generateLayout(def: MissionDefinition, rng: SeededRng, terrain: Terrain): WorldLayout {
+  private generateLayout(def: MissionDefinition, rng: SeededRng, terrain: Terrain, props: PropLibrary): WorldLayout {
     const buildings: BuildingPlacement[] = [];
     const squads: SquadPlacement[] = [];
     const ballistae: BallistaPlacement[] = [];
     let commanderPos: Vector3 | null = null;
+    let castleZone: { center: Vector3; radiusSq: number } | null = null;
+    const villageZones: AmbientZonePlacement[] = [];
+    let castleAabbs: CastleAabb[] = [];
+    let playerStart = new Vector3(-380, 150, -380);
+    let playerStartYaw = Math.PI / 4;
 
     const findFlat = (cx: number, cz: number, spread: number, size: number): Vector3 => {
       for (let tries = 0; tries < 24; tries++) {
@@ -269,6 +293,34 @@ export class WorldBuilder {
         commanderPos = findFlat(0, 320, 20, 3);
         break;
       }
+      case "blackstone": {
+        // THE BLACKSTONE CITADEL — the castle IS the mission
+        const castle = new CastleBuilder(this.scene, terrain.sampler, rng);
+        const res = castle.build(0, 0, props);
+        buildings.push(...res.buildingPlacements);
+        castleAabbs = res.wallAabbs;
+        castleZone = { center: res.center, radiusSq: res.radius * res.radius };
+        // defenders: wall archers, courtyard infantry + elites, castellan at the keep gate
+        squads.push({ type: "archer", count: 12, center: new Vector3(0, 0, 80), radius: 95 });
+        squads.push({ type: "archer", count: 8, center: new Vector3(0, 0, -80), radius: 95 });
+        squads.push({ type: "swordsman", count: 12, center: new Vector3(0, 0, 20), radius: 45 });
+        squads.push({ type: "shieldman", count: 8, center: new Vector3(-40, 0, 40), radius: 30 });
+        squads.push({ type: "spearman", count: 8, center: new Vector3(40, 0, 40), radius: 30 });
+        squads.push({ type: "elite", count: 5, center: new Vector3(0, 0, 0), radius: 30 });
+        // ballistae: 4 on wall towers + 2 in the courtyard
+        ballistae.push(
+          { pos: new Vector3(0, terrain.heightAt(0, -110) + 17, -104), yaw: Math.PI },
+          { pos: new Vector3(-110, terrain.heightAt(-110, 0) + 17, 0), yaw: -Math.PI / 2 },
+          { pos: new Vector3(110, terrain.heightAt(110, 0) + 17, 0), yaw: Math.PI / 2 },
+          { pos: new Vector3(-70, terrain.heightAt(-70, -70) + 17, -66), yaw: (Math.PI * 3) / 4 },
+          { pos: new Vector3(60, terrain.heightAt(60, 60), 60), yaw: Math.PI },
+          { pos: new Vector3(-60, terrain.heightAt(-60, 60), 60), yaw: Math.PI }
+        );
+        commanderPos = new Vector3(0, terrain.heightAt(0, 22), 22); // at the keep gate
+        playerStart = new Vector3(-60, 170, -420);
+        playerStartYaw = Math.PI * 0.06;
+        break;
+      }
       default:
         break;
     }
@@ -281,8 +333,74 @@ export class WorldBuilder {
       squads,
       ballistae,
       commanderPos,
-      playerStart: new Vector3(-380, 150, -380),
-      playerStartYaw: Math.PI / 4,
+      playerStart,
+      playerStartYaw,
+      castleZone,
+      villageZones,
+      castleAabbs,
     };
+  }
+
+  /**
+   * Environmental density pass: roads between POIs, prop clusters, ambient
+   * landmarks, smoke and birds — storytelling rather than uniform clutter.
+   */
+  private decorate(def: MissionDefinition, rng: SeededRng, props: PropLibrary, layout: WorldLayout): void {
+    const pois: { x: number; z: number; kind: "village" | "camp" | "battle" | "castle" }[] = [];
+
+    // derive POIs from the mission layout
+    for (const b of layout.buildings) {
+      if (b.tag === "village" || b.tag === "house") pois.push({ x: b.pos.x, z: b.pos.z, kind: "village" });
+      else if (b.tag === "supply" || b.tag === "camp" || b.tag === "barracks") pois.push({ x: b.pos.x, z: b.pos.z, kind: "camp" });
+      else if (b.tag === "keep" || b.tag === "gatehouse") pois.push({ x: b.pos.x, z: b.pos.z, kind: "castle" });
+    }
+    if (pois.length === 0) pois.push({ x: 150, z: 60, kind: "village" });
+
+    for (const p of pois) {
+      if (p.kind === "village") {
+        props.villageCluster(p.x, p.z, 6, 34);
+        layout.villageZones.push({ center: new Vector3(p.x, 0, p.z), radiusSq: 55 * 55 });
+      } else if (p.kind === "camp") {
+        props.militaryCamp(p.x, p.z, 6, 26);
+      }
+    }
+
+    // battlefield debris between POIs + at squad hotspots
+    for (const s of layout.squads.slice(0, 3)) {
+      props.battlefieldDebris(s.center.x, s.center.z, 6, s.radius * 0.8);
+    }
+
+    // roads connecting the first POIs to each other
+    for (let i = 0; i < Math.min(pois.length - 1, 3); i++) {
+      const a = pois[i];
+      const b = pois[i + 1];
+      const mid = { x: (a.x + b.x) / 2 + rng.range(-40, 40), z: (a.z + b.z) / 2 + rng.range(-40, 40) };
+      props.road([a, mid, b], 4);
+    }
+    // approach road to the castle gate for ground continuation
+    if (def.id === "blackstone") {
+      props.road([
+        { x: 0, z: 118 },
+        { x: 6, z: 190 },
+        { x: -20, z: 280 },
+      ], 5);
+    }
+
+    // vegetation patches (denser near forests)
+    for (let i = 0; i < 10; i++) {
+      const a = rng.range(0, Math.PI * 2);
+      const r = rng.range(140, 640);
+      props.vegetationPatch(Math.cos(a) * r, Math.sin(a) * r, rng.int(3, 8), rng.range(8, 26));
+    }
+
+    // ambient landmarks + smoke + birds
+    props.distantLandmarks();
+    const smokeCount = def.id === "blackstone" ? 4 : 3;
+    for (let i = 0; i < smokeCount; i++) {
+      const p = pois[rng.int(0, pois.length - 1)];
+      props.addSmokeColumn(p.x + rng.range(-30, 30), p.z + rng.range(-30, 30), rng.range(0.8, 1.4));
+    }
+    props.addBirds(rng.range(-300, 300), rng.range(-300, 300), rng.range(90, 150), 5);
+    if (rng.chance(0.5)) props.addBirds(rng.range(200, 500), rng.range(-400, -200), rng.range(110, 170), 4);
   }
 }

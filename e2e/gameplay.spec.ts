@@ -42,7 +42,7 @@ test("E2E 1: boot → main menu → character select → mission select → laun
   // confirm → mission select
   await page.getByRole("button", { name: "CONFIRM" }).click();
   await page.waitForSelector("#screen-mission-select.visible");
-  await expect(page.locator(".map-marker")).toHaveCount(4);
+  await expect(page.locator(".map-marker")).toHaveCount(5);
 
   // launch Dragonstone
   await page.getByRole("button", { name: "LAUNCH" }).click();

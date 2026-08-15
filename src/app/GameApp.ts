@@ -7,12 +7,15 @@ import { SaveSystem, defaultSave, type SaveData, type GameSettings, IndexedDbSto
 import { UpgradeSystem } from "../progression/UpgradeSystem";
 import { InputManager } from "../input/InputManager";
 import { AudioManager } from "../audio/AudioManager";
+import { MusicSystem } from "../audio/MusicSystem";
+import type { MusicStateId } from "../audio/MusicComposer";
 import { PerformanceGovernor } from "../engine/PerformanceGovernor";
 import { detectCapabilities, type EngineInfo } from "../engine/EngineFactory";
 import { UIManager } from "../ui/UIManager";
 import { MenuShowcase } from "../scenes/MenuShowcase";
 import { MissionScene } from "../mission/MissionScene";
 import { getMission, MISSIONS } from "../data/missions";
+import { applyDamageTint } from "../world/DragonMaterials";
 import { getRider } from "../data/riders";
 import { getDragon } from "../data/dragons";
 import type { MissionStats } from "../mission/Scoring";
@@ -30,6 +33,7 @@ export interface GameAppOptions {
 export class GameApp {
   readonly state = new StateMachine();
   readonly bus = new EventBus<GameEvents>();
+  readonly music = new MusicSystem();
   settings!: GameSettings;
   save!: SaveData;
   upgrades!: UpgradeSystem;
@@ -150,12 +154,18 @@ export class GameApp {
   }
 
   private wireBus(): void {
-    this.bus.on("sfx", ({ name }) => {
+    this.bus.on("sfx", ({ name, intensity }) => {
       const a = this.audio as any;
-      if (typeof a[name] === "function") a[name]();
+      if (typeof a[name] === "function") a[name](intensity);
     });
     this.bus.on("relic-found", () => {
       /* audio handled via sfx relic */
+    });
+    this.bus.on("dragon-fallen", () => {
+      this.music.setState("dragon_fallen");
+    });
+    this.bus.on("ground-begun", () => {
+      this.music.setState("ground");
     });
   }
 
@@ -261,8 +271,10 @@ export class GameApp {
       const prevBest = this.save.bestScores[missionDef.id] ?? 0;
       if (score > prevBest) this.save.bestScores[missionDef.id] = score;
       this.audio.victory();
+      this.music.setState("victory");
     } else {
       this.audio.defeat();
+      this.music.setState("defeat");
     }
     this.save.coins = this.upgrades.coins;
     this.save.upgrades = this.upgrades.serialize().levels;
@@ -375,9 +387,25 @@ export class GameApp {
           this.ui.populateShop(this.upgrades.coins, this.upgrades.serialize().levels);
           this.ui.showScreen("shop");
         } else {
-          // defeat: retry offer via shop? → mission select
           this.backToMenu();
         }
+      },
+      onRetryMission: () => {
+        if (this.missionCfg) {
+          this.setPaused(false);
+          this.loadMission();
+        } else {
+          this.backToMenu();
+        }
+      },
+      onMissionSelect: () => {
+        this.mission?.dispose();
+        this.mission = null;
+        this.input.resetAllInputs();
+        this.openShowcase();
+        this.state.transition(GameState.MISSION_SELECT);
+        this.populateMissionSelect();
+        this.ui.showScreen("mission-select");
       },
     };
   }
@@ -392,11 +420,42 @@ export class GameApp {
     return this.save.selectedDragon ?? "syrax";
   }
 
+  private musicAmbientTimer = 0;
+
+  /** adaptive score state + ambient audio zone from the live mission */
+  private updateMusicAndAmbient(): void {
+    const m = this.mission;
+    if (!m) return;
+    // ambient zone by player position (castle missions define a castle center+radius)
+    const zone = m.getAmbientZone();
+    this.audio.setAmbientZone(zone);
+
+    let target: MusicStateId;
+    if (m.missionId === "blackstone" && m.phase !== "ground") {
+      target = m.musicIntensity >= 0.8 ? "combat_high" : "castle";
+    } else if (m.phase === "ground") {
+      target = m.musicIntensity >= 0.8 ? "combat_high" : "ground";
+    } else if (m.musicIntensity >= 0.75) {
+      target = "combat_high";
+    } else if (m.musicIntensity >= 0.35) {
+      target = "combat_low";
+    } else {
+      target = "explore";
+    }
+    this.music.setState(target);
+    this.audio.setBattleIntensity(m.musicIntensity);
+    // governor tier ≥ 2: cull far decorative props to protect framerate
+    m.world.props.setCullingRadius(this.governor.tier >= 2 ? 380 : 6000);
+  }
+
   private backToMenu(): void {
     this.state.transition(GameState.MENU);
     this.mission?.dispose();
     this.mission = null;
     this.input.resetAllInputs();
+    this.music.setState("menu");
+    this.audio.setAmbientZone("field");
+    this.audio.setBattleIntensity(0);
     this.openShowcase();
     this.ui.showScreen("main-menu");
     this.ui.setContinueEnabled(this.hasProgress());
@@ -439,12 +498,23 @@ export class GameApp {
 
     // audio unlock on first interaction
     if (this.frameCount === 30) this.audio.unlock();
+    // start the score once audio exists
+    if (this.frameCount === 30 && this.audio.musicInput) {
+      const ctx = (this.audio as any).ctx as AudioContext;
+      this.music.start(ctx, this.audio.musicInput);
+    }
 
     if (this.mission && this.state.inGameplay && !this.paused) {
       const dt = clamp(frameMs / 1000, 0, 0.05);
       // benchmark autopilot
       if (this.opts.benchmark) this.benchmarkPilot();
       this.mission.update(dt);
+      // adaptive music + ambient zones (~1 Hz) — skipped if the mission just ended
+      this.musicAmbientTimer += frameMs;
+      if (this.musicAmbientTimer > 1000 && this.state.inGameplay) {
+        this.musicAmbientTimer = 0;
+        this.updateMusicAndAmbient();
+      }
       // phase transitions → game state
       if (this.mission.phase === "dragonDying" && this.state.state === GameState.DRAGON_GAMEPLAY) {
         this.state.transition(GameState.DRAGON_DEATH);
@@ -479,6 +549,8 @@ export class GameApp {
     const obj = m.tracker.current();
     // live settings → mission systems
     m.dragonCtrl.inputTurnScale = this.settings.keyboardTurnSpeed ?? 1;
+    // subtle damage state on the dragon material (soot/darkening as HP drops)
+    applyDamageTint(m.rig.materials, p.dragonHp / Math.max(1, p.maxDragonHp));
     this.ui.hud.update({
       mode: m.phase === "ground" ? "ground" : m.phase === "dragonDying" ? "dying" : "dragon",
       dragonHp: p.dragonHp,

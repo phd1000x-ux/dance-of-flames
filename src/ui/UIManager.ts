@@ -27,6 +27,8 @@ export interface UiCallbacks {
   onShopBuy(upgradeId: string): void;
   onShopClose(nextMission: boolean): void;
   onResultsContinue(): void;
+  onRetryMission(): void;
+  onMissionSelect(): void;
 }
 
 /** Builds & manages all DOM screens (menus, shop, pause, results, settings). */
@@ -470,6 +472,7 @@ export class UIManager {
       riverlands: { x: 44, y: 48 },
       harrenhal: { x: 40, y: 33 },
       kingslanding: { x: 58, y: 66 },
+      blackstone: { x: 24, y: 58 },
     };
     d.innerHTML = `
       <div class="mission-layout">
@@ -751,15 +754,18 @@ export class UIManager {
         <div class="panel-title victory-title" id="results-title">VICTORY</div>
         <div class="rank-badge" id="results-rank">S</div>
         <div class="results-stats" id="results-stats"></div>
-        <div class="modal-btns">
-          <button class="btn" data-act="continue">CONTINUE</button>
-        </div>
+        <div class="modal-btns" id="results-btns"></div>
       </div></div>`;
     d.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
       if (!t) return;
       this.click();
-      if (t.dataset.act === "continue") this.cb.onResultsContinue();
+      switch (t.dataset.act) {
+        case "continue": this.cb.onResultsContinue(); break;
+        case "retry": this.cb.onRetryMission(); break;
+        case "missionselect": this.cb.onMissionSelect(); break;
+        case "mainmenu": this.cb.onAbandon(); break;
+      }
     });
     return d;
   }
@@ -785,6 +791,12 @@ export class UIManager {
     (screen.querySelector("#results-stats") as HTMLElement).innerHTML = rows
       .map(([k, v]) => `<div class="row"><span>${k}</span><span>${v}</span></div>`)
       .join("");
+    (screen.querySelector("#results-btns") as HTMLElement).innerHTML = victory
+      ? `<button class="btn" data-act="continue">CONTINUE</button>`
+      : `<button class="btn" data-act="retry">RETRY</button>
+         <button class="btn ghost" data-act="missionselect">RETURN TO MISSION SELECT</button>
+         <button class="btn ghost" data-act="mainmenu">MAIN MENU</button>`;
+    this.applyFocusIfActive("results");
   }
 
   // ---------------- settings ----------------
@@ -810,6 +822,8 @@ export class UIManager {
         <div class="setting-row"><label>Invert Y</label><button class="btn ghost toggle-btn" id="set-invert">OFF</button></div>
         <div class="setting-row"><label>Master Volume</label>
           <input type="range" id="set-master" min="0" max="1" step="0.05"> <span class="setting-value" id="set-master-v"></span></div>
+        <div class="setting-row"><label>Music Volume</label>
+          <input type="range" id="set-music" min="0" max="1" step="0.05"> <span class="setting-value" id="set-music-v"></span></div>
         <div class="setting-row"><label>Effects Volume</label>
           <input type="range" id="set-fx" min="0" max="1" step="0.05"> <span class="setting-value" id="set-fx-v"></span></div>
         <div class="setting-row"><label>Show FPS</label><button class="btn ghost toggle-btn" id="set-fps">OFF</button></div>
@@ -864,6 +878,9 @@ export class UIManager {
         case "set-master":
           s.masterVolume = parseFloat((el as HTMLInputElement).value);
           break;
+        case "set-music":
+          s.musicVolume = parseFloat((el as HTMLInputElement).value);
+          break;
         case "set-fx":
           s.effectsVolume = parseFloat((el as HTMLInputElement).value);
           break;
@@ -904,6 +921,9 @@ export class UIManager {
     const master = d.querySelector("#set-master") as HTMLInputElement;
     master.value = String(s.masterVolume);
     (d.querySelector("#set-master-v") as HTMLElement).textContent = String(Math.round(s.masterVolume * 100)) + "%";
+    const music = d.querySelector("#set-music") as HTMLInputElement;
+    music.value = String(s.musicVolume ?? 0.65);
+    (d.querySelector("#set-music-v") as HTMLElement).textContent = String(Math.round((s.musicVolume ?? 0.65) * 100)) + "%";
     const fx = d.querySelector("#set-fx") as HTMLInputElement;
     fx.value = String(s.effectsVolume);
     (d.querySelector("#set-fx-v") as HTMLElement).textContent = String(Math.round(s.effectsVolume * 100)) + "%";

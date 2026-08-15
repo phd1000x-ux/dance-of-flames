@@ -222,6 +222,7 @@ export class RiderController {
 
   /** set by combat system so hits apply to actual enemy entities */
   onHitCallback: ((fwd: Vector3, range: number, arcCos: number, damage: number, heavy: boolean) => void) | null = null;
+  onParry: (() => void) | null = null;
 
   /** incoming melee/ranged damage; returns actual damage applied */
   takeHit(amount: number, fromDir: Vector3, sourceType: string): { applied: number; parried: boolean; dodged: boolean } {
@@ -229,13 +230,14 @@ export class RiderController {
     // facing check for block
     const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     const facing = Vector3.Dot(fwd, fromDir) < -0.25;
-    if (this.blocking && facing) {
-      if (this.blockTime < 0.22) {
-        // PARRY: negate + flash
-        this.parryFlash = 0.3;
-        this.bus.emit("sfx", { name: "swordHit" });
-        return { applied: 0, parried: true, dodged: false };
-      }
+      if (this.blocking && facing) {
+        if (this.blockTime < 0.22) {
+          // PARRY: negate + flash
+          this.parryFlash = 0.3;
+          this.bus.emit("sfx", { name: "swordSwing" });
+          this.onParry?.();
+          return { applied: 0, parried: true, dodged: false };
+        }
       const blockEff = clamp(this.player.riderStats.riderBlock ?? 0.6, 0, 0.9);
       const applied = amount * (1 - blockEff);
       const died = this.player.damageRider(applied);

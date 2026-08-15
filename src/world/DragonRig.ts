@@ -10,6 +10,7 @@ import {
 } from "@babylonjs/core";
 import type { DragonDefinition } from "../data/dragons";
 import { damp } from "../core/MathUtils";
+import { buildDragonMaterials, animateJawHeat, type DragonMaterialSet } from "./DragonMaterials";
 
 export interface DragonAnimParams {
   flapRate: number; // rad/s
@@ -17,16 +18,24 @@ export interface DragonAnimParams {
   sweep: number; // 0..1 wing fold for dive/boost
   jawOpen: number; // 0..1
   dt: number;
+  /** rider procedural animation inputs */
+  riderRoll?: number; // dragon roll (rad)
+  riderPitchIn?: number; // dragon pitch (rad)
+  riderSpeedT?: number; // 0..1 speed fraction
+  riderBoost?: boolean;
 }
 
 /**
- * Procedural low-poly dragon: body / neck / head / jaw / wings / legs / tail / saddle + rider.
- * Forward is +Z. All sizes scale with the dragon definition.
+ * Procedural dragon with PBR-style material stack (procedural scale normal maps,
+ * roughness and albedo variation), distinct head/body/wing/accent/jaw surfaces,
+ * eyes, teeth, detailed saddle and an articulated multi-material rider that
+ * leans with flight. Forward is +Z.
  */
 export class DragonRig {
   readonly root: TransformNode;
   readonly headTip: TransformNode;
   readonly headPivot: TransformNode;
+  readonly materials: DragonMaterialSet;
   private wingInnerL: TransformNode;
   private wingInnerR: TransformNode;
   private wingOuterL: TransformNode;
@@ -34,41 +43,27 @@ export class DragonRig {
   private tailSegs: TransformNode[] = [];
   private neckPivot: TransformNode;
   private jawPivot: TransformNode;
-  private riderFigure: TransformNode;
-  private flapPhase = 0;
+  private riderFigure!: TransformNode;
+  private riderTorso!: TransformNode;
+  private riderHead!: TransformNode;
+  /** exposed so the controller can time wingbeat audio to the animation */
+  flapPhase = 0;
   private flapSmooth = 0;
   private tailPhase = 0;
-  private readonly mat: StandardMaterial;
+  private riderSway = 0;
 
   constructor(private scene: Scene, private def: DragonDefinition) {
     const s = def.scale;
     this.root = new TransformNode(`dragon-${def.id}`, scene);
+    this.materials = buildDragonMaterials(scene, def);
+    const M = this.materials;
 
-    this.mat = new StandardMaterial(`dragonMat-${def.id}`, scene);
-    const body = Color3.FromHexString(def.bodyColor);
-    this.mat.diffuseColor = body;
-    this.mat.specularColor = new Color3(0.12, 0.12, 0.12);
-    this.mat.emissiveColor = body.scale(0.12);
-
-    const wingMat = new StandardMaterial(`wingMat-${def.id}`, scene);
-    const wing = Color3.FromHexString(def.wingColor);
-    wingMat.diffuseColor = wing;
-    wingMat.emissiveColor = wing.scale(0.1);
-    wingMat.specularColor = new Color3(0.05, 0.05, 0.05);
-    wingMat.backFaceCulling = false;
-    wingMat.alpha = 0.96;
-
-    const accentMat = new StandardMaterial(`accentMat-${def.id}`, scene);
-    const accent = Color3.FromHexString(def.accentColor);
-    accentMat.diffuseColor = accent;
-    accentMat.emissiveColor = accent.scale(0.08);
-
-    // ---- body (merged: torso + chest + legs + spikes) ----
+    // ---- body (torso + chest + legs + back spikes) ----
     const parts: Mesh[] = [];
-    const torso = MeshBuilder.CreateCapsule(`torso`, { height: 5.4 * s, radius: 0.95 * s, tessellation: 8, subdivisions: 2 }, scene);
+    const torso = MeshBuilder.CreateCapsule(`torso`, { height: 5.4 * s, radius: 0.95 * s, tessellation: 10, subdivisions: 2 }, scene);
     torso.rotation.x = Math.PI / 2;
     parts.push(torso);
-    const chest = MeshBuilder.CreateCapsule(`chest`, { height: 3.2 * s, radius: 1.12 * s, tessellation: 8, subdivisions: 2 }, scene);
+    const chest = MeshBuilder.CreateCapsule(`chest`, { height: 3.2 * s, radius: 1.12 * s, tessellation: 10, subdivisions: 2 }, scene);
     chest.rotation.x = Math.PI / 2;
     chest.position.set(0, 0.06 * s, 1.1 * s);
     parts.push(chest);
@@ -77,38 +72,40 @@ export class DragonRig {
       spike.position.set(0, (0.95 - i * 0.06) * s, (1.8 - i * 0.75) * s);
       parts.push(spike);
     }
-    // 4 tucked legs
     const legDefs: [number, number][] = [
       [0.8, 0.9], [-0.8, 0.9], [0.85, -1.3], [-0.85, -1.3],
     ];
     for (const [lx, lz] of legDefs) {
-      const leg = MeshBuilder.CreateCapsule(`leg${lx}${lz}`, { height: 1.5 * s, radius: 0.24 * s, tessellation: 6, subdivisions: 1 }, scene);
+      const leg = MeshBuilder.CreateCapsule(`leg${lx}${lz}`, { height: 1.5 * s, radius: 0.26 * s, tessellation: 8, subdivisions: 1 }, scene);
       leg.position.set(lx * s, -0.55 * s, lz * s);
       leg.rotation.z = lx > 0 ? -0.5 : 0.5;
       leg.rotation.x = -0.45;
       parts.push(leg);
+      const claw = MeshBuilder.CreateCylinder(`clawf${lx}${lz}`, { diameterTop: 0, diameterBottom: 0.2 * s, height: 0.4 * s, tessellation: 4 }, scene);
+      claw.position.set(lx * 1.1 * s, -1.28 * s, (lz + 0.3) * s);
+      parts.push(claw);
     }
     const bodyMesh = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
-    bodyMesh.material = accentMat;
+    bodyMesh.material = M.body;
     bodyMesh.parent = this.root;
     bodyMesh.name = `dragon-${def.id}-body`;
 
-    // ---- neck ----
+    // ---- neck (medium directional scales) ----
     this.neckPivot = new TransformNode("neckPivot", scene);
     this.neckPivot.parent = this.root;
     this.neckPivot.position.set(0, 0.55 * s, 2.5 * s);
     const neckParts: Mesh[] = [];
     for (let i = 0; i < 3; i++) {
-      const seg = MeshBuilder.CreateCapsule(`neckSeg${i}`, { height: 1.5 * s, radius: (0.52 - i * 0.07) * s, tessellation: 8, subdivisions: 1 }, scene);
+      const seg = MeshBuilder.CreateCapsule(`neckSeg${i}`, { height: 1.5 * s, radius: (0.52 - i * 0.07) * s, tessellation: 10, subdivisions: 1 }, scene);
       seg.rotation.x = Math.PI / 2 - 0.55 - i * 0.1;
       seg.position.set(0, (0.42 + i * 0.5) * s, (0.55 + i * 0.72) * s);
       neckParts.push(seg);
     }
     const neckMesh = Mesh.MergeMeshes(neckParts, true, true, undefined, false, false)!;
-    neckMesh.material = this.mat;
+    neckMesh.material = M.head;
     neckMesh.parent = this.neckPivot;
 
-    // ---- head ----
+    // ---- head (fine dense scales + horns + brow) ----
     this.headPivot = new TransformNode("headPivot", scene);
     this.headPivot.parent = this.neckPivot;
     this.headPivot.position.set(0, 2.1 * s, 2.6 * s);
@@ -118,87 +115,135 @@ export class DragonRig {
     const snout = MeshBuilder.CreateBox(`snout`, { width: 0.55 * s, height: 0.4 * s, depth: 0.7 * s }, scene);
     snout.position.set(0, -0.08 * s, 0.85 * s);
     headParts.push(snout);
+    const noseHorn = MeshBuilder.CreateCylinder(`noseHorn`, { diameterTop: 0, diameterBottom: 0.14 * s, height: 0.3 * s, tessellation: 5 }, scene);
+    noseHorn.position.set(0, 0.18 * s, 1.1 * s);
+    noseHorn.rotation.x = -0.5;
+    headParts.push(noseHorn);
     for (const hx of [-0.28, 0.28]) {
       const horn = MeshBuilder.CreateCylinder(`horn${hx}`, { diameterTop: 0, diameterBottom: 0.16 * s, height: 0.85 * s, tessellation: 5 }, scene);
       horn.position.set(hx * s, 0.42 * s, -0.32 * s);
       horn.rotation.x = -0.8;
+      horn.rotation.z = hx > 0 ? 0.25 : -0.25;
       headParts.push(horn);
+      const cheek = MeshBuilder.CreateCylinder(`cheek${hx}`, { diameterTop: 0, diameterBottom: 0.1 * s, height: 0.34 * s, tessellation: 4 }, scene);
+      cheek.position.set(hx * 1.2 * s, 0.05 * s, 0.35 * s);
+      cheek.rotation.z = hx > 0 ? 1.4 : -1.4;
+      headParts.push(cheek);
     }
     const brow = MeshBuilder.CreateBox(`brow`, { width: 0.9 * s, height: 0.14 * s, depth: 0.3 * s }, scene);
     brow.position.set(0, 0.3 * s, 0.42 * s);
     headParts.push(brow);
     const headMesh = Mesh.MergeMeshes(headParts, true, true, undefined, false, false)!;
-    headMesh.material = this.mat;
+    headMesh.material = M.head;
     headMesh.parent = this.headPivot;
 
-    // jaw (animated for fire)
+    // eyes: glossy orbs w/ dark pupils + ember glint
+    const eyeMat = new StandardMaterial(`eyeMat-${def.id}`, scene);
+    eyeMat.diffuseColor = new Color3(0.08, 0.05, 0.02);
+    eyeMat.emissiveColor = Color3.FromHexString(def.fireColor).scale(0.35);
+    eyeMat.specularColor = new Color3(1, 0.95, 0.85);
+    eyeMat.specularPower = 128;
+    const pupilMat = new StandardMaterial(`pupilMat-${def.id}`, scene);
+    pupilMat.diffuseColor = Color3.Black();
+    pupilMat.specularColor = new Color3(0.2, 0.2, 0.2);
+    for (const ex of [-0.3, 0.3]) {
+      const eye = MeshBuilder.CreateSphere(`eye${ex}`, { diameter: 0.19 * s, segments: 6 }, scene);
+      eye.position.set(ex * s, 0.13 * s, 0.55 * s);
+      eye.material = eyeMat;
+      eye.parent = this.headPivot;
+      const pupil = MeshBuilder.CreateSphere(`pupil${ex}`, { diameter: 0.09 * s, segments: 5 }, scene);
+      pupil.position.set(ex * 1.18 * s, 0.13 * s, 0.63 * s);
+      pupil.material = pupilMat;
+      pupil.parent = this.headPivot;
+    }
+
+    // jaw + teeth (heat-reactive material)
     this.jawPivot = new TransformNode("jawPivot", scene);
     this.jawPivot.parent = this.headPivot;
     this.jawPivot.position.set(0, -0.2 * s, 0.15 * s);
     const jaw = MeshBuilder.CreateBox(`jaw`, { width: 0.5 * s, height: 0.14 * s, depth: 0.9 * s }, scene);
     jaw.position.set(0, -0.05 * s, 0.45 * s);
-    jaw.material = accentMat;
+    jaw.material = M.jaw;
     jaw.parent = this.jawPivot;
+    const toothMat = new StandardMaterial(`toothMat-${def.id}`, scene);
+    toothMat.diffuseColor = new Color3(0.85, 0.8, 0.68);
+    toothMat.specularColor = new Color3(0.4, 0.38, 0.32);
+    for (let i = 0; i < 5; i++) {
+      for (const tx of [-0.18, 0.18]) {
+        const tooth = MeshBuilder.CreateCylinder(`tooth${i}${tx}`, { diameterTop: 0.01, diameterBottom: 0.05 * s, height: 0.16 * s, tessellation: 4 }, scene);
+        tooth.position.set(tx * s, 0.03 * s, (0.85 - i * 0.16) * s);
+        tooth.rotation.x = Math.PI;
+        tooth.material = toothMat;
+        tooth.parent = this.jawPivot;
+      }
+    }
+    const mouth = MeshBuilder.CreateBox(`mouthIn`, { width: 0.42 * s, height: 0.1 * s, depth: 0.6 * s }, scene);
+    mouth.position.set(0, -0.12 * s, 0.5 * s);
+    const mouthMat = new StandardMaterial(`mouthMat-${def.id}`, scene);
+    mouthMat.diffuseColor = new Color3(0.1, 0.02, 0.02);
+    mouthMat.emissiveColor = Color3.FromHexString(def.fireColor).scale(0.12);
+    mouth.material = mouthMat;
+    mouth.parent = this.headPivot;
 
     this.headTip = new TransformNode("headTip", scene);
     this.headTip.parent = this.headPivot;
     this.headTip.position.set(0, -0.05 * s, 1.35 * s);
 
-    // ---- tail ----
+    // ---- tail (elongated scales) ----
     let tailParent: TransformNode = new TransformNode("tailPivot", scene);
     tailParent.parent = this.root;
     tailParent.position.set(0, 0.15 * s, -2.6 * s);
     for (let i = 0; i < 5; i++) {
       const segPivot = new TransformNode(`tailSeg${i}`, scene);
       segPivot.parent = tailParent;
-      segPivot.position.set(0, i === 0 ? 0 : 0, -1.05 * s);
-      const seg = MeshBuilder.CreateCapsule(`tailM${i}`, { height: 1.15 * s, radius: (0.5 - i * 0.08) * s, tessellation: 6, subdivisions: 1 }, scene);
+      segPivot.position.set(0, 0, -1.05 * s);
+      const seg = MeshBuilder.CreateCapsule(`tailM${i}`, { height: 1.15 * s, radius: (0.5 - i * 0.08) * s, tessellation: 8, subdivisions: 1 }, scene);
       seg.rotation.x = Math.PI / 2;
       seg.position.z = -0.5 * s;
-      seg.material = this.mat;
+      seg.material = M.body;
       seg.parent = segPivot;
       this.tailSegs.push(segPivot);
       tailParent = segPivot;
     }
     const fin = MeshBuilder.CreateBox(`tailFin`, { width: 0.06 * s, height: 0.9 * s, depth: 0.7 * s }, scene);
     fin.position.set(0, 0, -1.1 * s);
-    fin.material = wingMat;
+    fin.material = M.wing;
     fin.parent = tailParent;
 
-    // ---- wings ----
+    // ---- wings (leathery membrane, veined) ----
     const makeWing = (side: 1 | -1): { inner: TransformNode; outer: TransformNode } => {
       const inner = new TransformNode(`wingInner${side}`, scene);
       inner.parent = this.root;
       inner.position.set(side * 0.85 * s, 0.62 * s, 0.55 * s);
-      const armBone = MeshBuilder.CreateCapsule(`armBone${side}`, { height: 3.1 * s, radius: 0.13 * s, tessellation: 6, subdivisions: 1 }, scene);
+      const armBone = MeshBuilder.CreateCapsule(`armBone${side}`, { height: 3.1 * s, radius: 0.13 * s, tessellation: 8, subdivisions: 1 }, scene);
       armBone.rotation.z = Math.PI / 2;
       armBone.position.set(side * 1.5 * s, 0, 0);
-      armBone.material = this.mat;
+      armBone.material = M.body;
       armBone.parent = inner;
       const membrane1 = MeshBuilder.CreatePlane(`membrane1-${side}`, { width: 2.6 * s, height: 3.4 * s }, scene);
       membrane1.rotation.x = Math.PI / 2;
       membrane1.rotation.y = Math.PI / 2;
       membrane1.position.set(side * 1.35 * s, -0.28 * s, -0.7 * s);
-      membrane1.material = wingMat;
+      membrane1.material = M.wing;
       membrane1.parent = inner;
 
       const outer = new TransformNode(`wingOuter${side}`, scene);
       outer.parent = inner;
       outer.position.set(side * 3.0 * s, 0, 0);
-      const outerBone = MeshBuilder.CreateCapsule(`outerBone${side}`, { height: 3.3 * s, radius: 0.09 * s, tessellation: 6, subdivisions: 1 }, scene);
+      const outerBone = MeshBuilder.CreateCapsule(`outerBone${side}`, { height: 3.3 * s, radius: 0.09 * s, tessellation: 8, subdivisions: 1 }, scene);
       outerBone.rotation.z = Math.PI / 2;
       outerBone.position.set(side * 1.6 * s, 0, 0);
-      outerBone.material = this.mat;
+      outerBone.material = M.body;
       outerBone.parent = outer;
       const membrane2 = MeshBuilder.CreatePlane(`membrane2-${side}`, { width: 3.1 * s, height: 2.9 * s }, scene);
       membrane2.rotation.x = Math.PI / 2;
       membrane2.rotation.y = Math.PI / 2;
       membrane2.position.set(side * 1.5 * s, -0.2 * s, -0.5 * s);
-      membrane2.material = wingMat;
+      membrane2.material = M.wing;
       membrane2.parent = outer;
       const claw = MeshBuilder.CreateCylinder(`claw${side}`, { diameterTop: 0, diameterBottom: 0.12 * s, height: 0.3 * s, tessellation: 4 }, scene);
       claw.position.set(side * 3.2 * s, 0, 0);
-      claw.material = this.mat;
+      claw.material = M.accent;
       claw.parent = outer;
       return { inner, outer };
     };
@@ -209,31 +254,153 @@ export class DragonRig {
     this.wingInnerR = wr.inner;
     this.wingOuterR = wr.outer;
 
-    // ---- saddle + seated rider ----
-    this.riderFigure = new TransformNode("riderFigure", scene);
-    this.riderFigure.parent = this.root;
-    this.riderFigure.position.set(0, 1.05 * s, 0.1 * s);
-    const saddle = MeshBuilder.CreateBox(`saddle`, { width: 0.9 * s, height: 0.22 * s, depth: 1.0 * s }, scene);
-    saddle.material = accentMat;
-    saddle.parent = this.riderFigure;
-    const riderMat = new StandardMaterial(`riderMat-${def.id}`, scene);
-    riderMat.diffuseColor = new Color3(0.2, 0.2, 0.24);
-    riderMat.emissiveColor = new Color3(0.05, 0.05, 0.06);
-    const rTorso = MeshBuilder.CreateCapsule(`rTorso`, { height: 0.75, radius: 0.22, tessellation: 6, subdivisions: 1 }, scene);
-    rTorso.position.y = 0.48;
-    rTorso.material = riderMat;
-    rTorso.parent = this.riderFigure;
-    const rHead = MeshBuilder.CreateSphere(`rHead`, { diameter: 0.36, segments: 5 }, scene);
-    rHead.position.y = 1.0;
-    rHead.material = riderMat;
-    rHead.parent = this.riderFigure;
-    const rCloak = MeshBuilder.CreateBox(`rCloak`, { width: 0.55, height: 0.7, depth: 0.08 }, scene);
-    rCloak.position.set(0, 0.42, -0.24);
-    rCloak.rotation.x = 0.25;
-    rCloak.material = riderMat;
-    rCloak.parent = this.riderFigure;
+    // ---- saddle + articulated rider ----
+    this.buildRider(s, M);
 
     this.root.rotationQuaternion = Quaternion.Identity();
+  }
+
+  /** detailed saddle + multi-material humanoid rider reading as a real character */
+  private buildRider(s: number, M: DragonMaterialSet): void {
+    const scene = this.scene;
+    const leather = new StandardMaterial(`riderLeather-${this.def.id}`, scene);
+    leather.diffuseColor = new Color3(0.22, 0.14, 0.09);
+    leather.specularColor = new Color3(0.08, 0.06, 0.05);
+    leather.specularPower = 24;
+    const metal = new StandardMaterial(`riderMetal-${this.def.id}`, scene);
+    metal.diffuseColor = new Color3(0.55, 0.56, 0.6);
+    metal.specularColor = new Color3(0.85, 0.86, 0.9);
+    metal.specularPower = 96;
+    const cloth = new StandardMaterial(`riderCloth-${this.def.id}`, scene);
+    cloth.diffuseColor = Color3.FromHexString(this.def.accentColor).scale(0.8);
+    cloth.specularColor = new Color3(0.03, 0.03, 0.03);
+    const hair = new StandardMaterial(`riderHair-${this.def.id}`, scene);
+    hair.diffuseColor = new Color3(0.13, 0.1, 0.07);
+    hair.specularColor = new Color3(0.12, 0.1, 0.08);
+    const skin = new StandardMaterial(`riderSkin-${this.def.id}`, scene);
+    skin.diffuseColor = new Color3(0.72, 0.55, 0.42);
+    skin.specularColor = new Color3(0.15, 0.12, 0.1);
+
+    this.riderFigure = new TransformNode("riderFigure", scene);
+    this.riderFigure.parent = this.root;
+    this.riderFigure.position.set(0, 1.02 * s, 0.1 * s);
+
+    // saddle with pommel + straps over the chest
+    const saddle = MeshBuilder.CreateBox(`saddle`, { width: 0.92 * s, height: 0.22 * s, depth: 1.0 * s }, scene);
+    saddle.material = leather;
+    saddle.parent = this.riderFigure;
+    const pommel = MeshBuilder.CreateCylinder(`pommel`, { diameter: 0.14 * s, height: 0.24 * s, tessellation: 6 }, scene);
+    pommel.position.set(0, 0.2 * s, 0.45 * s);
+    pommel.material = metal;
+    pommel.parent = this.riderFigure;
+    const strap = MeshBuilder.CreateBox(`strap`, { width: 1.9 * s, height: 0.09, depth: 0.12 }, scene);
+    strap.position.set(0, -0.05 * s, 0.35 * s);
+    strap.material = leather;
+    strap.parent = this.riderFigure;
+
+    // rider: pelvis → torso(+armor) → head(+hair) + arms + legs
+    this.riderTorso = new TransformNode("riderTorso", scene);
+    this.riderTorso.parent = this.riderFigure;
+    this.riderTorso.position.y = 0.12 * s;
+    const pelvis = MeshBuilder.CreateBox(`rPelvis`, { width: 0.42, height: 0.2, depth: 0.3 }, scene);
+    pelvis.position.y = 0.05;
+    pelvis.material = cloth;
+    pelvis.parent = this.riderTorso;
+    const chestBox = MeshBuilder.CreateCapsule(`rChest`, { height: 0.62, radius: 0.19, tessellation: 8, subdivisions: 1 }, scene);
+    chestBox.position.y = 0.42;
+    chestBox.material = leather;
+    chestBox.parent = this.riderTorso;
+    const plate = MeshBuilder.CreateBox(`rPlate`, { width: 0.44, height: 0.4, depth: 0.3 }, scene);
+    plate.position.set(0, 0.44, 0.02);
+    plate.material = metal;
+    plate.parent = this.riderTorso;
+    const belt = MeshBuilder.CreateBox(`rBelt`, { width: 0.46, height: 0.07, depth: 0.33 }, scene);
+    belt.position.y = 0.2;
+    belt.material = leather;
+    belt.parent = this.riderTorso;
+    for (const sx of [-0.24, 0.24]) {
+      const pauldron = MeshBuilder.CreateSphere(`rPauldron${sx}`, { diameterX: 0.2, diameterY: 0.14, diameterZ: 0.22, segments: 6 }, scene);
+      pauldron.position.set(sx, 0.66, 0);
+      pauldron.material = metal;
+      pauldron.parent = this.riderTorso;
+    }
+    // cloak down the dragon's back
+    const cloak = MeshBuilder.CreateBox(`rCloak`, { width: 0.5, height: 0.85, depth: 0.05 }, scene);
+    cloak.position.set(0, 0.4, -0.2);
+    cloak.rotation.x = 0.4;
+    cloak.material = cloth;
+    cloak.parent = this.riderTorso;
+
+    // head + hair + face hint
+    this.riderHead = new TransformNode("riderHead", scene);
+    this.riderHead.parent = this.riderTorso;
+    this.riderHead.position.y = 0.82;
+    const skullM = MeshBuilder.CreateSphere(`rSkull`, { diameterX: 0.19, diameterY: 0.23, diameterZ: 0.21, segments: 6 }, scene);
+    skullM.material = skin;
+    skullM.parent = this.riderHead;
+    const hairCap = MeshBuilder.CreateSphere(`rHair`, { diameterX: 0.21, diameterY: 0.22, diameterZ: 0.21, segments: 6 }, scene);
+    hairCap.position.set(0, 0.045, -0.025);
+    hairCap.scaling.y = 0.8;
+    hairCap.material = hair;
+    hairCap.parent = this.riderHead;
+    const hairBack = MeshBuilder.CreateBox(`rHairBack`, { width: 0.16, height: 0.3, depth: 0.06 }, scene);
+    hairBack.position.set(0, -0.06, -0.1);
+    hairBack.material = hair;
+    hairBack.parent = this.riderHead;
+    const nose = MeshBuilder.CreateBox(`rNose`, { width: 0.04, height: 0.07, depth: 0.06 }, scene);
+    nose.position.set(0, -0.01, 0.1);
+    nose.material = skin;
+    nose.parent = this.riderHead;
+
+    // arms: upper + forearm + glove, hands forward to the neck (reins)
+    const armRig = (side: number) => {
+      const upper = MeshBuilder.CreateCapsule(`rArmU${side}`, { height: 0.34, radius: 0.055, tessellation: 6, subdivisions: 1 }, scene);
+      upper.position.set(side * 0.26, 0.58, 0.08);
+      upper.rotation.z = side * 0.55;
+      upper.rotation.x = 0.5;
+      upper.material = leather;
+      upper.parent = this.riderTorso;
+      const fore = MeshBuilder.CreateCapsule(`rArmF${side}`, { height: 0.32, radius: 0.05, tessellation: 6, subdivisions: 1 }, scene);
+      fore.position.set(side * 0.32, 0.6, 0.3);
+      fore.rotation.x = 1.15;
+      fore.material = cloth;
+      fore.parent = this.riderTorso;
+      const glove = MeshBuilder.CreateSphere(`rGlove${side}`, { diameter: 0.1, segments: 5 }, scene);
+      glove.position.set(side * 0.3, 0.63, 0.44);
+      glove.material = leather;
+      glove.parent = this.riderTorso;
+    };
+    armRig(1);
+    armRig(-1);
+    // reins from hands toward the neck base
+    for (const rx of [-0.3, 0.3]) {
+      const rein = MeshBuilder.CreateCylinder(`rein${rx}`, { diameter: 0.02, height: 0.85, tessellation: 4 }, scene);
+      rein.position.set(rx * 0.8, 0.75, 0.65);
+      rein.rotation.x = 1.35;
+      rein.material = leather;
+      rein.parent = this.riderTorso;
+    }
+
+    // legs: thigh along flank + shin + boot in stirrup
+    const legRig = (side: number) => {
+      const thigh = MeshBuilder.CreateCapsule(`rThigh${side}`, { height: 0.42, radius: 0.08, tessellation: 6, subdivisions: 1 }, scene);
+      thigh.position.set(side * 0.26, 0.0, 0.12);
+      thigh.rotation.z = side * 0.85;
+      thigh.material = cloth;
+      thigh.parent = this.riderTorso;
+      const shin = MeshBuilder.CreateCapsule(`rShin${side}`, { height: 0.36, radius: 0.065, tessellation: 6, subdivisions: 1 }, scene);
+      shin.position.set(side * 0.42, -0.18, 0.16);
+      shin.rotation.z = side * 0.12;
+      shin.material = leather;
+      shin.parent = this.riderTorso;
+      const boot = MeshBuilder.CreateBox(`rBoot${side}`, { width: 0.13, height: 0.12, depth: 0.24 }, scene);
+      boot.position.set(side * 0.44, -0.36, 0.2);
+      boot.material = leather;
+      boot.parent = this.riderTorso;
+    };
+    legRig(1);
+    legRig(-1);
+    void M;
   }
 
   setRiderVisible(v: boolean): void {
@@ -249,25 +416,37 @@ export class DragonRig {
     const amp = this.flapSmooth * 0.75;
 
     const dihedral = 0.18;
-    // left wing (side +X): positive z-rotation lifts tip
     this.wingInnerL.rotation.z = dihedral + flap * amp;
     this.wingInnerL.rotation.y = -p.sweep * 0.95;
     this.wingOuterL.rotation.z = -0.2 + flapLag * amp * 1.25;
     this.wingOuterL.rotation.y = -p.sweep * 0.65;
-    // right wing mirrored
     this.wingInnerR.rotation.z = -(dihedral + flap * amp);
     this.wingInnerR.rotation.y = p.sweep * 0.95;
     this.wingOuterR.rotation.z = -(-0.2 + flapLag * amp * 1.25);
     this.wingOuterR.rotation.y = p.sweep * 0.65;
 
-    // tail sway
     for (let i = 0; i < this.tailSegs.length; i++) {
       this.tailSegs[i].rotation.y = Math.sin(this.tailPhase - i * 0.55) * 0.16;
     }
-    // neck bob & aim pose
     this.neckPivot.rotation.x = 0.08 + Math.sin(this.flapPhase * 0.5) * 0.03;
-    // jaw
     this.jawPivot.rotation.x = p.jawOpen * 0.5;
+    // mouth interior + jaw glow with fire intensity
+    animateJawHeat(this.materials.jaw, p.jawOpen, this.def.fireColor);
+
+    // ---- procedural rider animation: compensating lean ----
+    const roll = p.riderRoll ?? 0;
+    const pitch = p.riderPitchIn ?? 0;
+    const speedT = p.riderSpeedT ?? 0;
+    const boost = p.riderBoost ? 1 : 0;
+    // counter-bank into turns (rider stays more upright than the dragon)
+    this.riderSway = damp(this.riderSway, -roll * 0.55, 5, p.dt);
+    this.riderFigure.rotation.z = this.riderSway;
+    // crouch forward with acceleration/boost, sit back when decelerating
+    const leanF = 0.16 + speedT * 0.2 + boost * 0.22 - Math.max(0, -pitch) * 0.12;
+    this.riderFigure.rotation.x = damp(this.riderFigure.rotation.x, leanF, 5, p.dt);
+    // head looks into the turn
+    this.riderHead.rotation.y = damp(this.riderHead.rotation.y, this.riderSway * 1.2, 6, p.dt);
+    this.riderTorso.rotation.y = damp(this.riderTorso.rotation.y, this.riderSway * 0.35, 5, p.dt);
   }
 
   /** wing position (world) for audio/flap effects */
@@ -277,6 +456,5 @@ export class DragonRig {
 
   dispose(): void {
     this.root.dispose(false, true);
-    this.mat.dispose();
   }
 }

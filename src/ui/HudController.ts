@@ -2,6 +2,7 @@ import type { EventBus } from "../core/EventBus";
 import type { GameEvents } from "../core/Events";
 import type { GameSettings } from "../save/SaveSystem";
 import { RELICS } from "../data/items";
+import { worldToMap, arrowRotation } from "./MinimapMath";
 
 export interface HudSnapshot {
   mode: "dragon" | "dying" | "ground";
@@ -70,6 +71,8 @@ export class HudController {
   private objectivesPanel!: HTMLElement;
   private objectivesList!: HTMLElement;
   private hintTimer: ReturnType<typeof setTimeout> | null = null;
+  private fallenOverlay!: HTMLElement;
+  private fallenTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private parent: HTMLElement,
@@ -200,6 +203,17 @@ export class HudController {
     this.root.appendChild(this.objectivesPanel);
     this.objectivesList = this.objectivesPanel.querySelector("#op-list") as HTMLElement;
 
+    // DRAGON FALLEN cinematic transition overlay (Bug B)
+    this.fallenOverlay = this.el("div", "dragon-fallen-overlay", `
+      <div class="df-vignette"></div>
+      <div class="df-content">
+        <div class="df-title">DRAGON FALLEN</div>
+        <div class="df-sub">Your dragon has fallen.</div>
+        <div class="df-cta">CONTINUE THE BATTLE ON FOOT</div>
+      </div>`);
+    this.fallenOverlay.style.display = "none";
+    this.parent.appendChild(this.fallenOverlay);
+
     this.root.appendChild(this.hudDragon);
     this.root.appendChild(this.hudGround);
 
@@ -227,6 +241,28 @@ export class HudController {
     this.bus.on("toggle-objectives", (e) => {
       this.objectivesPanel.style.display = e.visible ? "block" : "none";
     });
+    this.bus.on("dragon-fallen", () => this.showFallenTransition());
+    this.bus.on("ground-begun", () => this.hideFallenTransition());
+  }
+
+  /** Bug B: DRAGON FALLEN cinematic transition (~2.6s) into ground combat */
+  private showFallenTransition(): void {
+    this.fallenOverlay.style.display = "block";
+    // restart CSS animations
+    this.fallenOverlay.classList.remove("show");
+    void this.fallenOverlay.offsetWidth;
+    this.fallenOverlay.classList.add("show");
+    if (this.fallenTimer) clearTimeout(this.fallenTimer);
+    this.fallenTimer = setTimeout(() => this.hideFallenTransition(), 2600);
+  }
+
+  private hideFallenTransition(): void {
+    if (this.fallenTimer) {
+      clearTimeout(this.fallenTimer);
+      this.fallenTimer = null;
+    }
+    this.fallenOverlay.classList.remove("show");
+    this.fallenOverlay.style.display = "none";
   }
 
   private showHint(text: string): void {
@@ -245,6 +281,7 @@ export class HudController {
     if (!v) {
       this.vignette.style.opacity = "0";
       this.speedLines.style.opacity = "0";
+      this.hideFallenTransition();
     }
   }
 
@@ -343,27 +380,39 @@ export class HudController {
   private drawMinimap(s: HudSnapshot, ctx: CanvasRenderingContext2D): void {
     const size = 176;
     const worldSize = s.bounds * 2 + 200;
-    const toMap = (x: number, z: number) => ({
-      x: (x / worldSize) * size + size / 2,
-      y: (z / worldSize) * size + size / 2,
-    });
+    // single source of truth: src/ui/MinimapMath.ts (North=-Z up, East=+X right)
+    const toMap = (x: number, z: number) => worldToMap(x, z, size, worldSize);
     ctx.clearRect(0, 0, size, size);
     ctx.fillStyle = "rgba(20, 14, 8, 0.6)";
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
 
+    // north indicator (map is NORTH-UP: fixed map, rotating player arrow)
+    ctx.save();
+    ctx.fillStyle = "rgba(240, 207, 142, 0.85)";
+    ctx.font = "bold 10px Georgia";
+    ctx.textAlign = "center";
+    ctx.fillText("N", size / 2, 11);
+    ctx.beginPath();
+    ctx.moveTo(size / 2 - 3, 14);
+    ctx.lineTo(size / 2 + 3, 14);
+    ctx.lineTo(size / 2, 19);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
     // buildings
     for (const b of s.buildings) {
       const p = toMap(b.x, b.z);
       ctx.fillStyle = b.collapsed ? "rgba(90,70,50,0.6)" : "rgba(190,180,150,0.75)";
-      ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+      ctx.fillRect(p.mx - 1.5, p.my - 1.5, 3, 3);
     }
     // loot (gold dots)
     ctx.fillStyle = "rgba(240,207,142,0.9)";
     for (const l of s.loot) {
       const p = toMap(l.x, l.z);
-      ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+      ctx.fillRect(p.mx - 1, p.my - 1, 2, 2);
     }
     // enemies
     for (const e of s.enemies) {
@@ -371,14 +420,14 @@ export class HudController {
       if (e.role === "elite" || e.role === "commander") {
         ctx.fillStyle = "#e05050";
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 2.6, 0, Math.PI * 2);
+        ctx.arc(p.mx, p.my, 2.6, 0, Math.PI * 2);
         ctx.fill();
       } else if (e.role === "archer") {
         ctx.fillStyle = "rgba(220,120,80,0.9)";
-        ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+        ctx.fillRect(p.mx - 1, p.my - 1, 2, 2);
       } else {
         ctx.fillStyle = "rgba(200,80,60,0.8)";
-        ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+        ctx.fillRect(p.mx - 1, p.my - 1, 2, 2);
       }
     }
     // ballistae: distinct diamond shape (not color-only)
@@ -386,7 +435,7 @@ export class HudController {
       const p = toMap(b.x, b.z);
       ctx.fillStyle = "#ffb347";
       ctx.save();
-      ctx.translate(p.x, p.y);
+      ctx.translate(p.mx, p.my);
       ctx.rotate(Math.PI / 4);
       ctx.fillRect(-2.5, -2.5, 5, 5);
       ctx.restore();
@@ -394,8 +443,8 @@ export class HudController {
     // player arrow
     const pp = toMap(s.playerX, s.playerZ);
     ctx.save();
-    ctx.translate(pp.x, pp.y);
-    ctx.rotate(-s.playerYaw + Math.PI);
+    ctx.translate(pp.mx, pp.my);
+    ctx.rotate(arrowRotation(s.playerYaw));
     ctx.fillStyle = "#7ac8f0";
     ctx.beginPath();
     ctx.moveTo(0, -6);

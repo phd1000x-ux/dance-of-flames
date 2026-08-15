@@ -55,13 +55,14 @@ describe("difficulty", () => {
 });
 
 describe("mission definitions", () => {
-  it("defines four playable missions", () => {
-    expect(MISSIONS.length).toBe(4);
+  it("defines five playable missions (four battlefields + the castle)", () => {
+    expect(MISSIONS.length).toBe(5);
     expect(MISSIONS.map((m) => m.id)).toEqual([
       "dragonstone",
       "riverlands",
       "harrenhal",
       "kingslanding",
+      "blackstone",
     ]);
   });
 
