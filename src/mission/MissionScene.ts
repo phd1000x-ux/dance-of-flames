@@ -500,7 +500,7 @@ export class MissionScene {
         contribution = input.isDown("accelerate") ? dt : 0;
         break;
       case "mouse":
-        contribution = Math.abs(input.mouseDX) + Math.abs(input.mouseDY);
+        contribution = Math.abs(input.frameMouseDX) + Math.abs(input.frameMouseDY);
         break;
       case "fire":
         contribution = input.isDown("fire") ? dt : 0;

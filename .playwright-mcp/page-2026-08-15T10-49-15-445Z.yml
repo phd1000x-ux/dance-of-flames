@@ -1,0 +1,27 @@
+- generic [active] [ref=f22e1]:
+  - generic:
+    - generic:
+      - generic: Destroy 4 siege ballistae0/4
+      - generic:
+        - generic: HIDDEN RELIC FOUND
+        - generic: —
+        - generic: —
+      - generic:
+        - generic:
+          - generic: V
+          - generic:
+            - generic:
+              - generic:
+                - generic: DRAGON
+                - generic: 1548/1643
+            - generic: BOOST
+            - generic:
+              - generic:
+                - generic: FLASKS [E]
+                - generic: "0"
+        - generic: SUPER CHARGE
+        - generic: "250"
+  - generic:
+    - generic: DANCE OF FLAMES
+    - generic: DRAGONRIDER
+    - generic: Preparing Battlefield…

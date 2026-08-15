@@ -52,6 +52,9 @@ export class InputManager {
   private releasedThisFrame = new Set<string>();
   mouseDX = 0;
   mouseDY = 0;
+  /** non-destructive per-frame totals (cleared at endFrame) — for tutorials/stats */
+  frameMouseDX = 0;
+  frameMouseDY = 0;
   wheel = 0;
   pointerLocked = false;
   /** test/E2E mode: synthetic input injection without real devices */
@@ -83,6 +86,8 @@ export class InputManager {
     if (this.pointerLocked || this.testMode || e.buttons !== 0 || this.freeMouse) {
       this.mouseDX += e.movementX ?? 0;
       this.mouseDY += e.movementY ?? 0;
+      this.frameMouseDX += e.movementX ?? 0;
+      this.frameMouseDY += e.movementY ?? 0;
     }
   };
   private wheelHandler = (e: WheelEvent) => {
@@ -165,6 +170,8 @@ export class InputManager {
     this.pressedThisFrame.clear();
     this.releasedThisFrame.clear();
     this.wheel = 0;
+    this.frameMouseDX = 0;
+    this.frameMouseDY = 0;
   }
 
   dispose(): void {
@@ -201,5 +208,7 @@ export class InputManager {
   injectMouseMove(dx: number, dy: number): void {
     this.mouseDX += dx;
     this.mouseDY += dy;
+    this.frameMouseDX += dx;
+    this.frameMouseDY += dy;
   }
 }

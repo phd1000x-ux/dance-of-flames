@@ -286,7 +286,10 @@ export class GameApp {
         this.ui.showScreen("settings");
         this.settingsReturnTo = this.state.state;
       },
-      onCredits: () => this.ui.showScreen("credits"),
+      onCredits: () => {
+        this.state.transition(GameState.CREDITS);
+        this.ui.showScreen("credits");
+      },
       onSelectionChange: (riderId: string, dragonId: string) => {
         this.showcase?.setDragon(getDragon(dragonId));
       },
