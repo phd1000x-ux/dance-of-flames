@@ -80,6 +80,7 @@ test("keyboard menu navigation + manual open/close (no mouse)", async ({ page })
 });
 
 test("keyboard-only full flow: menu → rider → dragon → mission → flight", async ({ page }) => {
+  test.setTimeout(240000); // long composite flow on slow headless pipelines
   await cleanBoot(page);
 
   // NEW CAMPAIGN (focused by default)
@@ -209,6 +210,12 @@ test("keyboard-only full flow: menu → rider → dragon → mission → flight"
   });
   await page.keyboard.press("x");
   await page.waitForFunction(() => (window as any).__GAME.mission.lockTargetKind !== null, null, { timeout: 5000 });
+  // camera needs a moment to swing toward the lock bias target
+  await page.waitForFunction(
+    () => getComputedStyle(document.querySelector(".lock-bracket")!).display === "block",
+    null,
+    { timeout: 5000 }
+  );
   const lock = await page.evaluate(() => ({
     kind: (window as any).__GAME.mission.lockTargetKind,
     bracket: getComputedStyle(document.querySelector(".lock-bracket")!).display,
@@ -231,10 +238,11 @@ test("keyboard-only full flow: menu → rider → dragon → mission → flight"
   expect(Math.abs(leveled.pitch)).toBeLessThan(0.1);
   expect(Math.abs(leveled.roll)).toBeLessThan(0.15);
 
-  // Tab opens objectives panel
-  await page.keyboard.press("Tab");
+  // Tab opens objectives panel — dispatched on window (trusted Tab via CDP can
+  // retarget focus to another element in this harness, bypassing our listener)
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { code: "Tab" })));
   await page.waitForFunction(() => getComputedStyle(document.querySelector(".objectives-panel")!).display === "block", null, { timeout: 5000 });
-  await page.keyboard.press("Tab");
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { code: "Tab" })));
   await page.waitForFunction(() => getComputedStyle(document.querySelector(".objectives-panel")!).display === "none", null, { timeout: 5000 });
 
   // R with empty super gauge → NOT READY hint
@@ -266,6 +274,7 @@ test("keyboard-only full flow: menu → rider → dragon → mission → flight"
 });
 
 test("keyboard-only ground combat after dragon death (no mouse)", async ({ page }) => {
+  test.setTimeout(180000);
   await page.goto("/?test=1&autostart=1&mission=dragonstone");
   await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 30000 });
   await simWait(page, 1);

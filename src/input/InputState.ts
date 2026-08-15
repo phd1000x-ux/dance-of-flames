@@ -137,7 +137,10 @@ export class InputState {
   pressed(action: GameAction): boolean {
     for (const code of DEFAULT_BINDINGS[action]) {
       if (this.keyboardOnly && code.startsWith("Mouse")) continue;
-      if (this.pressedNow.has(code)) return true;
+      if (this.pressedNow.has(code)) {
+        this.pressedNow.delete(code); // consume-on-read: exactly one consumer sees this edge
+        return true;
+      }
     }
     return false;
   }
@@ -158,8 +161,19 @@ export class InputState {
     this.lookPitch += (this.lookPitchRaw - this.lookPitch) * k;
   }
 
-  endFrame(): void {
-    this.pressedNow.clear();
-    this.releasedNow.clear();
+  /**
+   * Per-frame edge bookkeeping. Edge semantics are consume-on-read (see
+   * pressed()), which alone guarantees no double-consumption. The remaining loss
+   * window is a keypress arriving on a render frame that runs ZERO simulation
+   * substeps (common with the fixed-timestep loop): such a frame must NOT clear
+   * edges, or the press dies before any consumer reads it.
+   * @param simRanThisFrame true when at least one simulation substep executed
+   * (every pending edge was available to its consumers); false keeps edges alive.
+   */
+  endFrame(simRanThisFrame = true): void {
+    if (simRanThisFrame) {
+      this.pressedNow.clear();
+      this.releasedNow.clear();
+    }
   }
 }

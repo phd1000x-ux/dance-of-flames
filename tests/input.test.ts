@@ -102,15 +102,29 @@ describe("InputState — action bindings", () => {
     expect(s.isDown("fire")).toBe(false);
   });
 
-  it("pressed() is frame-scoped and cleared by endFrame()", () => {
+  it("pressed() is consume-on-read: first reader sees the edge, later reads do not", () => {
     const s = new InputState();
     s.keyDown("KeyF");
-    expect(s.pressed("fire")).toBe(true);
+    expect(s.pressed("fire")).toBe(true); // the one consumer
+    expect(s.pressed("fire")).toBe(false); // edge consumed — no double-fire across substeps
+    expect(s.isDown("fire")).toBe(true); // still held
     s.endFrame();
     expect(s.pressed("fire")).toBe(false);
-    expect(s.isDown("fire")).toBe(true); // still held
     s.keyUp("KeyF");
     expect(s.isDown("fire")).toBe(false);
+  });
+
+  it("unconsumed pressed edges are read exactly once across multiple simulation substeps", () => {
+    // simulates the fixed-timestep loop: one keydown, several update substeps
+    const s = new InputState();
+    s.keyDown("KeyQ");
+    let seenCount = 0;
+    for (let sub = 0; sub < 6; sub++) {
+      if (s.pressed("dodgeLeft")) seenCount++;
+      s.update(1 / 60);
+    }
+    s.endFrame();
+    expect(seenCount).toBe(1); // exactly one substep consumes the edge
   });
 });
 

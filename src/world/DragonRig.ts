@@ -10,7 +10,7 @@ import {
 } from "@babylonjs/core";
 import type { DragonDefinition } from "../data/dragons";
 import { damp } from "../core/MathUtils";
-import { buildDragonMaterials, animateJawHeat, type DragonMaterialSet } from "./DragonMaterials";
+import { buildDragonMaterials, animateJawHeat, assertMaterialsInScene, type DragonMaterialSet } from "./DragonMaterials";
 
 export interface DragonAnimParams {
   flapRate: number; // rad/s
@@ -56,6 +56,8 @@ export class DragonRig {
     const s = def.scale;
     this.root = new TransformNode(`dragon-${def.id}`, scene);
     this.materials = buildDragonMaterials(scene, def);
+    // invisible-dragon guard: refuse cross-scene/dead materials loudly
+    assertMaterialsInScene(this.materials, scene);
     const M = this.materials;
 
     // ---- body (torso + chest + legs + back spikes) ----

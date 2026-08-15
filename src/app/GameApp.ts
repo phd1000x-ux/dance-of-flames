@@ -453,6 +453,7 @@ export class GameApp {
     this.mission?.dispose();
     this.mission = null;
     this.input.resetAllInputs();
+    this.simAccumulator = 0;
     this.music.setState("menu");
     this.audio.setAmbientZone("field");
     this.audio.setBattleIntensity(0);
@@ -466,6 +467,7 @@ export class GameApp {
     if (!this.state.inGameplay && p) return;
     this.paused = p;
     this.input.resetAllInputs(); // §56: no stuck keys across context switches
+    this.simAccumulator = 0; // no catch-up backlog across the pause
     if (p) {
       this.state.transition(GameState.PAUSED);
       this.input.exitPointerLock();
@@ -480,6 +482,8 @@ export class GameApp {
   }
 
   // ---------------- main loop ----------------
+  private simAccumulator = 0;
+
   private frame(): void {
     this.frameCount++;
     const frameMs = this.engine.getDeltaTime();
@@ -505,10 +509,28 @@ export class GameApp {
     }
 
     if (this.mission && this.state.inGameplay && !this.paused) {
-      const dt = clamp(frameMs / 1000, 0, 0.05);
       // benchmark autopilot
       if (this.opts.benchmark) this.benchmarkPilot();
-      this.mission.update(dt);
+      // FIXED-TIMESTEP SIMULATION (root fix): the sim is decoupled from the render
+      // loop — real frame time accumulates and is consumed in 1/60s substeps.
+      // Previously one clamped dt per render frame made sim time run at 10–30% of
+      // real time under slow pipelines (software GL), diluting every timing-based
+      // behavior and ballooning test durations.
+      this.simAccumulator += clamp(frameMs / 1000, 0, 1);
+      const SIM_STEP = 1 / 60;
+      const maxSteps = this.opts.testMode ? 8 : 5;
+      let steps = 0;
+      while (this.simAccumulator >= SIM_STEP && steps < maxSteps) {
+        this.mission.update(SIM_STEP);
+        this.simAccumulator -= SIM_STEP;
+        steps++;
+      }
+      if (steps === maxSteps) this.simAccumulator = 0; // drop backlog (spiral-of-death guard)
+      // Edge bookkeeping IMMEDIATELY after the substep batch, only when substeps
+      // ran. Together with consume-on-read edges (InputState.pressed) this closes
+      // every loss/duplication window: edges arriving later this frame (HUD, render,
+      // idle) or on zero-substep frames survive until a substep consumes them.
+      this.input.endFrame(steps > 0);
       // adaptive music + ambient zones (~1 Hz) — skipped if the mission just ended
       this.musicAmbientTimer += frameMs;
       if (this.musicAmbientTimer > 1000 && this.state.inGameplay) {
@@ -529,8 +551,11 @@ export class GameApp {
       }
       if (this.opts.benchmark) this.benchmarkTick(performance.now());
       if (this.debugVisible) this.updateDebug();
-      this.input.endFrame();
-      this.mission.scene.render();
+      // testMode: rendering is the bottleneck under software GL — render every
+      // other frame so the sim cadence (and thus wall-clock test speed) roughly doubles
+      if (!this.opts.testMode || this.frameCount % 2 === 0) {
+        this.mission.scene.render();
+      }
       return;
     }
 

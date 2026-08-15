@@ -192,10 +192,28 @@ export interface DragonMaterialSet {
   dispose(): void;
 }
 
-/** per-scene cache so the menu showcase + mission share textures */
-const cache = new Map<string, DragonMaterialSet>();
+/**
+ * SCENE-SCOPED material cache.
+ *
+ * Root cause of the invisible-dragon bug: this cache was module-level and keyed
+ * by dragon id only, while the menu showcase and each mission are SEPARATE
+ * Babylon scenes with independent lifecycles. Starting a mission disposes the
+ * showcase scene — releasing the cached textures' GPU resources — and the new
+ * mission's rig then received the poisoned set (mesh.isVisible true, alpha 1,
+ * but dead textures → body rendered invisible while the rider, whose materials
+ * are built per-rig, stayed visible).
+ *
+ * Keying by scene makes cross-scene reuse impossible; a scene's set dies with
+ * that scene and is rebuilt on demand (a few ms inside the loading screen).
+ */
+const sceneCache = new WeakMap<Scene, Map<string, DragonMaterialSet>>();
 
 export function buildDragonMaterials(scene: Scene, def: DragonDefinition): DragonMaterialSet {
+  let cache = sceneCache.get(scene);
+  if (!cache) {
+    cache = new Map<string, DragonMaterialSet>();
+    sceneCache.set(scene, cache);
+  }
   const cached = cache.get(def.id);
   if (cached) return cached;
 
@@ -262,14 +280,13 @@ export function buildDragonMaterials(scene: Scene, def: DragonDefinition): Drago
       set.wing.dispose();
       set.accent.dispose();
       set.jaw.dispose();
-      cache.delete(def.id);
+      cache?.delete(def.id);
     },
   };
 
   cache.set(def.id, set);
   return set;
 }
-
 /** heat glow animation for the jaw when breathing fire */
 export function animateJawHeat(mat: StandardMaterial, jawOpen: number, fireColor: string): void {
   const c = Color3.FromHexString(fireColor);
@@ -289,15 +306,22 @@ export function applyDamageTint(mats: DragonMaterialSet, hpFraction: number): vo
   }
 }
 
-export function disposeDragonMaterialCache(): void {
-  for (const set of cache.values()) {
-    set.body.dispose();
-    set.head.dispose();
-    set.wing.dispose();
-    set.accent.dispose();
-    set.jaw.dispose();
+/**
+ * Defensive invariant check: every dragon material must belong to the scene the
+ * rig renders in. Cross-scene reuse was the invisible-dragon root cause; this
+ * fails loudly instead of silently rendering dead textures if it ever recurs.
+ */
+export function assertMaterialsInScene(set: DragonMaterialSet, scene: Scene): void {
+  for (const m of [set.body, set.head, set.wing, set.accent, set.jaw]) {
+    if (m.getScene() !== scene) {
+      throw new Error(
+        `[dragon-materials] material ${m.name} belongs to a disposed/foreign scene — refusing to render (invisible-dragon guard)`
+      );
+    }
+    if (m.alpha !== 1) {
+      m.alpha = 1; // opaque invariant; runtime effects must not leave transparency behind
+    }
   }
-  cache.clear();
 }
 
 export type { Texture };

@@ -7,6 +7,11 @@ import type { GameEvents } from "../core/Events";
 import type { EventBus } from "../core/EventBus";
 import { clamp, damp, lerp } from "../core/MathUtils";
 
+function smoothstep01(t: number): number {
+  const x = clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
 export type FlightState = "HOVER" | "FLY" | "BOOST" | "DIVE" | "STAGGER" | "DYING";
 
 /**
@@ -26,6 +31,10 @@ export class DragonController {
   dodgeTimer = 0;
   dodgeCooldown = 0;
   dodgeDir = 1; // +1 = right, -1 = left
+  dodgeStartRoll = 0;
+  /** latched intents (survive stagger/dodge frames) */
+  private queuedDodge: number | null = null;
+  queuedSuper = false;
   invulnerable = 0;
   staggerTimer = 0;
 
@@ -88,6 +97,14 @@ export class DragonController {
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.dodgeCooldown = Math.max(0, this.dodgeCooldown - dt);
 
+    // LATCH edge-triggered intents BEFORE any early-return state (stagger, dying):
+    // pressed edges are cleared at frame end regardless of whether a gameplay
+    // consumer read them — without latching, keys pressed during a stagger were
+    // silently discarded (root cause of the intermittent lost-input bugs).
+    const dodgeEdge = (input.pressed("dodgeRight") ? 1 : 0) - (input.pressed("dodgeLeft") ? 1 : 0);
+    if (dodgeEdge !== 0) this.queuedDodge = dodgeEdge;
+    if (input.pressed("super")) this.queuedSuper = true;
+
     if (this.player.mode === "dying") {
       this.updateDeath(dt);
       this.syncRig(dt);
@@ -115,12 +132,18 @@ export class DragonController {
     const bankInput = (input.isDown("turnRight") ? 1 : 0) - (input.isDown("turnLeft") ? 1 : 0);
     const verticalInput = (input.isDown("climb") ? 1 : 0) - (input.isDown("descend") ? 1 : 0);
 
-    // dodge / barrel roll — Q = left, E = right
-    const dodgeSide = (input.pressed("dodgeRight") ? 1 : 0) - (input.pressed("dodgeLeft") ? 1 : 0);
+    // dodge / barrel roll — Q = left, E = right.
+    // Heading-preserving: a dodge is a lateral displacement + full roll that
+    // RETURNS to the pre-dodge heading and bank. (The old version rotated yaw by
+    // ~197°, scrambling the player's orientation and any lock/aim intent.)
+    // Consumes the latched dodge intent (queued while staggered/dodging).
+    const dodgeSide = this.queuedDodge ?? 0;
+    this.queuedDodge = null;
     if (dodgeSide !== 0 && this.dodgeCooldown <= 0 && this.dodgeTimer <= 0) {
       this.dodgeTimer = 0.55;
       this.dodgeCooldown = 2.2;
       this.dodgeDir = dodgeSide;
+      this.dodgeStartRoll = this.roll;
       this.invulnerable = 0.55;
       this.bus.emit("sfx", { name: "dodge" });
     }
@@ -130,12 +153,13 @@ export class DragonController {
     let lateralVel = 0;
     if (this.dodgeTimer > 0) {
       this.dodgeTimer -= dt;
-      const spin = (Math.PI * 2) / 0.55;
-      yawRate = this.dodgeDir * spin * 0.55;
-      this.roll += -this.dodgeDir * spin * dt * 0.9; // roll continues the bank direction
+      // full barrel roll that ends exactly at the starting bank
+      const progress = 1 - this.dodgeTimer / 0.55;
+      this.roll = this.dodgeStartRoll - this.dodgeDir * Math.PI * 2 * smoothstep01(progress);
+      yawRate = 0; // heading preserved
       this.speed = damp(this.speed, Math.min(maxSpeed * 1.15, this.speed + 16), 4, dt);
-      // small lateral displacement (sin envelope)
-      lateralVel = this.dodgeDir * 9 * Math.sin((1 - this.dodgeTimer / 0.55) * Math.PI);
+      // lateral displacement (sin envelope, out and back)
+      lateralVel = this.dodgeDir * 11 * Math.sin(progress * Math.PI);
     } else {
       // roll relaxes to bank target (A/D bank + keyboard-look coordinated bank)
       const rollTarget = -bankInput * this.bankAmount - lookYaw * 0.22;

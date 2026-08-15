@@ -240,6 +240,88 @@ test("castle mission: full phased completion → VICTORY (§90)", async ({ page 
   expect(await page.locator("#results-title").textContent()).toBe("VICTORY");
 });
 
+test("dragon never becomes invisible across scene/mission cycles (material cache poisoning)", async ({ page }) => {
+  await bootMission(page, "dragonstone");
+  /**
+   * Root cause regression: the dragon material set was cached module-level by
+   * dragon id and shared across the menu-showcase scene and mission scenes.
+   * Starting a mission disposed the showcase scene (releasing the cached
+   * textures' GPU resources), so the mission rig rendered dead textures —
+   * mesh.isVisible true, alpha 1, body invisible while the rider stayed visible.
+   * The cache is now scene-scoped; this test pins the invariant.
+   */
+  const audit = () =>
+    page.evaluate(() => {
+      const app = (window as any).__APP;
+      const rig = app.mission.rig;
+      const mats = [rig.materials.body, rig.materials.head, rig.materials.wing, rig.materials.accent, rig.materials.jaw];
+      return {
+        inScene: mats.every((m: any) => m.getScene() === app.mission.scene),
+        alpha1: mats.every((m: any) => m.alpha === 1),
+        gpuAlive: mats.every((m: any) => m.diffuseTexture && m.diffuseTexture._texture),
+        bodyMeshesVisible: rig.root
+          .getChildMeshes()
+          .filter((x: any) => x.parent?.name !== "riderFigure" && x.name !== "saddle" && x.name !== "pommel" && x.name !== "strap")
+          .every((x: any) => x.isVisible),
+      };
+    });
+
+  // mission 1 invariants
+  const m1 = await audit();
+  expect(m1.inScene).toBe(true);
+  expect(m1.alpha1).toBe(true);
+  expect(m1.gpuAlive).toBe(true);
+  expect(m1.bodyMeshesVisible).toBe(true);
+
+  // menu (disposes the mission scene) then a second mission with another dragon
+  await page.evaluate(() => (window as any).__APP.backToMenu());
+  await page.waitForSelector("#screen-main-menu.visible");
+  await page.evaluate(() => (window as any).__APP.startMission("riverlands", "daemon", "caraxes", "normal"));
+  await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 40000 });
+  await page.waitForTimeout(1500);
+  const m2 = await audit();
+  expect(m2.inScene).toBe(true);
+  expect(m2.gpuAlive).toBe(true);
+  expect(m2.bodyMeshesVisible).toBe(true);
+
+  // and back to the FIRST dragon again (double-cycle)
+  await page.evaluate(() => (window as any).__APP.backToMenu());
+  await page.waitForSelector("#screen-main-menu.visible");
+  await page.evaluate(() => (window as any).__APP.startMission("dragonstone", "rhaenyra", "syrax", "normal"));
+  await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 40000 });
+  await page.waitForTimeout(1500);
+  const m3 = await audit();
+  expect(m3.gpuAlive).toBe(true);
+  expect(m3.bodyMeshesVisible).toBe(true);
+
+  // death transition: dragon corpse stays visible (only mounted-rider group hides)
+  await page.evaluate(() => {
+    const g = (window as any).__GAME;
+    g.mission.dragonCtrl.pos.set(-200, 40, -200);
+    g.api.damageDragon(99999);
+  });
+  await page.waitForFunction(() => (window as any).__GAME.state === "GROUND_GAMEPLAY", null, { timeout: 30000 });
+  const ground = await page.evaluate(() => {
+    const app = (window as any).__APP;
+    const rig = app.mission.rig;
+    // mounted-rider group = anything under riderFigure (incl. saddle mounted on it)
+    const inRiderGroup = (x: any) => {
+      let p = x.parent;
+      while (p && p !== rig.root) {
+        if (p.name === "riderFigure") return true;
+        p = p.parent;
+      }
+      return ["saddle", "pommel", "strap"].includes(x.name);
+    };
+    return {
+      corpseVisible: rig.root.getChildMeshes().filter((x: any) => !inRiderGroup(x)).every((x: any) => x.isVisible),
+      groundRiderVisible: app.mission.riderCtrl.figure.root.getChildMeshes().filter((x: any) => x.name !== "g-bodyProxy").every((x: any) => x.isVisible),
+    };
+  });
+  expect(ground.corpseVisible).toBe(true);
+  expect(ground.groundRiderVisible).toBe(true);
+});
+
 test("castle mission: dragon death → ground continuation → VICTORY (§91)", async ({ page }) => {
   await bootMission(page, "blackstone");
   // force dragon death near the gate approach

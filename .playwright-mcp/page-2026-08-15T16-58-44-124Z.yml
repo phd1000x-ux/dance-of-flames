@@ -1,0 +1,16 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e9]:
+    - generic [ref=e10]: DANCE OF FLAMES
+    - generic [ref=e11]: DRAGONRIDER
+    - button "CONTINUE" [disabled] [ref=e12]
+    - button "> NEW CAMPAIGN <" [ref=e13] [cursor=pointer]
+    - button "BATTLE" [ref=e14] [cursor=pointer]
+    - button "MANUAL" [ref=e15] [cursor=pointer]
+    - button "SETTINGS" [ref=e16] [cursor=pointer]
+    - button "CREDITS" [ref=e17] [cursor=pointer]
+    - generic [ref=e18]: W / S NAVIGATE ENTER SELECT
+    - generic [ref=e19]: A fan-made battle simulator inspired by the world of Westeros.All assets procedural & original.
+  - generic:
+    - generic: DANCE OF FLAMES
+    - generic: DRAGONRIDER
+    - generic: Awakening the dragons…

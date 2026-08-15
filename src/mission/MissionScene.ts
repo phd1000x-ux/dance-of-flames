@@ -416,11 +416,13 @@ export class MissionScene {
       if (d.input.pressed("recenterCamera")) this.dragonCtrl.startRecenter();
       // consumables (G)
       if (d.input.pressed("interact")) this.useConsumable();
-      // super with not-ready feedback (R)
-      if (d.input.pressed("super") && !(this.player.superCharge >= 100 && this.player.superCooldown <= 0)) {
+      // super with not-ready feedback (R) — edges latched through stagger frames
+      const superPressed = this.dragonCtrl.queuedSuper || d.input.pressed("super");
+      this.dragonCtrl.queuedSuper = false;
+      if (superPressed && !(this.player.superCharge >= 100 && this.player.superCooldown <= 0)) {
         d.bus.emit("hud-hint", { text: "SUPER CHARGE NOT READY" });
       }
-      this.fire.update(dt, d.input.isDown("fire"), d.input.pressed("super"), d.particleScale());
+      this.fire.update(dt, d.input.isDown("fire"), superPressed, d.particleScale());
       // audio ambience by speed
       d.audio.setWind(clamp(this.dragonCtrl.speed / 60, 0.1, 1));
       d.audio.setFireLoop(this.fire.firing);
@@ -663,7 +665,20 @@ export class MissionScene {
         this.lockTargetPos.copyFrom(src);
       }
     }
+    // X during a barrel-dodge would acquire a random side target (the heading is
+    // mid-spin) — queue the intent and acquire on roll completion instead of
+    // silently consuming the input.
     if (d.input.pressed("lockOn")) {
+      if (this.dragonCtrl.dodgeTimer > 0) {
+        this.lockPending = true;
+      } else if (this.lockTargetPos) {
+        this.clearLock();
+      } else {
+        this.acquireLock();
+      }
+      d.bus.emit("target-lock-changed", { locked: !!this.lockTargetPos, kind: this.lockTargetKind });
+    } else if (this.lockPending && this.dragonCtrl.dodgeTimer <= 0) {
+      this.lockPending = false;
       if (this.lockTargetPos) {
         this.clearLock();
       } else {
@@ -673,12 +688,15 @@ export class MissionScene {
     }
   }
 
+  private lockPending = false;
+
   private clearLock(): void {
     this.lockTargetPos = null;
     this.lockTargetKind = null;
     this.lockSoldier = null;
     this.lockBallista = null;
     this.lockBuilding = null;
+    this.lockPending = false;
   }
 
   private acquireLock(): void {

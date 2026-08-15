@@ -167,8 +167,8 @@ export class InputManager {
     return { dx, dy };
   }
 
-  endFrame(): void {
-    this.state.endFrame();
+  endFrame(simRanThisFrame = true): void {
+    this.state.endFrame(simRanThisFrame);
     this.wheel = 0;
     this.frameMouseDX = 0;
     this.frameMouseDY = 0;

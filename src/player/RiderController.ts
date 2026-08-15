@@ -32,6 +32,8 @@ export class RiderController {
   attackHitDone = false;
   comboWindow = 0;
   queuedInput = false;
+  /** latched heavy-attack intent (survives active-swing frames) */
+  private queuedHeavy = false;
 
   blocking = false;
   blockTime = 0; // time since block started (parry window)
@@ -127,10 +129,15 @@ export class RiderController {
       this.bus.emit("sfx", { name: "dodge" });
     }
 
+    // latch attack edges so presses during an active swing are never lost
+    if (input.pressed("heavyAttack")) this.queuedHeavy = true;
+
     if (!this.busy) {
       if (input.pressed("lightAttack")) {
-        this.startAttack(dt > 0 ? "light1" : "light1");
-      } else if (input.pressed("heavyAttack") && this.player.riderStamina >= 14) {
+        this.queuedHeavy = false; // light takes priority over a stale heavy intent
+        this.startAttack("light1");
+      } else if (this.queuedHeavy && this.player.riderStamina >= 14) {
+        this.queuedHeavy = false;
         this.player.riderStamina -= 14;
         this.startAttack("heavy");
       }
