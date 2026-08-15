@@ -57,7 +57,7 @@ export class FireSystem {
       return;
     }
 
-    const firing = this.player.fireEnergy.update(dt, wantFire && this.player.superCooldown <= 0);
+    const firing = this.player.fireEnergy.update(dt, wantFire);
     this.firing = firing;
 
     if (wantSuper && this.player.superCharge >= 100 && this.player.superCooldown <= 0) {

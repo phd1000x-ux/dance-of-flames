@@ -341,6 +341,7 @@ export class MissionScene {
       playerMode: this.phase === "ground" ? "ground" : "dragon",
       dragonPos: this.dragonCtrl.pos,
       dragonSpeed: this.dragonCtrl.speed,
+      dragonForward: this.dragonCtrl.forward,
       dragonAltitude: this.dragonCtrl.pos.y - this.world.terrain.heightAt(this.dragonCtrl.pos.x, this.dragonCtrl.pos.z),
       riderPos: this.riderCtrl ? this.riderCtrl.pos : null,
       riderFwd: this.riderCtrl ? new Vector3(Math.sin(this.riderCtrl.yaw), 0, Math.cos(this.riderCtrl.yaw)) : null,

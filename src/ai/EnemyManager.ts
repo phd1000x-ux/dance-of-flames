@@ -69,6 +69,7 @@ export interface CombatContext {
   playerMode: "dragon" | "ground";
   dragonPos: Vector3;
   dragonSpeed: number;
+  dragonForward: Vector3;
   dragonAltitude: number;
   riderPos: Vector3 | null;
   riderFwd: Vector3 | null;
@@ -77,6 +78,24 @@ export interface CombatContext {
 }
 
 let nextId = 1;
+
+/** Exact low-arc ballistic launch direction from origin to target at given speed. */
+export function ballisticDir(origin: Vector3, target: Vector3, speed: number, gravity = 9.8): Vector3 {
+  const delta = target.subtract(origin);
+  const h = delta.y;
+  const d = Math.hypot(delta.x, delta.z);
+  if (d < 0.001) return new Vector3(0, d === 0 ? 1 : delta.y, 0).normalize();
+  const v2 = speed * speed;
+  const root = v2 * v2 - gravity * (gravity * d * d + 2 * h * v2);
+  const dirH = new Vector3(delta.x, 0, delta.z).normalize();
+  if (root < 0) {
+    // out of range: max-range 45° arc toward target
+    return new Vector3(dirH.x * Math.SQRT1_2, Math.SQRT1_2, dirH.z * Math.SQRT1_2);
+  }
+  const elev = Math.atan((v2 - Math.sqrt(root)) / (gravity * d));
+  const cos = Math.cos(elev);
+  return new Vector3(dirH.x * cos, Math.sin(elev), dirH.z * cos);
+}
 
 /**
  * Enemy soldiers + siege ballistae with LOD-tiered AI scheduling.
@@ -428,31 +447,30 @@ export class EnemyManager {
           }
           return;
         }
-        // vs dragon: volleys when in range
+        // vs dragon: volleys when in range (with velocity lead)
         if (dist < s.def.range && altDelta > 4 && s.cooldown <= 0 && s.tier < 2) {
           s.state = "aim";
-          if (s.stateTime > 0.01 && s.cooldown > -99) {
-            // aim telegraph handled via cooldown scheduling
-          }
           s.cooldown = s.def.attackCooldown / this.difficulty.aggression;
+          const flightT = dist / 40;
+          const lead = ctx.dragonForward.scale(ctx.dragonSpeed * flightT * 0.7);
           const aimError = (1 - this.difficulty.enemyAccuracy) * 14;
-          this.fireArrow(
-            s,
-            targetPos.add(new Vector3(0, 0, 0)).add(new Vector3((Math.random() - 0.5) * aimError, (Math.random() - 0.5) * aimError * 0.6 + 2, (Math.random() - 0.5) * aimError)),
-            s.def.damage,
-            0.05
-          );
+          const aimPoint = targetPos
+            .add(lead)
+            .add(new Vector3((Math.random() - 0.5) * aimError, (Math.random() - 0.5) * aimError * 0.6 + 2, (Math.random() - 0.5) * aimError));
+          this.fireArrow(s, aimPoint, s.def.damage, 0.05);
         } else {
           s.state = "alert";
         }
         break;
       }
       case "spear": {
+        faceTarget();
         if (ctx.playerMode === "dragon") {
-          faceTarget();
           if (altDelta < 16 && dist < 34 && s.cooldown <= 0) {
             s.cooldown = s.def.attackCooldown * 1.4 / this.difficulty.aggression;
-            this.projectiles.spawn("spear", s.pos.add(new Vector3(0, 1.6, 0)), toTarget.add(new Vector3(0, altDelta + dist * 0.25, 0)), 26, s.def.damage, 0.08);
+            const origin = s.pos.add(new Vector3(0, 1.6, 0));
+            const dir = ballisticDir(origin, targetPos, 26);
+            this.projectiles.spawn("spear", origin, dir, 26, s.def.damage, 0.08);
           }
         } else {
           this.meleeBehavior(s, dt, dist, targetYaw, ctx);
@@ -479,7 +497,9 @@ export class EnemyManager {
           faceTarget();
           if (altDelta < 22 && dist < 44 && s.cooldown <= 0) {
             s.cooldown = 2.6 / this.difficulty.aggression;
-            this.projectiles.spawn("spear", s.pos.add(new Vector3(0, 1.8, 0)), toTarget.add(new Vector3(0, altDelta + dist * 0.3, 0)), 30, s.def.damage * 0.7, 0.05);
+            const origin = s.pos.add(new Vector3(0, 1.8, 0));
+            const dir = ballisticDir(origin, targetPos, 30);
+            this.projectiles.spawn("spear", origin, dir, 30, s.def.damage * 0.7, 0.05);
           }
         } else {
           this.meleeBehavior(s, dt, dist, targetYaw, ctx);
@@ -547,10 +567,7 @@ export class EnemyManager {
 
   private fireArrow(s: Soldier, targetPos: Vector3, damage: number, spread: number): void {
     const origin = s.pos.add(new Vector3(0, 1.5, 0));
-    const dir = targetPos.subtract(origin);
-    const dist = dir.length();
-    // ballistic lead: aim slightly above for gravity
-    dir.y += dist * 0.12;
+    const dir = ballisticDir(origin, targetPos, 40);
     this.projectiles.spawn("arrow", origin, dir, 40, damage * this.difficulty.enemyDamage, spread);
   }
 
@@ -589,9 +606,12 @@ export class EnemyManager {
       b.state = "reload";
       b.railMat.emissiveColor = Color3.Black();
       const origin = b.pos.add(new Vector3(0, 1.9, 0));
-      // lead the target using dragon velocity approximation
-      const lead = toT.scale(0.14 * (ctx.dragonSpeed / 20));
-      const dir = toT.add(lead);
+      // lead the flying target using its velocity
+      const flightT = dist / 95;
+      const lead = ctx.playerMode === "dragon"
+        ? ctx.dragonForward.scale(ctx.dragonSpeed * flightT * 0.85)
+        : new Vector3(0, 0, 0);
+      const dir = ballisticDir(origin, target.add(lead), 95);
       this.projectiles.spawn("bolt", origin, dir, 95, b.def.damage * this.difficulty.enemyDamage, 0.02);
       this.bus.emit("sfx", { name: "ballistaFire" });
     }
