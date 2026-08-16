@@ -1,3 +1,17 @@
+/** Per-dragon wing silhouette — drives the procedural wing geometry. */
+export interface WingShape {
+  /** overall wingspan multiplier (1 = baseline) */
+  span: number;
+  /** fore-aft chord multiplier — narrow & long (0.75) vs broad (1.25) */
+  chord: number;
+  /** wing-finger bones 3..5 (visual spars along the trailing edge) */
+  fingers: number;
+  /** trailing-edge notch depth 0..1 (scalloped bat-wing cut) */
+  membraneNotch: number;
+  /** backward sweep of the outer panel, radians */
+  sweepAngle: number;
+}
+
 export interface DragonDefinition {
   id: string;
   name: string;
@@ -9,6 +23,8 @@ export interface DragonDefinition {
   wingColor: string;
   accentColor: string;
   fireColor: string;
+  /** Wing silhouette (distinct per dragon) */
+  wingShape: WingShape;
   /** Combat */
   maxHealth: number;
   armor: number;
@@ -43,6 +59,7 @@ export const DRAGONS: DragonDefinition[] = [
     wingColor: "#e8d478",
     accentColor: "#7a6414",
     fireColor: "#ff9a3c",
+    wingShape: { span: 1.0, chord: 1.0, fingers: 4, membraneNotch: 0.35, sweepAngle: 0.18 }, // balanced queenly wings
     maxHealth: 1000,
     armor: 30,
     fireDamage: 55,
@@ -72,6 +89,7 @@ export const DRAGONS: DragonDefinition[] = [
     wingColor: "#d4485c",
     accentColor: "#5a1020",
     fireColor: "#ff5a2a",
+    wingShape: { span: 1.12, chord: 0.74, fingers: 4, membraneNotch: 0.55, sweepAngle: 0.42 }, // narrow serpentine sails
     maxHealth: 950,
     armor: 35,
     fireDamage: 78,
@@ -101,6 +119,7 @@ export const DRAGONS: DragonDefinition[] = [
     wingColor: "#6e8f74",
     accentColor: "#233327",
     fireColor: "#ffb347",
+    wingShape: { span: 1.32, chord: 1.28, fingers: 5, membraneNotch: 0.18, sweepAngle: 0.08 }, // colossal broad battle-planes
     maxHealth: 1550,
     armor: 62,
     fireDamage: 96,
@@ -130,6 +149,7 @@ export const DRAGONS: DragonDefinition[] = [
     wingColor: "#f4d675",
     accentColor: "#9c7018",
     fireColor: "#ffd24a",
+    wingShape: { span: 1.06, chord: 1.08, fingers: 4, membraneNotch: 0.28, sweepAngle: 0.22 }, // wide golden glory
     maxHealth: 1100,
     armor: 40,
     fireDamage: 60,
@@ -159,6 +179,7 @@ export const DRAGONS: DragonDefinition[] = [
     wingColor: "#d96a75",
     accentColor: "#6b1520",
     fireColor: "#ff7a3c",
+    wingShape: { span: 1.18, chord: 0.85, fingers: 5, membraneNotch: 0.45, sweepAngle: 0.35 }, // long scarlet speed-blades
     maxHealth: 900,
     armor: 28,
     fireDamage: 58,
@@ -188,6 +209,7 @@ export const DRAGONS: DragonDefinition[] = [
     wingColor: "#dceef0",
     accentColor: "#6e8c94",
     fireColor: "#9adcff",
+    wingShape: { span: 1.22, chord: 0.68, fingers: 3, membraneNotch: 0.62, sweepAngle: 0.5 }, // slim falcon-like slivers
     maxHealth: 780,
     armor: 22,
     fireDamage: 50,

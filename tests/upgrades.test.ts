@@ -98,6 +98,26 @@ describe("stat composition", () => {
     }
   });
 
+  it("every dragon has a distinct wing silhouette (wingShape)", () => {
+    const sigs = DRAGONS.map((d) => `${d.wingShape.span}/${d.wingShape.chord}/${d.wingShape.fingers}/${d.wingShape.membraneNotch}/${d.wingShape.sweepAngle}`);
+    expect(new Set(sigs).size).toBe(DRAGONS.length); // all unique
+    // canonical identities preserved:
+    const vhagar = DRAGONS.find((d) => d.id === "vhagar")!;
+    const moondancer = DRAGONS.find((d) => d.id === "moondancer")!;
+    const caraxes = DRAGONS.find((d) => d.id === "caraxes")!;
+    expect(vhagar.wingShape.chord).toBeGreaterThan(1.2); // broad battle-planes
+    expect(vhagar.wingShape.fingers).toBe(5);
+    expect(moondancer.wingShape.chord).toBeLessThan(0.75); // slim slivers
+    expect(moondancer.wingShape.membraneNotch).toBeGreaterThan(0.6); // deep scallops
+    expect(caraxes.wingShape.chord).toBeLessThan(0.8); // narrow serpentine
+    for (const d of DRAGONS) {
+      expect(d.wingShape.fingers).toBeGreaterThanOrEqual(3);
+      expect(d.wingShape.fingers).toBeLessThanOrEqual(5);
+      expect(d.wingShape.membraneNotch).toBeGreaterThanOrEqual(0);
+      expect(d.wingShape.membraneNotch).toBeLessThanOrEqual(1);
+    }
+  });
+
   it("Vhagar is tankier but slower than Moondancer", () => {
     const vhagar = DRAGONS.find((d) => d.id === "vhagar")!;
     const moondancer = DRAGONS.find((d) => d.id === "moondancer")!;
