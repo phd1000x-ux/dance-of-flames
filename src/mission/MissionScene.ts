@@ -600,6 +600,9 @@ export class MissionScene {
     this.groundCam.yaw = this.riderCtrl.yaw;
     this.groundCam.pitch = 0.15;
     this.groundCam.reset(this.riderCtrl.pos);
+    // the renderer draws from scene.activeCamera — without this the view stays
+    // on the frozen dragonCam and ground combat is never actually shown
+    this.scene.activeCamera = this.groundCam.camera;
 
     // convert objectives so the mission remains completable
     this.tracker.convertToGround();

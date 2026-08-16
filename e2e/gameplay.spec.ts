@@ -143,11 +143,13 @@ test("E2E 5: dragon dies → death sequence → rider spawns → ground camera �
       riderHp: g.mission.riderCtrl.player.riderHp,
       hudGroundVisible: getComputedStyle(document.querySelector(".hud-ground")!).display,
       objective: document.querySelector("#objective-text")!.textContent,
+      activeCamera: g.mission.scene.activeCamera.name,
     };
   });
   expect(ground.riderSpawned).toBe(true);
   expect(ground.riderHp).toBeGreaterThan(0);
   expect(ground.hudGroundVisible).toBe("block");
+  expect(ground.activeCamera).toBe("groundCam"); // renderer must follow the rider, not the frozen dragonCam
   expect(ground.objective.length).toBeGreaterThan(5); // converted objective text
 
   // place an enemy in front and swing
