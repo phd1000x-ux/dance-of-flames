@@ -457,6 +457,12 @@ export class DragonRig {
   }
 
   dispose(): void {
-    this.root.dispose(false, true);
+    // Dispose ONLY the mesh hierarchy. Materials/textures are owned by the
+    // scene-scoped cache (DragonMaterials) and intentionally survive rig swaps
+    // (menu preview cycling, mission restarts) — disposing them here poisoned
+    // the cache and made the dragon render invisible the next time the same
+    // dragon id was built in this scene. The cache (WeakMap keyed by scene)
+    // releases everything when the scene itself is disposed.
+    this.root.dispose(false, false);
   }
 }

@@ -320,6 +320,30 @@ test("dragon never becomes invisible across scene/mission cycles (material cache
   });
   expect(ground.corpseVisible).toBe(true);
   expect(ground.groundRiderVisible).toBe(true);
+
+  // SECOND poisoning path: cycling dragons in the character-select preview.
+  // The showcase swaps rigs on dragon change; rig.dispose() previously disposed
+  // the shared materials+textures while the scene-scoped cache kept returning
+  // the dead set — the dragon preview (and any later same-scene rebuild) went
+  // invisible after A → B → A.
+  await page.evaluate(() => (window as any).__APP.backToMenu());
+  await page.waitForSelector("#screen-main-menu.visible");
+  await page.evaluate(() => (window as any).__APP.ui.populateCharacterSelect((window as any).__APP.save));
+  const cycles = await page.evaluate(async () => {
+    const imp = new Function("p", "return import(p)") as (p: string) => Promise<any>;
+    const { getDragon } = await imp("/src/data/dragons.ts");
+    const app = (window as any).__APP;
+    const sh = app.showcase;
+    const alive = (m: any) => !!m.diffuseTexture && !!m.diffuseTexture._texture;
+    const results: boolean[] = [];
+    for (const id of ["caraxes", "syrax", "vhagar", "caraxes", "syrax"]) {
+      sh.setDragon(getDragon(id));
+      await new Promise((r) => setTimeout(r, 80));
+      results.push([sh.rig.materials.body, sh.rig.materials.wing, sh.rig.materials.jaw].every(alive));
+    }
+    return results;
+  });
+  expect(cycles.every(Boolean)).toBe(true);
 });
 
 test("castle mission: dragon death → ground continuation → VICTORY (§91)", async ({ page }) => {
