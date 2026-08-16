@@ -11,6 +11,18 @@ export interface RiderGroundStats {
   moveSpeed: number;
 }
 
+export interface RiderLook {
+  gender: "male" | "female";
+  /** distinct silhouette hairstyles */
+  hairStyle: "long" | "short" | "braids" | "topknot" | "ponytail" | "buzz";
+  hairColor: string;
+  skin: string;
+  /** body-frame variation, 0.9 slight … 1.1 broad */
+  build: number;
+  /** optional distinguishing face detail */
+  face?: "eyepatch" | "beard" | "crownBraid";
+}
+
 export interface RiderDefinition {
   id: string;
   name: string;
@@ -23,6 +35,8 @@ export interface RiderDefinition {
   dragonBonus: StatModSource;
   ground: RiderGroundStats;
   color: string;
+  /** visual identity — gendered frame, hairstyle, colors (drives rider meshes) */
+  look: RiderLook;
 }
 
 export const RIDERS: RiderDefinition[] = [
@@ -36,6 +50,7 @@ export const RIDERS: RiderDefinition[] = [
     dragonBonus: { maxSpeed: 1.05, turnRate: 1.08 },
     ground: { hp: 200, armor: 18, swordDamage: 26, heavyMultiplier: 2.1, stamina: 100, block: 0.6, dodgeCost: 22, moveSpeed: 7.5 },
     color: "#d8d0c0",
+    look: { gender: "female", hairStyle: "long", hairColor: "#e8ddb8", skin: "#e8c9a8", build: 0.92, face: "crownBraid" },
   },
   {
     id: "daemon",
@@ -47,6 +62,7 @@ export const RIDERS: RiderDefinition[] = [
     dragonBonus: { fireDamage: 1.08, boostSpeed: 1.06 },
     ground: { hp: 220, armor: 22, swordDamage: 34, heavyMultiplier: 2.2, stamina: 110, block: 0.65, dodgeCost: 24, moveSpeed: 7.8 },
     color: "#404850",
+    look: { gender: "male", hairStyle: "short", hairColor: "#d8d2c4", skin: "#dcb896", build: 1.06, face: "beard" },
   },
   {
     id: "aemond",
@@ -58,6 +74,7 @@ export const RIDERS: RiderDefinition[] = [
     dragonBonus: { maxHealth: 1.06, armor: 1.08 },
     ground: { hp: 240, armor: 26, swordDamage: 30, heavyMultiplier: 2.4, stamina: 100, block: 0.7, dodgeCost: 25, moveSpeed: 7.2 },
     color: "#2f3a2f",
+    look: { gender: "male", hairStyle: "buzz", hairColor: "#dcd6c8", skin: "#e0be9c", build: 1.0, face: "eyepatch" },
   },
   {
     id: "aegon",
@@ -69,6 +86,7 @@ export const RIDERS: RiderDefinition[] = [
     dragonBonus: { fireRecharge: 1.1, fireCapacity: 1.1 },
     ground: { hp: 210, armor: 20, swordDamage: 27, heavyMultiplier: 2.0, stamina: 105, block: 0.6, dodgeCost: 22, moveSpeed: 7.4 },
     color: "#c8a83e",
+    look: { gender: "male", hairStyle: "short", hairColor: "#e2dcca", skin: "#e2c2a2", build: 1.04 },
   },
   {
     id: "rhaenys",
@@ -80,6 +98,7 @@ export const RIDERS: RiderDefinition[] = [
     dragonBonus: { maxSpeed: 1.07, fireRecharge: 1.12 },
     ground: { hp: 205, armor: 19, swordDamage: 28, heavyMultiplier: 2.1, stamina: 112, block: 0.62, dodgeCost: 21, moveSpeed: 7.6 },
     color: "#8f3040",
+    look: { gender: "female", hairStyle: "braids", hairColor: "#2c2426", skin: "#caa286", build: 0.96 },
   },
   {
     id: "baela",
@@ -91,6 +110,7 @@ export const RIDERS: RiderDefinition[] = [
     dragonBonus: { turnRate: 1.12, acceleration: 1.1 },
     ground: { hp: 190, armor: 14, swordDamage: 25, heavyMultiplier: 1.9, stamina: 120, block: 0.5, dodgeCost: 18, moveSpeed: 8.2 },
     color: "#b8c8cc",
+    look: { gender: "female", hairStyle: "ponytail", hairColor: "#dfe4e6", skin: "#e6c6a6", build: 0.9 },
   },
 ];
 

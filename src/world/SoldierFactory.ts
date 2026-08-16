@@ -161,8 +161,14 @@ export class SoldierFactory {
     shieldMesh: TransformNode;
   } {
     const root = new TransformNode("riderGround", this.scene);
+    const look = def.look;
+    const female = look.gender === "female";
+    const build = look.build;
+    // PROTAGONIST SCALE 1.5x — same character as the mounted rider
+    root.scaling.setAll(1.5);
     const c = Color3.FromHexString(def.color);
-    // distinct material types: leather / metal / cloth / hair / skin
+
+    // distinct material types: leather / metal / cloth / hair / skin (look colors)
     const leather = new StandardMaterial("gLeather", this.scene);
     leather.diffuseColor = new Color3(0.24, 0.15, 0.1);
     leather.specularColor = new Color3(0.09, 0.07, 0.06);
@@ -174,12 +180,12 @@ export class SoldierFactory {
     cloth.diffuseColor = c;
     cloth.emissiveColor = c.scale(0.12);
     cloth.specularColor = new Color3(0.04, 0.04, 0.04);
-    const hair = new StandardMaterial("gHair", this.scene);
-    hair.diffuseColor = new Color3(0.14, 0.11, 0.08);
-    hair.specularColor = new Color3(0.14, 0.11, 0.09);
-    const skin = new StandardMaterial("gSkin", this.scene);
-    skin.diffuseColor = new Color3(0.72, 0.55, 0.42);
-    skin.specularColor = new Color3(0.16, 0.13, 0.11);
+    const hairMat = new StandardMaterial("gHair", this.scene);
+    hairMat.diffuseColor = Color3.FromHexString(look.hairColor);
+    hairMat.specularColor = new Color3(0.14, 0.11, 0.09);
+    const skinMat = new StandardMaterial("gSkin", this.scene);
+    skinMat.diffuseColor = Color3.FromHexString(look.skin);
+    skinMat.specularColor = new Color3(0.16, 0.13, 0.11);
 
     const attach = (mesh: Mesh, mat: StandardMaterial, parent: TransformNode) => {
       mesh.material = mat;
@@ -187,67 +193,139 @@ export class SoldierFactory {
       mesh.isPickable = false;
     };
 
+    const shoulderW = (female ? 0.86 : 1.0) * build;
+    const hipW = female ? 1.1 : 1.0;
+
     // torso group (walk bob + attack lean applied here by the controller)
     const torsoPivot = new TransformNode("gTorsoPivot", this.scene);
     torsoPivot.parent = root;
-    const pelvis = MeshBuilder.CreateBox("g-pelvis", { width: 0.42, height: 0.2, depth: 0.3 }, this.scene);
+    const pelvis = MeshBuilder.CreateBox("g-pelvis", { width: 0.42 * hipW, height: 0.2, depth: 0.3 }, this.scene);
     pelvis.position.y = 0.88;
     attach(pelvis, cloth, torsoPivot);
-    const chest = MeshBuilder.CreateCapsule("g-chest", { height: 0.72, radius: 0.24, tessellation: 8, subdivisions: 1 }, this.scene);
+    const chest = MeshBuilder.CreateCapsule("g-chest", { height: 0.72, radius: 0.24 * (female ? 0.94 : 1) * build, tessellation: 8, subdivisions: 1 }, this.scene);
     chest.position.y = 1.25;
     attach(chest, leather, torsoPivot);
-    const plate = MeshBuilder.CreateBox("g-plate", { width: 0.46, height: 0.42, depth: 0.34 }, this.scene);
+    const plate = MeshBuilder.CreateBox("g-plate", { width: 0.46 * shoulderW, height: 0.42, depth: 0.34 }, this.scene);
     plate.position.set(0, 1.28, 0.02);
     attach(plate, metal, torsoPivot);
-    const belt = MeshBuilder.CreateBox("g-belt", { width: 0.47, height: 0.07, depth: 0.35 }, this.scene);
+    const belt = MeshBuilder.CreateBox("g-belt", { width: 0.47 * hipW, height: 0.07, depth: 0.35 }, this.scene);
     belt.position.y = 1.0;
     attach(belt, leather, torsoPivot);
     for (const sx of [-0.26, 0.26]) {
-      const pauldron = MeshBuilder.CreateSphere(`g-pauldron${sx}`, { diameterX: 0.22, diameterY: 0.15, diameterZ: 0.24, segments: 6 }, this.scene);
-      pauldron.position.set(sx, 1.52, 0);
+      const pauldron = MeshBuilder.CreateSphere(`g-pauldron${sx}`, { diameterX: 0.22 * shoulderW, diameterY: 0.15, diameterZ: 0.24, segments: 6 }, this.scene);
+      pauldron.position.set(sx * shoulderW, 1.52, 0);
       attach(pauldron, metal, torsoPivot);
     }
-    // head + hair + face
+    // head + hairstyle + face identity
     const headPivot = new TransformNode("gHeadPivot", this.scene);
     headPivot.parent = torsoPivot;
     headPivot.position.y = 1.66;
     const skull = MeshBuilder.CreateSphere("g-skull", { diameterX: 0.2, diameterY: 0.24, diameterZ: 0.22, segments: 6 }, this.scene);
-    attach(skull, skin, headPivot);
+    attach(skull, skinMat, headPivot);
+    const nose = MeshBuilder.CreateBox("g-nose", { width: 0.045, height: 0.07, depth: 0.06 }, this.scene);
+    nose.position.set(0, -0.01, 0.11);
+    attach(nose, skinMat, headPivot);
     const hairCap = MeshBuilder.CreateSphere("g-hair", { diameterX: 0.22, diameterY: 0.23, diameterZ: 0.22, segments: 6 }, this.scene);
     hairCap.position.set(0, 0.05, -0.03);
     hairCap.scaling.y = 0.82;
-    attach(hairCap, hair, headPivot);
-    const hairBack = MeshBuilder.CreateBox("g-hairback", { width: 0.17, height: 0.34, depth: 0.06 }, this.scene);
-    hairBack.position.set(0, -0.08, -0.11);
-    attach(hairBack, hair, headPivot);
-    const nose = MeshBuilder.CreateBox("g-nose", { width: 0.045, height: 0.07, depth: 0.06 }, this.scene);
-    nose.position.set(0, -0.01, 0.11);
-    attach(nose, skin, headPivot);
+    attach(hairCap, hairMat, headPivot);
+
+    switch (look.hairStyle) {
+      case "long": {
+        const back = MeshBuilder.CreateBox("g-hairL", { width: 0.2, height: 0.72, depth: 0.05 }, this.scene);
+        back.position.set(0, -0.3, -0.11);
+        attach(back, hairMat, headPivot);
+        for (const fx of [-0.11, 0.11]) {
+          const strand = MeshBuilder.CreateBox(`g-hairS${fx}`, { width: 0.045, height: 0.5, depth: 0.045 }, this.scene);
+          strand.position.set(fx, -0.18, 0.075);
+          attach(strand, hairMat, headPivot);
+        }
+        break;
+      }
+      case "braids": {
+        for (const bx of [-0.1, 0.1]) {
+          const braid = MeshBuilder.CreateCylinder(`g-braid${bx}`, { diameter: 0.06, height: 0.6, tessellation: 5 }, this.scene);
+          braid.position.set(bx, -0.34, -0.1);
+          braid.rotation.x = 0.12;
+          attach(braid, hairMat, headPivot);
+          const tie = MeshBuilder.CreateSphere(`g-tie${bx}`, { diameter: 0.07, segments: 4 }, this.scene);
+          tie.position.set(bx, -0.64, -0.06);
+          attach(tie, metal, headPivot);
+        }
+        break;
+      }
+      case "topknot": {
+        const bun = MeshBuilder.CreateSphere("g-bun", { diameter: 0.13, segments: 6 }, this.scene);
+        bun.position.set(0, 0.16, -0.02);
+        attach(bun, hairMat, headPivot);
+        break;
+      }
+      case "ponytail": {
+        const tail = MeshBuilder.CreateCapsule("g-tail", { height: 0.5, radius: 0.05, tessellation: 6, subdivisions: 1 }, this.scene);
+        tail.position.set(0, -0.18, -0.16);
+        tail.rotation.x = 0.5;
+        attach(tail, hairMat, headPivot);
+        break;
+      }
+      case "buzz": {
+        hairCap.scaling.scaleInPlace(0.94);
+        break;
+      }
+      case "short":
+      default: {
+        const back = MeshBuilder.CreateBox("g-hairSh", { width: 0.17, height: 0.22, depth: 0.06 }, this.scene);
+        back.position.set(0, -0.04, -0.1);
+        attach(back, hairMat, headPivot);
+        break;
+      }
+    }
+    if (look.face === "eyepatch") {
+      const patchMat = new StandardMaterial("gPatchM", this.scene);
+      patchMat.diffuseColor = new Color3(0.05, 0.04, 0.03);
+      const patch = MeshBuilder.CreateBox("g-patch", { width: 0.085, height: 0.07, depth: 0.03 }, this.scene);
+      patch.position.set(0.055, 0.02, 0.1);
+      attach(patch, patchMat, headPivot);
+      const band = MeshBuilder.CreateBox("g-band", { width: 0.24, height: 0.025, depth: 0.22 }, this.scene);
+      band.position.set(0, 0.03, 0);
+      attach(band, patchMat, headPivot);
+    } else if (look.face === "beard") {
+      const beard = MeshBuilder.CreateBox("g-beard", { width: 0.14, height: 0.1, depth: 0.06 }, this.scene);
+      beard.position.set(0, -0.1, 0.075);
+      attach(beard, hairMat, headPivot);
+    } else if (look.face === "crownBraid") {
+      const gold = new StandardMaterial("gGoldM", this.scene);
+      gold.diffuseColor = new Color3(0.85, 0.68, 0.3);
+      gold.specularColor = new Color3(0.9, 0.8, 0.5);
+      gold.specularPower = 64;
+      const circlet = MeshBuilder.CreateCylinder("g-circlet", { diameter: 0.2, height: 0.03, tessellation: 10 }, this.scene);
+      circlet.position.set(0, 0.11, 0);
+      attach(circlet, gold, headPivot);
+    }
     // cloak
-    const cloak = MeshBuilder.CreateBox("g-cloak", { width: 0.6, height: 1.0, depth: 0.06 }, this.scene);
+    const cloak = MeshBuilder.CreateBox("g-cloak", { width: 0.6, height: female ? 1.05 : 1.0, depth: 0.06 }, this.scene);
     cloak.position.set(0, 1.15, -0.24);
     cloak.rotation.x = 0.12;
     attach(cloak, cloth, torsoPivot);
 
-    // arms (right holds the sword pivot; left holds the shield)
+    // arms
     for (const ax of [-0.33, 0.33]) {
       const upper = MeshBuilder.CreateCapsule(`g-armU${ax}`, { height: 0.34, radius: 0.06, tessellation: 6, subdivisions: 1 }, this.scene);
-      upper.position.set(ax * 0.8, 1.44, 0.04);
+      upper.position.set(ax * shoulderW, 1.44, 0.04);
       upper.rotation.z = ax > 0 ? -0.3 : 0.3;
       attach(upper, leather, torsoPivot);
       const fore = MeshBuilder.CreateCapsule(`g-armF${ax}`, { height: 0.32, radius: 0.05, tessellation: 6, subdivisions: 1 }, this.scene);
-      fore.position.set(ax, 1.18, 0.12);
+      fore.position.set(ax * shoulderW, 1.18, 0.12);
       fore.rotation.z = ax > 0 ? -0.15 : 0.15;
-      attach(fore, skin, torsoPivot);
+      attach(fore, skinMat, torsoPivot);
       const glove = MeshBuilder.CreateSphere(`g-glove${ax}`, { diameter: 0.11, segments: 5 }, this.scene);
-      glove.position.set(ax * 1.05, 1.02, 0.14);
+      glove.position.set(ax * shoulderW, 1.02, 0.14);
       attach(glove, leather, torsoPivot);
     }
 
-    // legs with boots (merged into the animated body mesh)
+    // legs with boots
     const legParts: Mesh[] = [];
     for (const lx of [-0.15, 0.15]) {
-      const thigh = MeshBuilder.CreateCapsule(`g-thigh${lx}`, { height: 0.44, radius: 0.085, tessellation: 6, subdivisions: 1 }, this.scene);
+      const thigh = MeshBuilder.CreateCapsule(`g-thigh${lx}`, { height: 0.44, radius: 0.085 * hipW, tessellation: 6, subdivisions: 1 }, this.scene);
       thigh.position.set(lx, 0.66, 0);
       legParts.push(thigh);
       const shin = MeshBuilder.CreateCapsule(`g-shin${lx}`, { height: 0.4, radius: 0.07, tessellation: 6, subdivisions: 1 }, this.scene);
@@ -295,7 +373,7 @@ export class SoldierFactory {
     shieldMesh.material = shieldMat;
     shieldMesh.parent = root;
 
-    return { root, body, swordPivot, shieldMesh };
+return { root, body, swordPivot, shieldMesh };
   }
 }
 

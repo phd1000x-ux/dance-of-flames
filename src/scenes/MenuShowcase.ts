@@ -11,6 +11,7 @@ import {
 } from "@babylonjs/core";
 import type { AbstractEngine } from "@babylonjs/core";
 import type { DragonDefinition } from "../data/dragons";
+import type { RiderDefinition } from "../data/riders";
 import { DragonRig } from "../world/DragonRig";
 import { buildSkyAndHorizon } from "../world/Terrain";
 
@@ -23,6 +24,7 @@ export class MenuShowcase {
   readonly camera: UniversalCamera;
   private rig: DragonRig | null = null;
   private rigDef: DragonDefinition | null = null;
+  private riderDef: RiderDefinition | null = null;
   private theta = 0.6;
   private radius = 70;
   private height = 14;
@@ -89,11 +91,12 @@ export class MenuShowcase {
     });
   }
 
-  setDragon(def: DragonDefinition): void {
-    if (this.rigDef?.id === def.id) return;
+  setDragon(def: DragonDefinition, rider?: RiderDefinition): void {
+    if (rider) this.riderDef = rider;
+    if (this.rigDef?.id === def.id && !rider) return;
     this.rig?.dispose();
     this.rigDef = def;
-    this.rig = new DragonRig(this.scene, def);
+    this.rig = new DragonRig(this.scene, def, this.riderDef ?? undefined);
     this.rig.root.position.set(0, 9, 0);
     this.rig.root.rotationQuaternion = null;
     this.rig.root.rotation.y = Math.PI * 0.85;

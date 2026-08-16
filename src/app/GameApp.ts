@@ -149,7 +149,7 @@ export class GameApp {
     if (!this.showcase) {
       this.showcase = new MenuShowcase(this.engine, this.canvas);
     }
-    this.showcase.setDragon(getDragon(this.save.selectedDragon ?? "syrax"));
+    this.showcase.setDragon(getDragon(this.save.selectedDragon ?? "syrax"), getRider(this.save.selectedRider ?? "rhaenyra"));
     this.showcase.setMode("menu");
   }
 
@@ -325,7 +325,7 @@ export class GameApp {
         this.ui.showScreen("credits");
       },
       onSelectionChange: (riderId: string, dragonId: string) => {
-        this.showcase?.setDragon(getDragon(dragonId));
+        this.showcase?.setDragon(getDragon(dragonId), getRider(riderId));
       },
       onConfirmSelection: (riderId: string, dragonId: string) => {
         this.state.transition(GameState.MISSION_SELECT);

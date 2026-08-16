@@ -46,14 +46,17 @@ export class DragonRig {
   private riderFigure!: TransformNode;
   private riderTorso!: TransformNode;
   private riderHead!: TransformNode;
+  /** visual identity of the mounted rider (gendered frame + hairstyle) */
+  private riderLook: import("../data/riders").RiderLook;
   /** exposed so the controller can time wingbeat audio to the animation */
   flapPhase = 0;
   private flapSmooth = 0;
   private tailPhase = 0;
   private riderSway = 0;
 
-  constructor(private scene: Scene, private def: DragonDefinition) {
+  constructor(private scene: Scene, private def: DragonDefinition, riderDef?: import("../data/riders").RiderDefinition) {
     const s = def.scale;
+    this.riderLook = riderDef?.look ?? { gender: "male", hairStyle: "short", hairColor: "#6b543c", skin: "#d9b48f", build: 1 };
     this.root = new TransformNode(`dragon-${def.id}`, scene);
     this.materials = buildDragonMaterials(scene, def);
     // invisible-dragon guard: refuse cross-scene/dead materials loudly
@@ -265,6 +268,11 @@ export class DragonRig {
   /** detailed saddle + multi-material humanoid rider reading as a real character */
   private buildRider(s: number, M: DragonMaterialSet): void {
     const scene = this.scene;
+    const look = this.riderLook;
+    const female = look.gender === "female";
+    const build = look.build;
+
+    // ---- materials (leather / metal / cloth / hair / skin, per look colors) ----
     const leather = new StandardMaterial(`riderLeather-${this.def.id}`, scene);
     leather.diffuseColor = new Color3(0.22, 0.14, 0.09);
     leather.specularColor = new Color3(0.08, 0.06, 0.05);
@@ -274,101 +282,192 @@ export class DragonRig {
     metal.specularColor = new Color3(0.85, 0.86, 0.9);
     metal.specularPower = 96;
     const cloth = new StandardMaterial(`riderCloth-${this.def.id}`, scene);
-    cloth.diffuseColor = Color3.FromHexString(this.def.accentColor).scale(0.8);
+    cloth.diffuseColor = Color3.FromHexString(this.def.accentColor).scale(female ? 0.9 : 0.8);
     cloth.specularColor = new Color3(0.03, 0.03, 0.03);
-    const hair = new StandardMaterial(`riderHair-${this.def.id}`, scene);
-    hair.diffuseColor = new Color3(0.13, 0.1, 0.07);
-    hair.specularColor = new Color3(0.12, 0.1, 0.08);
-    const skin = new StandardMaterial(`riderSkin-${this.def.id}`, scene);
-    skin.diffuseColor = new Color3(0.72, 0.55, 0.42);
-    skin.specularColor = new Color3(0.15, 0.12, 0.1);
+    const hairMat = new StandardMaterial(`riderHair-${this.def.id}`, scene);
+    hairMat.diffuseColor = Color3.FromHexString(look.hairColor);
+    hairMat.specularColor = new Color3(0.14, 0.12, 0.1);
+    const skinMat = new StandardMaterial(`riderSkin-${this.def.id}`, scene);
+    skinMat.diffuseColor = Color3.FromHexString(look.skin);
+    skinMat.specularColor = new Color3(0.16, 0.13, 0.11);
 
+    // ---- mount node: PROTAGONIST SCALE 1.5x (whole rider grows as one unit) ----
     this.riderFigure = new TransformNode("riderFigure", scene);
     this.riderFigure.parent = this.root;
     this.riderFigure.position.set(0, 1.02 * s, 0.1 * s);
+    this.riderFigure.scaling.setAll(1.5);
 
-    // saddle with pommel + straps over the chest
-    const saddle = MeshBuilder.CreateBox(`saddle`, { width: 0.92 * s, height: 0.22 * s, depth: 1.0 * s }, scene);
+    // saddle with pommel + girth strap
+    const saddle = MeshBuilder.CreateBox(`saddle`, { width: 0.98 * s, height: 0.22 * s, depth: 1.05 * s }, scene);
     saddle.material = leather;
     saddle.parent = this.riderFigure;
-    const pommel = MeshBuilder.CreateCylinder(`pommel`, { diameter: 0.14 * s, height: 0.24 * s, tessellation: 6 }, scene);
-    pommel.position.set(0, 0.2 * s, 0.45 * s);
+    const pommel = MeshBuilder.CreateCylinder(`pommel`, { diameter: 0.14 * s, height: 0.26 * s, tessellation: 6 }, scene);
+    pommel.position.set(0, 0.22 * s, 0.5 * s);
     pommel.material = metal;
     pommel.parent = this.riderFigure;
-    const strap = MeshBuilder.CreateBox(`strap`, { width: 1.9 * s, height: 0.09, depth: 0.12 }, scene);
-    strap.position.set(0, -0.05 * s, 0.35 * s);
+    const strap = MeshBuilder.CreateBox(`strap`, { width: 2.05 * s, height: 0.1, depth: 0.13 }, scene);
+    strap.position.set(0, -0.06 * s, 0.38 * s);
     strap.material = leather;
     strap.parent = this.riderFigure;
 
-    // rider: pelvis → torso(+armor) → head(+hair) + arms + legs
+    // ---- gendered frame ----
+    const shoulderW = (female ? 0.86 : 1.0) * build; // shoulder spread multiplier
+    const hipW = female ? 1.1 : 1.0;
+
     this.riderTorso = new TransformNode("riderTorso", scene);
     this.riderTorso.parent = this.riderFigure;
     this.riderTorso.position.y = 0.12 * s;
-    const pelvis = MeshBuilder.CreateBox(`rPelvis`, { width: 0.42, height: 0.2, depth: 0.3 }, scene);
+    const pelvis = MeshBuilder.CreateBox(`rPelvis`, { width: 0.42 * hipW, height: 0.2, depth: 0.3 }, scene);
     pelvis.position.y = 0.05;
     pelvis.material = cloth;
     pelvis.parent = this.riderTorso;
-    const chestBox = MeshBuilder.CreateCapsule(`rChest`, { height: 0.62, radius: 0.19, tessellation: 8, subdivisions: 1 }, scene);
+    const chestBox = MeshBuilder.CreateCapsule(`rChest`, { height: 0.62, radius: 0.19 * (female ? 0.94 : 1) * build, tessellation: 8, subdivisions: 1 }, scene);
     chestBox.position.y = 0.42;
     chestBox.material = leather;
     chestBox.parent = this.riderTorso;
-    const plate = MeshBuilder.CreateBox(`rPlate`, { width: 0.44, height: 0.4, depth: 0.3 }, scene);
+    // breastplate: broad flat for men, shaped cuirass for women
+    const plate = MeshBuilder.CreateBox(`rPlate`, { width: 0.44 * shoulderW, height: 0.4, depth: 0.3 }, scene);
     plate.position.set(0, 0.44, 0.02);
     plate.material = metal;
     plate.parent = this.riderTorso;
-    const belt = MeshBuilder.CreateBox(`rBelt`, { width: 0.46, height: 0.07, depth: 0.33 }, scene);
+    const belt = MeshBuilder.CreateBox(`rBelt`, { width: 0.46 * hipW, height: 0.07, depth: 0.33 }, scene);
     belt.position.y = 0.2;
     belt.material = leather;
     belt.parent = this.riderTorso;
     for (const sx of [-0.24, 0.24]) {
-      const pauldron = MeshBuilder.CreateSphere(`rPauldron${sx}`, { diameterX: 0.2, diameterY: 0.14, diameterZ: 0.22, segments: 6 }, scene);
-      pauldron.position.set(sx, 0.66, 0);
+      const pauldron = MeshBuilder.CreateSphere(`rPauldron${sx}`, { diameterX: 0.2 * shoulderW, diameterY: 0.14, diameterZ: 0.22, segments: 6 }, scene);
+      pauldron.position.set(sx * shoulderW, 0.66, 0);
       pauldron.material = metal;
       pauldron.parent = this.riderTorso;
     }
-    // cloak down the dragon's back
-    const cloak = MeshBuilder.CreateBox(`rCloak`, { width: 0.5, height: 0.85, depth: 0.05 }, scene);
+    // cloak down the dragon's back (longer for women)
+    const cloak = MeshBuilder.CreateBox(`rCloak`, { width: 0.5, height: female ? 1.0 : 0.85, depth: 0.05 }, scene);
     cloak.position.set(0, 0.4, -0.2);
     cloak.rotation.x = 0.4;
     cloak.material = cloth;
     cloak.parent = this.riderTorso;
 
-    // head + hair + face hint
+    // ---- head + HAIRSTYLE + face identity ----
     this.riderHead = new TransformNode("riderHead", scene);
     this.riderHead.parent = this.riderTorso;
     this.riderHead.position.y = 0.82;
     const skullM = MeshBuilder.CreateSphere(`rSkull`, { diameterX: 0.19, diameterY: 0.23, diameterZ: 0.21, segments: 6 }, scene);
-    skullM.material = skin;
+    skullM.material = skinMat;
     skullM.parent = this.riderHead;
+    const nose = MeshBuilder.CreateBox(`rNose`, { width: 0.04, height: 0.07, depth: 0.06 }, scene);
+    nose.position.set(0, -0.01, 0.1);
+    nose.material = skinMat;
+    nose.parent = this.riderHead;
+
+    // shared hair cap (all styles)
     const hairCap = MeshBuilder.CreateSphere(`rHair`, { diameterX: 0.21, diameterY: 0.22, diameterZ: 0.21, segments: 6 }, scene);
     hairCap.position.set(0, 0.045, -0.025);
     hairCap.scaling.y = 0.8;
-    hairCap.material = hair;
+    hairCap.material = hairMat;
     hairCap.parent = this.riderHead;
-    const hairBack = MeshBuilder.CreateBox(`rHairBack`, { width: 0.16, height: 0.3, depth: 0.06 }, scene);
-    hairBack.position.set(0, -0.06, -0.1);
-    hairBack.material = hair;
-    hairBack.parent = this.riderHead;
-    const nose = MeshBuilder.CreateBox(`rNose`, { width: 0.04, height: 0.07, depth: 0.06 }, scene);
-    nose.position.set(0, -0.01, 0.1);
-    nose.material = skin;
-    nose.parent = this.riderHead;
 
-    // arms: upper + forearm + glove, hands forward to the neck (reins)
+    switch (look.hairStyle) {
+      case "long": {
+        // long flowing back sheet + two front strands
+        const back = MeshBuilder.CreateBox(`rHairL`, { width: 0.2, height: 0.72, depth: 0.05 }, scene);
+        back.position.set(0, -0.28, -0.11);
+        back.material = hairMat;
+        back.parent = this.riderHead;
+        for (const fx of [-0.11, 0.11]) {
+          const strand = MeshBuilder.CreateBox(`rHairS${fx}`, { width: 0.045, height: 0.5, depth: 0.045 }, scene);
+          strand.position.set(fx, -0.16, 0.075);
+          strand.material = hairMat;
+          strand.parent = this.riderHead;
+        }
+        break;
+      }
+      case "braids": {
+        // two thick side braids hanging down the back
+        for (const bx of [-0.1, 0.1]) {
+          const braid = MeshBuilder.CreateCylinder(`rBraid${bx}`, { diameter: 0.06, height: 0.6, tessellation: 5 }, scene);
+          braid.position.set(bx, -0.32, -0.1);
+          braid.rotation.x = 0.12;
+          braid.material = hairMat;
+          braid.parent = this.riderHead;
+          const tie = MeshBuilder.CreateSphere(`rTie${bx}`, { diameter: 0.07, segments: 4 }, scene);
+          tie.position.set(bx, -0.62, -0.06);
+          tie.material = metal;
+          tie.parent = this.riderHead;
+        }
+        break;
+      }
+      case "topknot": {
+        const bun = MeshBuilder.CreateSphere(`rBun`, { diameter: 0.13, segments: 6 }, scene);
+        bun.position.set(0, 0.16, -0.02);
+        bun.material = hairMat;
+        bun.parent = this.riderHead;
+        break;
+      }
+      case "ponytail": {
+        const tail = MeshBuilder.CreateCapsule(`rTail`, { height: 0.5, radius: 0.05, tessellation: 6, subdivisions: 1 }, scene);
+        tail.position.set(0, -0.16, -0.16);
+        tail.rotation.x = 0.5;
+        tail.material = hairMat;
+        tail.parent = this.riderHead;
+        break;
+      }
+      case "buzz": {
+        hairCap.scaling.scaleInPlace(0.94); // tight cap only
+        break;
+      }
+      case "short":
+      default: {
+        const back = MeshBuilder.CreateBox(`rHairSh`, { width: 0.17, height: 0.22, depth: 0.06 }, scene);
+        back.position.set(0, -0.02, -0.1);
+        back.material = hairMat;
+        back.parent = this.riderHead;
+        break;
+      }
+    }
+
+    // face identity
+    if (look.face === "eyepatch") {
+      const patch = MeshBuilder.CreateBox(`rPatch`, { width: 0.085, height: 0.07, depth: 0.03 }, scene);
+      patch.position.set(0.055, 0.02, 0.1);
+      const patchMat = new StandardMaterial(`rPatchM-${this.def.id}`, scene);
+      patchMat.diffuseColor = new Color3(0.05, 0.04, 0.03);
+      patch.material = patchMat;
+      patch.parent = this.riderHead;
+      const band = MeshBuilder.CreateBox(`rBand`, { width: 0.24, height: 0.025, depth: 0.22 }, scene);
+      band.position.set(0, 0.03, 0);
+      band.material = patchMat;
+      band.parent = this.riderHead;
+    } else if (look.face === "beard") {
+      const beard = MeshBuilder.CreateBox(`rBeard`, { width: 0.14, height: 0.1, depth: 0.06 }, scene);
+      beard.position.set(0, -0.09, 0.075);
+      beard.material = hairMat;
+      beard.parent = this.riderHead;
+    } else if (look.face === "crownBraid") {
+      const circlet = MeshBuilder.CreateCylinder(`rCirclet`, { diameter: 0.2, height: 0.03, tessellation: 10 }, scene);
+      circlet.position.set(0, 0.1, 0);
+      const gold = new StandardMaterial(`rGoldM-${this.def.id}`, scene);
+      gold.diffuseColor = new Color3(0.85, 0.68, 0.3);
+      gold.specularColor = new Color3(0.9, 0.8, 0.5);
+      gold.specularPower = 64;
+      circlet.material = gold;
+      circlet.parent = this.riderHead;
+    }
+
+    // arms: upper + forearm + glove, hands forward to the reins
     const armRig = (side: number) => {
       const upper = MeshBuilder.CreateCapsule(`rArmU${side}`, { height: 0.34, radius: 0.055, tessellation: 6, subdivisions: 1 }, scene);
-      upper.position.set(side * 0.26, 0.58, 0.08);
+      upper.position.set(side * 0.26 * shoulderW, 0.58, 0.08);
       upper.rotation.z = side * 0.55;
       upper.rotation.x = 0.5;
       upper.material = leather;
       upper.parent = this.riderTorso;
       const fore = MeshBuilder.CreateCapsule(`rArmF${side}`, { height: 0.32, radius: 0.05, tessellation: 6, subdivisions: 1 }, scene);
-      fore.position.set(side * 0.32, 0.6, 0.3);
+      fore.position.set(side * 0.32 * shoulderW, 0.6, 0.3);
       fore.rotation.x = 1.15;
       fore.material = cloth;
       fore.parent = this.riderTorso;
       const glove = MeshBuilder.CreateSphere(`rGlove${side}`, { diameter: 0.1, segments: 5 }, scene);
-      glove.position.set(side * 0.3, 0.63, 0.44);
+      glove.position.set(side * 0.3 * shoulderW, 0.63, 0.44);
       glove.material = leather;
       glove.parent = this.riderTorso;
     };
@@ -376,8 +475,8 @@ export class DragonRig {
     armRig(-1);
     // reins from hands toward the neck base
     for (const rx of [-0.3, 0.3]) {
-      const rein = MeshBuilder.CreateCylinder(`rein${rx}`, { diameter: 0.02, height: 0.85, tessellation: 4 }, scene);
-      rein.position.set(rx * 0.8, 0.75, 0.65);
+      const rein = MeshBuilder.CreateCylinder(`rein${rx}`, { diameter: 0.025, height: 0.95, tessellation: 4 }, scene);
+      rein.position.set(rx * 0.8 * shoulderW, 0.78, 0.7);
       rein.rotation.x = 1.35;
       rein.material = leather;
       rein.parent = this.riderTorso;
@@ -385,7 +484,7 @@ export class DragonRig {
 
     // legs: thigh along flank + shin + boot in stirrup
     const legRig = (side: number) => {
-      const thigh = MeshBuilder.CreateCapsule(`rThigh${side}`, { height: 0.42, radius: 0.08, tessellation: 6, subdivisions: 1 }, scene);
+      const thigh = MeshBuilder.CreateCapsule(`rThigh${side}`, { height: 0.42, radius: 0.08 * hipW, tessellation: 6, subdivisions: 1 }, scene);
       thigh.position.set(side * 0.26, 0.0, 0.12);
       thigh.rotation.z = side * 0.85;
       thigh.material = cloth;

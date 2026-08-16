@@ -131,7 +131,7 @@ export class MissionScene {
     this.player.fireBoostCharges = d.consumables.fireBoost;
     this.player.armorWardCharges = d.consumables.armorWard;
 
-    this.rig = new DragonRig(this.scene, d.dragon);
+    this.rig = new DragonRig(this.scene, d.dragon, d.rider);
     for (const m of this.rig.root.getChildMeshes()) {
       this.world.shadows?.addShadowCaster(m);
     }

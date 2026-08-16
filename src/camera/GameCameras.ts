@@ -156,8 +156,8 @@ export class GroundCamera {
       this.yaw += d * Math.min(1, dt * 3.5);
     }
 
-    const dist = 4.6;
-    const shoulder = 0.85;
+    const dist = 5.8; // rider is 1.5x scale — pull the shoulder cam back accordingly
+    const shoulder = 1.0;
     const dirH = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     const right = new Vector3(dirH.z, 0, -dirH.x);
     const pitchFactor = 1 - Math.abs(this.pitch) * 0.3;
@@ -170,7 +170,7 @@ export class GroundCamera {
     camPos.y = Math.max(camPos.y, groundY);
 
     this.camera.position.copyFrom(camPos);
-    const look = targetPos.add(new Vector3(0, 1.5, 0)).add(dirH.scale(2));
+    const look = targetPos.add(new Vector3(0, 2.1, 0)).add(dirH.scale(2));
     this.camera.setTarget(look);
     this.camera.upVector.copyFrom(Vector3.Up());
   }

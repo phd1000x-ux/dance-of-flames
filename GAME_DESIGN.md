@@ -31,6 +31,8 @@ progressively harder battlefields.
 | Rhaenys | Meleys | Speed / veteran |
 | Baela | Moondancer | Extreme agility / fragile |
 
+Each rider has a distinct visual identity (gendered frame, unique hairstyle — long/braids/ponytail/topknot/buzz — hair color, skin tone, build, and signature face detail: Rhaenyra's circlet, Daemon's beard, Aemond's eyepatch) applied to both the mounted and ground figures, and the protagonist renders at 1.5× scale.
+
 Dragons differ across 13 gameplay stats (HP, armor, fire damage/range/cone/capacity/
 drain/recharge, accel, max/boost speed, turn rate, climb, dive, stagger resist,
 hitbox). Canon pairs get a "BONDED" synergy bonus (e.g. Daemon+Caraxes: fire damage
