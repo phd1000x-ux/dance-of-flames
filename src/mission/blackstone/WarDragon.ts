@@ -1,4 +1,4 @@
-import { Color3, PointLight, Scene, Vector3 } from "@babylonjs/core";
+import { Color3, PointLight, Quaternion, Scene, Vector3 } from "@babylonjs/core";
 import type { GameEventBus } from "../../core/Events";
 import type { EffectsLibrary } from "../../world/EffectsLibrary";
 import { DragonRig } from "../../world/DragonRig";
@@ -142,11 +142,11 @@ export class WarDragon {
     this.pos.y += Math.sin(pitch) * this.speed * dt;
     this.pos.y = Math.max(this.pos.y, terrainHeight + 12); // never inside terrain/fortress
     this.rig.root.position.copyFrom(this.pos);
-    this.rig.root.rotation.set(pitch, this.yaw, this.roll);
-    this.rig.animate({ flapRate: 5.2, flapAmp: 0.8, sweep: this.state_ === "CHASE" ? 0.25 : 0.1, jawOpen: this.sm.state === "TELEGRAPH" ? 1 : this.sm.state === "ATTACK" ? 1 : 0, dt });
+    this.rig.root.rotationQuaternion = Quaternion.FromEulerAngles(pitch, this.yaw, this.roll);
+    this.rig.animate({ flapRate: 5.2, flapAmp: 0.8, sweep: this.state_ === "CHASE" ? 0.25 : 0.1, jawOpen: this.state_ === "TELEGRAPH" || this.state_ === "ATTACK" ? 1 : 0, dt });
 
     this.fireLight.position.copyFrom(this.rig.headTip.getAbsolutePosition());
-    this.fireLight.intensity = this.sm.state === "ATTACK" ? 2.2 : this.sm.state === "TELEGRAPH" ? 0.8 : 0;
+    this.fireLight.intensity = this.state_ === "ATTACK" ? 2.2 : this.state_ === "TELEGRAPH" ? 0.8 : 0;
   }
 
   forward(): Vector3 {
