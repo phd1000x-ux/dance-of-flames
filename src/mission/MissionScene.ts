@@ -31,6 +31,7 @@ import { EnemyManager, type CombatContext, type Soldier } from "../ai/EnemyManag
 import { BuildingSystem } from "../world/BuildingSystem";
 import { LootSystem } from "../world/LootSystem";
 import { ObjectiveTracker } from "./Objectives";
+import { BlackstoneFinale } from "./blackstone/BlackstoneFinale";
 import { emptyStats, type MissionStats } from "./Scoring";
 import { getRelic } from "../data/items";
 import { clamp } from "../core/MathUtils";
@@ -72,6 +73,8 @@ export class MissionScene {
   readonly enemies: EnemyManager;
   readonly buildings: BuildingSystem;
   readonly loot: LootSystem;
+  readonly effects: EffectsLibrary;
+  readonly finale: BlackstoneFinale | null = null;
   readonly tracker: ObjectiveTracker;
   readonly stats: MissionStats = emptyStats();
   readonly rng: SeededRng;
@@ -144,7 +147,8 @@ export class MissionScene {
       this.dragonCtrl.yaw = Math.PI * 0.02; // face the wall
     }
 
-    const effects = new EffectsLibrary(this.scene);
+    this.effects = new EffectsLibrary(this.scene);
+    const effects = this.effects;
     this.dragonCam = new DragonCamera(this.scene, d.settings, this.world.terrain);
     this.groundCam = new GroundCamera(this.scene, this.world.terrain);
     this.dragonCam.reset(this.dragonCtrl);
@@ -175,6 +179,10 @@ export class MissionScene {
     if (d.mission.tutorial) {
       this.tutorialStep = 0;
     }
+
+    if (d.mission.id === "blackstone") {
+      this.finale = new BlackstoneFinale(this, d);
+    }
   }
 
   get worldLayout() {
@@ -187,6 +195,7 @@ export class MissionScene {
     this.fire.onFireHit = (origin, dir, range, halfAngle, dps, dt) => {
       this.enemies.applyFireDamage(origin, dir, range, halfAngle, dps, dt);
       this.buildings.applyFireDamage(origin, dir, range, halfAngle, dps, dt);
+      if (this.finale) this.finale.applyFire(origin, dir, range, halfAngle, dps, dt);
       // lifesteal relic
       if (this.player.lifesteal > 0) {
         this.player.healDragon(dps * dt * this.player.lifesteal * 0.01);
@@ -196,6 +205,7 @@ export class MissionScene {
       // super beam: massive damage in a long line
       this.enemies.applyFireDamage(origin, dir, 170, 0.22, 600, 1);
       this.buildings.applyFireDamage(origin, dir, 170, 0.28, 900, 1);
+      if (this.finale) this.finale.applyFire(origin, dir, 170, 0.22, 600, 1);
       this.dragonCam.addShake(0.5);
     };
 
@@ -526,6 +536,7 @@ export class MissionScene {
     this.emitObjective();
 
     // victory check
+    if (this.finale) this.finale.update(dt);
     if (this.tracker.allCompleted()) {
       this.endMission(true);
     }
@@ -608,6 +619,43 @@ export class MissionScene {
     this.tracker.convertToGround();
     this.deps.bus.emit("ground-mode-start", { pos: { x: spawn.x, y: spawn.y, z: spawn.z } });
     this.deps.bus.emit("ground-begun", {});
+  }
+
+  /** Finale: land-and-dismount with the dragon ALIVE (no convertToGround, no death cinematics). */
+  scriptedDismount(spawnPos: Vector3): void {
+    this.phase = "ground";
+    this.player.mode = "ground";
+    this.dragonCtrl.speed = 0;
+    this.dragonCtrl.pitch = 0;
+    this.dragonCtrl.roll = 0;
+    this.rig.setRiderVisible(false);
+    const factory = new SoldierFactory(this.scene);
+    const figure = factory.createRiderFigure(this.deps.rider);
+    for (const m of figure.root.getChildMeshes()) {
+      this.world.shadows?.addShadowCaster(m);
+    }
+    this.riderCtrl = new RiderController(this.player, figure, this.world.terrain, this.deps.bus);
+    this.riderCtrl.spawn(spawnPos, this.dragonCtrl.yaw);
+    this.groundCam.yaw = this.dragonCtrl.yaw;
+    this.groundCam.pitch = 0.15;
+    this.groundCam.reset(this.riderCtrl.pos);
+    this.scene.activeCamera = this.groundCam.camera;
+    this.deps.bus.emit("ground-mode-start", { pos: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z } });
+  }
+
+  /** Finale: rider back on the (alive, parked) dragon — returns flight mode. */
+  remountDragon(): void {
+    if (!this.riderCtrl) return;
+    this.riderCtrl.figure.root.dispose(false, false);
+    this.riderCtrl = null;
+    this.phase = "dragon";
+    this.player.mode = "dragon";
+    this.player.riderAlive = true;
+    this.rig.setRiderVisible(true);
+    this.dragonCtrl.speed = 20;
+    this.dragonCtrl.pitch = 0.12;
+    this.dragonCam.reset(this.dragonCtrl);
+    this.scene.activeCamera = this.dragonCam.camera;
   }
 
   private updateTutorial(dt: number): void {

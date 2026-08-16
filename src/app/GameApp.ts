@@ -542,6 +542,8 @@ export class GameApp {
         this.state.transition(GameState.DRAGON_DEATH);
       } else if (this.mission.phase === "ground" && this.state.is(GameState.DRAGON_DEATH, GameState.DRAGON_GAMEPLAY)) {
         this.state.transition(GameState.GROUND_GAMEPLAY);
+      } else if (this.mission.phase === "dragon" && this.state.is(GameState.GROUND_GAMEPLAY)) {
+        this.state.transition(GameState.DRAGON_GAMEPLAY); // finale remount
       }
       // HUD at ~30Hz
       this.lastHudUpdate += frameMs;
