@@ -11,6 +11,7 @@ export class CastellanBoss {
   private pattern: CastellanPattern | null = null;
   private patternT = 0;
   private swingIndex = 0;
+  private swingStruck = false;
   private playerPos = new Vector3();
 
   constructor(private s: Soldier, private enemies: EnemyManager, private projectiles: ProjectileSystem, private bus: GameEventBus) {
@@ -59,6 +60,7 @@ export class CastellanBoss {
       this.pattern = selectCastellanPattern(Math.random, dist, null, this.duel.shouldReinforce());
       this.patternT = 0;
       this.swingIndex = 0;
+      this.swingStruck = false;
       if (this.pattern === "reinforce") this.doReinforce();
       return;
     }
@@ -92,15 +94,17 @@ export class CastellanBoss {
       s.state = "meleeWindup";
       return;
     }
-    if (this.swingIndex === 0) {
-      this.swingIndex = 1;
+    if (!this.swingStruck) {
+      this.swingStruck = true;
+      this.swingIndex++;
       if (dist < s.def.range + 1.4) {
         const from = Vector3.Normalize(this.playerPos.subtract(s.pos));
         this.enemies.onMeleeHitRider?.(dmg, from.x, from.z);
         this.bus.emit("sfx", { name: "swordSwing" });
       }
       if (this.pattern === "combo" && this.swingIndex < 3) {
-        this.patternT = 0; // next swing of the combo
+        this.patternT = 0; // next swing of the combo — longer windup, heavier hit
+        this.swingStruck = false;
       }
     }
   }
