@@ -19,6 +19,8 @@ export interface DragonDefinition {
   description: string;
   /** Visual */
   scale: number;
+  /** proportion multiplier for chest/neck girth (war dragon bulk) */
+  bulk?: number;
   bodyColor: string;
   wingColor: string;
   accentColor: string;

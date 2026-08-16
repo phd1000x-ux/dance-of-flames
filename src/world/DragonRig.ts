@@ -59,6 +59,7 @@ export class DragonRig {
 
   constructor(private scene: Scene, private def: DragonDefinition, riderDef?: import("../data/riders").RiderDefinition) {
     const s = def.scale;
+    const bulk = def.bulk ?? 1;
     this.riderLook = riderDef?.look ?? { gender: "male", hairStyle: "short", hairColor: "#6b543c", skin: "#d9b48f", build: 1 };
     this.root = new TransformNode(`dragon-${def.id}`, scene);
     this.materials = buildDragonMaterials(scene, def);
@@ -71,7 +72,7 @@ export class DragonRig {
     const torso = MeshBuilder.CreateCapsule(`torso`, { height: 5.4 * s, radius: 0.95 * s, tessellation: 10, subdivisions: 2 }, scene);
     torso.rotation.x = Math.PI / 2;
     parts.push(torso);
-    const chest = MeshBuilder.CreateCapsule(`chest`, { height: 3.2 * s, radius: 1.12 * s, tessellation: 10, subdivisions: 2 }, scene);
+    const chest = MeshBuilder.CreateCapsule(`chest`, { height: 3.2 * s, radius: 1.12 * s * bulk, tessellation: 10, subdivisions: 2 }, scene);
     chest.rotation.x = Math.PI / 2;
     chest.position.set(0, 0.06 * s, 1.1 * s);
     parts.push(chest);
@@ -104,7 +105,7 @@ export class DragonRig {
     this.neckPivot.position.set(0, 0.55 * s, 2.5 * s);
     const neckParts: Mesh[] = [];
     for (let i = 0; i < 3; i++) {
-      const seg = MeshBuilder.CreateCapsule(`neckSeg${i}`, { height: 1.5 * s, radius: (0.52 - i * 0.07) * s, tessellation: 10, subdivisions: 1 }, scene);
+      const seg = MeshBuilder.CreateCapsule(`neckSeg${i}`, { height: 1.5 * s, radius: (0.52 - i * 0.07) * s * bulk, tessellation: 10, subdivisions: 1 }, scene);
       seg.rotation.x = Math.PI / 2 - 0.55 - i * 0.1;
       seg.position.set(0, (0.42 + i * 0.5) * s, (0.55 + i * 0.72) * s);
       neckParts.push(seg);
@@ -359,6 +360,8 @@ export class DragonRig {
     // ---- saddle + articulated rider ----
     this.buildRider(s, M);
 
+    if (def.bulk) this.buildWarArmor();
+
     this.root.rotationQuaternion = Quaternion.Identity();
   }
 
@@ -603,6 +606,44 @@ export class DragonRig {
 
   setRiderVisible(v: boolean): void {
     this.riderFigure.getChildMeshes().forEach((m) => (m.isVisible = v));
+  }
+
+  /** partial war armor: head plate, neck rings, chest plate, saddle hardware (~25% coverage) */
+  private buildWarArmor(): void {
+    const s = this.def.scale;
+    const mat = new StandardMaterial(`war-armor-${this.def.id}`, this.scene);
+    mat.diffuseColor = Color3.FromHexString("#2e2a26");
+    mat.specularColor = new Color3(0.22, 0.2, 0.18);
+    mat.specularPower = 60;
+    const parts: Mesh[] = [];
+    const brow = MeshBuilder.CreateBox(`armor-brow`, { width: 1.05 * s, height: 0.22 * s, depth: 0.5 * s }, this.scene);
+    brow.position.set(0, 0.42 * s, 0.55 * s);
+    parts.push(brow);
+    for (let i = 0; i < 3; i++) {
+      const ring = MeshBuilder.CreateTorus(`armor-neck${i}`, { diameter: 1.15 * s * this.def.bulk!, thickness: 0.12 * s, tessellation: 10 }, this.scene);
+      ring.position.set(0, (0.42 + i * 0.5) * s, (0.55 + i * 0.72) * s);
+      ring.rotation.x = 0.55 + i * 0.1;
+      parts.push(ring);
+    }
+    const plate = MeshBuilder.CreateBox(`armor-chest`, { width: 1.5 * s * this.def.bulk!, height: 0.7 * s, depth: 1.6 * s }, this.scene);
+    plate.position.set(0, 0.2 * s, 1.1 * s);
+    parts.push(plate);
+    const saddle = MeshBuilder.CreateBox(`armor-saddle`, { width: 1.0 * s, height: 0.25 * s, depth: 1.4 * s }, this.scene);
+    saddle.position.set(0, 1.05 * s, 0.2 * s);
+    parts.push(saddle);
+    for (const side of [-1, 1]) {
+      const chain = MeshBuilder.CreateCylinder(`armor-chain${side}`, { diameter: 0.06 * s, height: 0.9 * s, tessellation: 4 }, this.scene);
+      chain.position.set(side * 0.75 * s, 0.7 * s, 0.9 * s);
+      chain.rotation.z = side * 0.4;
+      parts.push(chain);
+    }
+    const armor = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
+    armor.material = mat;
+    armor.parent = this.root;
+    armor.isPickable = false;
+    for (const m of this.root.getChildMeshes()) {
+      if (m.name.startsWith("armor-")) m.receiveShadows = false;
+    }
   }
 
   animate(p: DragonAnimParams): void {
