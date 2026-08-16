@@ -10,9 +10,13 @@ on foot with a sword until the mission is done.
 
 ## Screenshots
 
-| Dragon & rider select — Vhagar at true scale | King's Landing assault — dragonfire on the walls | Dragon down — the rider fights on |
-|:---:|:---:|:---:|
-| ![Dragon select screen showing Vhagar with battle stats](docs/screenshots/dragon-select.png) | ![Vhagar breathing fire during the King's Landing assault](docs/screenshots/fire-breath-assault.png) | ![The rider fighting with a sword after the dragon falls](docs/screenshots/ground-combat.png) |
+| Dragon & rider select — Vhagar at true scale | King's Landing assault — dragonfire on the walls |
+|:---:|:---:|
+| ![Dragon select screen showing Vhagar with battle stats](docs/screenshots/dragon-select.png) | ![Vhagar breathing fire during the King's Landing assault](docs/screenshots/fire-breath-assault.png) |
+
+| The Blackstone Citadel — walls within walls, a keep that scratches the sky | Dragon down — the rider fights on |
+|:---:|:---:|
+| ![Vhagar approaching the colossal Blackstone Citadel fortress](docs/screenshots/citadel-approach.png) | ![The rider fighting with a sword after the dragon falls](docs/screenshots/ground-combat.png) |
 
 ## System Requirements
 
