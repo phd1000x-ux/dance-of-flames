@@ -294,47 +294,57 @@ export class DragonRig {
       const inner = new TransformNode(`wingInner${side}`, scene);
       inner.parent = this.root;
       inner.position.set(side * 0.85 * s, 0.62 * s, 0.55 * s);
+
+      // ---- inner panel: arm bone + membrane filling behind it ----
       const armLen = 3.1 * s * wshape.span;
       const armBone = MeshBuilder.CreateCapsule(`armBone${side}`, { height: armLen, radius: 0.13 * s, tessellation: 8, subdivisions: 1 }, scene);
-      armBone.rotation.z = Math.PI / 2;
+      armBone.rotation.z = Math.PI / 2; // lie along the span (+X)
       armBone.position.set(side * (armLen / 2), 0, 0);
       armBone.material = M.body;
       armBone.parent = inner;
-      // inner membrane: filled skin behind the arm bone (chord = fore-aft size)
+
       const membrane1 = buildMembrane(`membrane1-${side}`, 2.7 * s * wshape.span, 3.2 * s * wshape.chord);
-      membrane1.rotation.y = side > 0 ? 0 : Math.PI; // mirror for the left wing
-      membrane1.position.set(side * 0.1 * s, -0.02 * s, 0);
+      // mirror (not rotate!) for the left wing so the trailing edge stays BEHIND
+      membrane1.scaling.x = side;
+      membrane1.position.set(0, -0.02 * s, 0);
       membrane1.material = M.wing;
       membrane1.parent = inner;
 
+      // ---- outer panel: whole node sweeps back; contents stay in the wing plane ----
       const outer = new TransformNode(`wingOuter${side}`, scene);
       outer.parent = inner;
-      outer.position.set(side * 3.0 * s * wshape.span, 0, 0);
+      outer.position.set(side * armLen, 0, 0);
+      outer.rotation.y = wshape.sweepAngle * side; // base sweep (animate() only touches rotation.z)
+
       const outerLen = 3.3 * s * wshape.span;
       const outerBone = MeshBuilder.CreateCapsule(`outerBone${side}`, { height: outerLen, radius: 0.09 * s, tessellation: 8, subdivisions: 1 }, scene);
       outerBone.rotation.z = Math.PI / 2;
-      outerBone.rotation.y = wshape.sweepAngle * side; // sweep the outer panel back
       outerBone.position.set(side * (outerLen / 2), 0, 0);
       outerBone.material = M.body;
       outerBone.parent = outer;
-      // finger spars fanning along the outer panel trailing edge
+
+      // finger spars: FLAT in the wing plane, fanning from the tip joint
+      // backward-outward toward the membrane scallop valleys
       const fingers = Math.max(3, Math.min(5, wshape.fingers));
       for (let f = 1; f < fingers; f++) {
         const t = f / fingers;
-        const spar = MeshBuilder.CreateCapsule(`fingerSpar${side}-${f}`, { height: 1.6 * s * wshape.span * (1 - t * 0.35), radius: 0.045 * s, tessellation: 5, subdivisions: 1 }, scene);
-        spar.position.set(side * t * outerLen * 0.8, -0.05 * s, -0.4 * s * wshape.chord * t);
-        spar.rotation.x = 0.5 + t * 0.3;
+        const len = 2.6 * s * wshape.span * (1 - t * 0.22);
+        const spar = MeshBuilder.CreateCapsule(`fingerSpar${side}-${f}`, { height: len, radius: 0.05 * s, tessellation: 5, subdivisions: 1 }, scene);
+        spar.rotation.x = -Math.PI / 2; // capsule +Y → flat along -Z (trailing)
+        spar.rotation.y = -(t * 0.85) * side; // fan outward
+        spar.position.set(side * 0.12 * s, -0.04 * s, -0.12 * s);
         spar.material = M.body;
         spar.parent = outer;
       }
-      // outer membrane: filled skin continuing to the wing tip, swept back
-      const membrane2 = buildMembrane(`membrane2-${side}`, 3.2 * s * wshape.span, 2.9 * s * wshape.chord);
-      membrane2.rotation.y = side > 0 ? wshape.sweepAngle : Math.PI - wshape.sweepAngle; // mirror + sweep
-      membrane2.position.set(side * 0.1 * s, -0.02 * s, 0);
+
+      const membrane2 = buildMembrane(`membrane2-${side}`, outerLen * 0.97, 2.9 * s * wshape.chord);
+      membrane2.scaling.x = side; // mirror for the left wing
+      membrane2.position.set(0, -0.02 * s, 0);
       membrane2.material = M.wing;
       membrane2.parent = outer;
+
       const claw = MeshBuilder.CreateCylinder(`claw${side}`, { diameterTop: 0, diameterBottom: 0.12 * s, height: 0.3 * s, tessellation: 4 }, scene);
-      claw.position.set(side * 3.2 * s * wshape.span, 0, 0);
+      claw.position.set(side * outerLen, 0, 0);
       claw.material = M.accent;
       claw.parent = outer;
       return { inner, outer };
