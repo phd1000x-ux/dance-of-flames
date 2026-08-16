@@ -1000,3 +1000,9 @@ html, body {
   from { opacity: 0.65; }
   to { opacity: 1; }
 }
+/* finale boss bar + subtitles */
+.boss-bar { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); width: 420px; text-align: center; pointer-events: none; z-index: 40; }
+.boss-bar .bb-name { font-size: 13px; letter-spacing: 3px; color: #e8d8c8; text-shadow: 0 1px 3px #000; margin-bottom: 4px; }
+.boss-bar .bb-track { height: 8px; background: rgba(10, 8, 8, 0.75); border: 1px solid #6a5148; }
+.boss-bar .bb-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #7a1a12, #c8451e); transition: width 0.2s ease-out; }
+.finale-subtitle { position: absolute; bottom: 18%; left: 50%; transform: translateX(-50%); font-size: 22px; letter-spacing: 2px; color: #f0e6d8; text-shadow: 0 2px 6px #000; pointer-events: none; z-index: 40; font-style: italic; }
