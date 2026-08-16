@@ -163,13 +163,20 @@ bs-ballistae → bs-breach → bs-gate → bs-courtyard          (unchanged, exi
 → bs-final     survive 75 s                                 (unchanged)
 ```
 
-- `ObjectiveTracker.notifyEvent(eventId)` mirrors `notifyKill`/`notifyBuildingDestroyed`.
+- `ObjectiveTracker.notifyEvent(eventId)` completes **every incomplete matching event
+  objective in the chain** (not just the head): the castellan-death short-circuit must
+  work regardless of where the chain pointer sits when he dies.
 - **Death short-circuit**: if the castellan dies at any time (dragon-dead path,
   anomaly), `bs-castellan`/`bs-pursue`/`bs-vharax` complete immediately — the
   existing §90 E2E (killByType commander) passes unchanged and the mission can never
   dead-end.
-- Dragon death mid-finale: existing `convertToGround()` swaps the remaining event
-  objectives to their alternatives; if Vharax is active it flees. No auto-fail.
+- Dragon death mid-finale: existing `convertToGround()` runs; `bs-pursue`/`bs-vharax`
+  are **event objectives WITHOUT groundAlternative** — the tracker's sanctioned
+  splice-out path removes them (they are aerial-spectacle-only and meaningless on
+  foot). The ground chain therefore remains exactly today's: courtyard-alt →
+  castellan-alt (kill commander) → final-alt (survive 60) — preserving §91 E2E
+  timing. The every-objective-has-groundAlternative unit-test invariant is refined
+  to: every objective has a groundAlternative OR is an event objective.
 
 ### 2.3 Dragon-death matrix (Slice 1)
 
