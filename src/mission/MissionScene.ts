@@ -115,7 +115,7 @@ export class MissionScene {
   private dragonDeathHandled = false;
   private deathStartedAt = 0;
   /** cinematic slow-motion window (seconds of real time remaining) */
-  private slowmoT = 0;
+  slowmoT = 0;
 
   constructor(private deps: MissionSceneDeps) {
     const d = deps;
@@ -556,6 +556,11 @@ export class MissionScene {
       this.player.armorWardCharges--;
       this.player.addBuff({ id: `ward-${this.time}`, label: "Armor Ward", stat: "armor", mult: 1.4, remaining: 30 });
     }
+  }
+
+  /** finale hook — routes into the idempotent death pipeline */
+  beginDragonDeathPublic(): void {
+    if (this.phase === "dragon") this.beginDragonDeath();
   }
 
   private beginDragonDeath(): void {
