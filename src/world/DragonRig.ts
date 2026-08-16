@@ -221,45 +221,63 @@ export class DragonRig {
     // ---- wings (procedural silhouette per dragon: span/chord/fingers/notch/sweep) ----
     const wshape = def.wingShape;
     /**
-     * Builds one wing membrane as a custom triangular mesh with a SCALLOPED
-     * trailing edge: depth = leading edge → trailing edge, and the trailing
-     * edge is cut into `fingers` arcs (notch depth = membraneNotch) — like a
-     * bat's wing between its finger spars.
+     * Wing membrane in WING-LOCAL space matching the bones:
+     *   +x = out along the span, -z = toward the trailing edge (behind the arm),
+     *   y  = camber (gentle billow between spars).
+     * The trailing edge is scalloped into `fingers` arcs (notch = cut depth) so
+     * the membrane reads as bat-wing skin stretched between finger spars.
+     * The result is a filled, double-sided skin — NOT a flat ribbon.
      */
-    const buildMembrane = (name: string, depth: number, width: number, rootChord: number): Mesh => {
+    const buildMembrane = (name: string, width: number, rootChord: number): Mesh => {
       const positions: number[] = [];
       const indices: number[] = [];
-      // leading-edge strip vertices (slightly cambered up) + trailing arc fan
-      const LEV = 6; // leading edge vertices
-      const pts: Vector3[] = [];
-      for (let i = 0; i < LEV; i++) {
-        const t = i / (LEV - 1); // 0 at wing root → 1 at tip
-        const x = t * width;
-        const camber = Math.sin(t * Math.PI) * 0.06 * width * 0.15;
-        const chordHere = rootChord * (1 - t * 0.25); // taper toward tip
-        pts.push(new Vector3(x, camber, -chordHere * 0.18)); // leading edge
-      }
-      // trailing edge: fingers scallops between LE midpoints and the tip
+      const uvs: number[] = [];
+      const SEG = 8; // span-wise strips
       const fingers = Math.max(3, Math.min(5, wshape.fingers));
       const notch = wshape.membraneNotch;
-      const trailPts: Vector3[] = [];
-      for (let f = 0; f < fingers; f++) {
-        const t0 = f / fingers;
-        const t1 = (f + 1) / fingers;
-        const tm = (t0 + t1) / 2;
-        // scallop: pull each finger tip toward the leading edge by `notch`
-        const chordAt = (t: number) => rootChord * (1 - t * 0.25);
-        const tipDepth = -chordAt(t0) * (0.72 - notch * 0.4); // finger tip
-        const midDepth = tipDepth * (1 - notch * 0.5); // membrane sag between fingers
-        trailPts.push(new Vector3(t0 * width, 0, tipDepth));
-        if (f < fingers - 1) trailPts.push(new Vector3(tm * width, 0, midDepth));
+
+      // chord at span fraction t (taper toward the tip)
+      const chordAt = (t: number) => rootChord * (1 - t * 0.3);
+      // trailing-edge depth at span fraction t: base curve + scallop cut
+      const trailDepth = (t: number) => {
+        const base = -chordAt(t); // full chord behind the leading-edge bone
+        const scallop = Math.abs(Math.sin(t * fingers * Math.PI)) * notch * chordAt(t) * 0.34;
+        return base + scallop; // pulled toward LE between finger tips
+      };
+
+      const vid = (x: number, y: number, z: number) => {
+        positions.push(x, y, z);
+        uvs.push(x / (width || 1), z / (rootChord || 1));
+        return positions.length / 3 - 1;
+      };
+
+      // strip grid: leading edge (z≈0, on the bone) → trailing edge (scallop)
+      const grid: number[][] = [];
+      for (let i = 0; i <= SEG; i++) {
+        const t = i / SEG;
+        const x = t * width;
+        const chord = chordAt(t);
+        const td = trailDepth(t);
+        const row: number[] = [];
+        // 3 depth-wise vertices: leading (0), mid (billow peak), trailing (scallop)
+        const camber = Math.sin(t * Math.PI) * rootChord * 0.09; // billow scales with wing
+        const midZ = td * 0.52;
+        const midY = Math.sin(Math.PI * 0.5) * camber * Math.sin((0.52) * Math.PI); // peak near mid
+        row.push(vid(x, 0, 0));
+        row.push(vid(x, midY * 0.9, midZ));
+        row.push(vid(x, 0, td));
+        grid.push(row);
       }
-      const all = [...pts, ...trailPts, new Vector3(width, 0, -rootChord * (0.72 - notch * 0.4) * 0.3)];
-      for (const p of all) positions.push(p.x, p.y, p.z);
-      // triangulate as a fan from vertex 0 (root) — simple convex-ish fill
-      for (let i = 1; i < all.length - 1; i++) {
-        indices.push(0, i, i + 1);
+      for (let i = 0; i < SEG; i++) {
+        for (let j = 0; j < 3 - 1; j++) {
+          const a = grid[i][j];
+          const b = grid[i + 1][j];
+          const c = grid[i + 1][j + 1];
+          const d = grid[i][j + 1];
+          indices.push(a, b, c, a, c, d);
+        }
       }
+
       const mesh = new Mesh(name, scene);
       const vd = new VertexData();
       vd.positions = positions;
@@ -267,9 +285,6 @@ export class DragonRig {
       const normals: number[] = [];
       VertexData.ComputeNormals(positions, indices, normals);
       vd.normals = normals;
-      // planar uvs
-      const uvs: number[] = [];
-      for (const p of all) uvs.push(p.x / (width || 1), p.z / (rootChord || 1));
       vd.uvs = uvs;
       vd.applyToMesh(mesh);
       return mesh;
@@ -285,10 +300,10 @@ export class DragonRig {
       armBone.position.set(side * (armLen / 2), 0, 0);
       armBone.material = M.body;
       armBone.parent = inner;
-      // inner membrane: scalloped custom mesh (chord controls fore-aft size)
-      const membrane1 = buildMembrane(`membrane1-${side}`, 2.6 * s, 2.6 * s * wshape.span, 3.4 * s * wshape.chord);
-      membrane1.rotation.y = Math.PI / 2;
-      membrane1.position.set(side * 1.35 * s * wshape.span, -0.28 * s, -0.7 * s * wshape.chord);
+      // inner membrane: filled skin behind the arm bone (chord = fore-aft size)
+      const membrane1 = buildMembrane(`membrane1-${side}`, 2.7 * s * wshape.span, 3.2 * s * wshape.chord);
+      membrane1.rotation.y = side > 0 ? 0 : Math.PI; // mirror for the left wing
+      membrane1.position.set(side * 0.1 * s, -0.02 * s, 0);
       membrane1.material = M.wing;
       membrane1.parent = inner;
 
@@ -312,10 +327,10 @@ export class DragonRig {
         spar.material = M.body;
         spar.parent = outer;
       }
-      const membrane2 = buildMembrane(`membrane2-${side}`, 3.1 * s, 3.1 * s * wshape.span, 2.9 * s * wshape.chord);
-      membrane2.rotation.y = Math.PI / 2;
-      membrane2.rotation.x = wshape.sweepAngle * 0.4; // slight sweep in the panel
-      membrane2.position.set(side * 1.5 * s * wshape.span, -0.2 * s, -0.5 * s * wshape.chord);
+      // outer membrane: filled skin continuing to the wing tip, swept back
+      const membrane2 = buildMembrane(`membrane2-${side}`, 3.2 * s * wshape.span, 2.9 * s * wshape.chord);
+      membrane2.rotation.y = side > 0 ? wshape.sweepAngle : Math.PI - wshape.sweepAngle; // mirror + sweep
+      membrane2.position.set(side * 0.1 * s, -0.02 * s, 0);
       membrane2.material = M.wing;
       membrane2.parent = outer;
       const claw = MeshBuilder.CreateCylinder(`claw${side}`, { diameterTop: 0, diameterBottom: 0.12 * s, height: 0.3 * s, tessellation: 4 }, scene);

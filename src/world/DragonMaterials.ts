@@ -353,6 +353,8 @@ export function buildDragonMaterials(scene: Scene, def: DragonDefinition): Drago
     m.specularColor = o.spec;
     m.specularPower = o.power;
     m.emissiveColor = base.scale(0.02);
+    // wing membranes are seen from BOTH sides in flight — no back-face culling
+    if (name.endsWith("-wing")) m.backFaceCulling = false;
     return m;
   };
 
