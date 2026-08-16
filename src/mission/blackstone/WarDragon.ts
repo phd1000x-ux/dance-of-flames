@@ -155,7 +155,8 @@ export class WarDragon {
   }
 
   applyFire(origin: Vector3, dir: Vector3, range: number, halfAngle: number, dps: number, dt: number): void {
-    if (this.state_ === "GONE" || this.state_ === "FLEEING") return;
+    // damage-out is a DUEL_AIR mechanic — player fire only lands in duel states
+    if (this.state_ !== "ORBIT" && this.state_ !== "TELEGRAPH" && this.state_ !== "ATTACK" && this.state_ !== "RECOVERY") return;
     const head = this.pos.add(this.forward().scale(4 * VHARAX.scale));
     const tail = this.pos.subtract(this.forward().scale(4 * VHARAX.scale));
     const closest = closestPointOnSegment(origin, head, tail);

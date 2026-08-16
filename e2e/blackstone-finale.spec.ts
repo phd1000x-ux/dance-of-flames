@@ -71,8 +71,10 @@ test("finale: courtyard → land → ground duel → transition → remount → 
   await page.waitForFunction(() => (window as any).__GAME.mission.phase === "dragon", null, { timeout: 90000 });
   await page.waitForFunction(() => (window as any).__GAME.state === "DRAGON_GAMEPLAY", null, { timeout: 15000 });
 
-  // wait for the aerial duel itself — damaging Vharax during CHASE would strand the
-  // chase loop (chasePathIndex freezes while FLEEING → chase-complete never fires)
+  // wait for the aerial duel itself — damageWarDragon deliberately waits for
+  // DUEL_AIR so the organic chase→duel chain is exercised end-to-end (player fire
+  // is duel-gated in WarDragon.applyFire, and a mid-chase flee now resolves via
+  // the CHASE un-strand instead of dead-ending the loop)
   await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "DUEL_AIR", null, { timeout: 120000 });
 
   // aerial duel: war dragon is revealed; damage floors at 40% → resolve/flee (not death)

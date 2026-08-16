@@ -169,8 +169,10 @@ export class GameApp {
     });
     this.bus.on("finale-music", (e) => {
       if (e.state === "resolve") {
+        this.finaleMusicOverride = false;
         this.updateMusicAndAmbient();
       } else {
+        this.finaleMusicOverride = true;
         this.music.setState(e.state);
       }
     });
@@ -428,6 +430,8 @@ export class GameApp {
   }
 
   private musicAmbientTimer = 0;
+  // finale-music ("chase"/"boss") holds until "resolve" — adaptive selection must not clobber it
+  private finaleMusicOverride = false;
 
   /** adaptive score state + ambient audio zone from the live mission */
   private updateMusicAndAmbient(): void {
@@ -449,7 +453,7 @@ export class GameApp {
     } else {
       target = "explore";
     }
-    this.music.setState(target);
+    if (!this.finaleMusicOverride) this.music.setState(target);
     this.audio.setBattleIntensity(m.musicIntensity);
     // governor tier ≥ 2: cull far decorative props to protect framerate
     m.world.props.setCullingRadius(this.governor.tier >= 2 ? 380 : 6000);

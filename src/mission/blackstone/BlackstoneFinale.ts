@@ -41,8 +41,9 @@ export class BlackstoneFinale {
       this.shortCircuit();
     }
 
-    // dragon died mid-finale → resolve silently (tracker splices event objectives)
-    if ((m.phase === "dragonDying") && !this.phases.isTerminal() && this.phases.current !== "INACTIVE" && this.phases.current !== "AWAIT_LANDING") {
+    // dragon died mid-finale → resolve silently (tracker splices event objectives);
+    // AWAIT_LANDING included — a crash-landing dying dragon must not trigger the dismount
+    if ((m.phase === "dragonDying") && !this.phases.isTerminal() && this.phases.current !== "INACTIVE") {
       this.vharax?.flee();
       this.phases.transition("RESOLVED");
     }
@@ -68,7 +69,7 @@ export class BlackstoneFinale {
       case "AWAIT_LANDING": {
         const c = m.dragonCtrl;
         const alt = c.pos.y - m.world.terrain.heightAt(c.pos.x, c.pos.z);
-        if (alt < 4 && c.speed < 12) {
+        if (m.phase === "dragon" && alt < 4 && c.speed < 12) {
           const spawn = c.pos.add(new Vector3(Math.sin(c.yaw + Math.PI / 2) * 6, 0, Math.cos(c.yaw + Math.PI / 2) * 6));
           m.scriptedDismount(spawn);
           this.setStage("DUEL_GROUND");
@@ -129,6 +130,13 @@ export class BlackstoneFinale {
         }
         const v = this.vharax!;
         this.updateVharax(dt);
+        // defensive un-strand: a fled/gone Vharax can never finish the loop —
+        // chase-complete is a legal edge, so resolve rather than dead-ending the chain
+        if (v.state === "FLEEING" || v.state === "GONE") {
+          this.mission.tracker.notifyEvent("chase-complete");
+          this.setStage("RESOLVED");
+          break;
+        }
         if (v.chasePathIndex === 0 && this.stageT > 4) {
           this.chaseLoopNeeded--;
           if (this.chaseLoopNeeded <= 0) {
