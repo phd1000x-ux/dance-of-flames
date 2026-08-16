@@ -38,6 +38,7 @@ export class WarDragon {
 
   constructor(private scene: Scene, private effects: EffectsLibrary, private bus: GameEventBus) {
     this.rig = new DragonRig(scene, VHARAX);
+    this.rig.setRiderVisible(false); // wild war dragon — no phantom default rider
     this.rig.root.setEnabled(false);
     this.fireLight = new PointLight("vharax-fire", new Vector3(0, 0, 0), scene);
     this.fireLight.diffuse = new Color3(1, 0.45, 0.15);
