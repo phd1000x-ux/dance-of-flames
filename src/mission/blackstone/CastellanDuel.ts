@@ -37,6 +37,17 @@ export class CastellanDuel {
     return { applied: n, clamped: false, transitionNow: false };
   }
 
+  markTransitioned(): void {
+    this.transitioned = true;
+    this._hp = this.floor;
+  }
+
+  restoreHp(hp: number): void {
+    // test API: re-arm the transition when HP is set above the floor again
+    this._hp = hp;
+    this.transitioned = false;
+  }
+
   shouldReinforce(): boolean {
     return !this.reinforceFired && this._hp <= this.maxHp * this.reinforcePct && !this.transitioned;
   }

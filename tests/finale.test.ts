@@ -84,6 +84,27 @@ describe("castellan duel core", () => {
     expect(selectCastellanPattern(rand, 4, null, false)).toMatch(/combo|shieldBreaker/);
     expect(selectCastellanPattern(rand, 4, null, true)).toBe("reinforce");
   });
+
+  test("markTransitioned sets transitioned and clamps hp to floor", () => {
+    const d = new CastellanDuel(320);
+    d.damage(100); // 220, above floor
+    d.markTransitioned();
+    expect(d.transitioned).toBe(true);
+    expect(d.hp).toBe(128);
+    expect(d.damage(50).applied).toBe(0);
+  });
+
+  test("restoreHp un-clamps: next floor-crossing fires transitionNow again", () => {
+    const d = new CastellanDuel(320);
+    expect(d.damage(200).transitionNow).toBe(true); // hp → floor 128
+    d.restoreHp(220);
+    expect(d.hp).toBe(220);
+    expect(d.transitioned).toBe(false);
+    const hit = d.damage(100); // would be 120 — below floor
+    expect(hit.transitionNow).toBe(true);
+    expect(hit.clamped).toBe(true);
+    expect(d.hp).toBe(128);
+  });
 });
 
 describe("boss ai core", () => {
