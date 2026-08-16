@@ -82,3 +82,23 @@ describe("music composer — original cello/violin score", () => {
     expect(stateConfig("castle").bpm).toBeGreaterThan(stateConfig("menu").bpm);
   });
 });
+
+describe("chase/boss states", () => {
+  it("chase bars are violin-dominant and fast", () => {
+    const bar = composeBar("chase", 0, 1234);
+    expect(bar.bpm).toBeGreaterThan(120);
+    const violin = bar.notes.filter((n) => n.voice === "violin").length;
+    const cello = bar.notes.filter((n) => n.voice === "cello").length;
+    expect(violin).toBeGreaterThan(cello);
+  });
+
+  it("boss bars deterministic and dense", () => {
+    expect(composeBar("boss", 2, 42)).toEqual(composeBar("boss", 2, 42));
+    expect(composeBar("boss", 0, 42).notes.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("state configs loop", () => {
+    expect(stateConfig("chase").loop).toBe(true);
+    expect(stateConfig("boss").loop).toBe(true);
+  });
+});

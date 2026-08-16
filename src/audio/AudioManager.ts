@@ -233,6 +233,35 @@ export class AudioManager {
     this.impactDuck(0.5, 1.2);
   }
 
+  /** war-dragon roar: pitched-down, slower, heavier than the player roar */
+  deepRoar(): void {
+    if (this.throttled("deepRoar", 2500)) return;
+    const dur = 2.6;
+    this.tone(34, 20, dur, "sine", 0.5, { am: 14, attack: 0.15 });
+    this.tone(17, 12, dur, "sine", 0.3, { attack: 0.2 });
+    this.noise(dur, "bandpass", 240, 120, 0.16, 1.2);
+    this.impactDuck(0.7, 2);
+  }
+
+  /** flame-sweep telegraph inhale */
+  inhale(): void {
+    this.noise(1.0, "bandpass", 400, 1600, 0.14, 2);
+    this.tone(140, 320, 1.0, "sine", 0.06);
+  }
+
+  /** near-miss / wing buffet whoosh */
+  wingBuffet(intensity = 1): void {
+    if (this.throttled("buffet", 300)) return;
+    this.noise(0.5, "lowpass", 300 + 200 * intensity, 150, 0.2, 1.5);
+  }
+
+  /** hit on war-dragon scales */
+  bossHit(): void {
+    if (this.throttled("bossHit", 120)) return;
+    this.tone(220, 90, 0.12, "square", 0.1);
+    this.noise(0.1, "highpass", 3000, 1500, 0.12, 1);
+  }
+
   /** wingbeat — size-appropriate thump + leather snap, varies every beat */
   flapBeat(intensity = 1): void {
     if (this.throttled("flap", 170)) return;

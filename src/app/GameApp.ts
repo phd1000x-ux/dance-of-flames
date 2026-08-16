@@ -167,6 +167,13 @@ export class GameApp {
     this.bus.on("ground-begun", () => {
       this.music.setState("ground");
     });
+    this.bus.on("finale-music", (e) => {
+      if (e.state === "resolve") {
+        this.updateMusicAndAmbient();
+      } else {
+        this.music.setState(e.state);
+      }
+    });
   }
 
   // ---------------- mission lifecycle ----------------
