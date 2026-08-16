@@ -226,7 +226,7 @@ test("castle mission: full phased completion → VICTORY (§90)", async ({ page 
   await page.waitForFunction(() => document.querySelector("#objective-text")!.textContent.includes("courtyard"), null, { timeout: 8000 });
   // Phase 4: clear courtyard defenders
   await page.evaluate(() => (window as any).__GAME.api.killByType("soldier", 12));
-  await page.waitForFunction(() => document.querySelector("#objective-text")!.textContent.includes("castellan"), null, { timeout: 8000 });
+  await page.waitForFunction(() => document.querySelector("#objective-text")!.textContent!.toLowerCase().includes("castellan"), null, { timeout: 8000 });
   // Phase 5: eliminate the castellan
   await page.evaluate(() => (window as any).__GAME.api.killByType("commander", 1));
   await page.waitForFunction(() => document.querySelector("#objective-text")!.textContent.includes("counterattack"), null, { timeout: 8000 });
