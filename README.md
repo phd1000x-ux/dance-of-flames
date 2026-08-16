@@ -8,6 +8,12 @@ Ride a dragon over a war-torn battlefield, breathe fire on armies, raze fortific
 loot coins and hidden relics, buy upgrades — and if your dragon falls, keep fighting
 on foot with a sword until the mission is done.
 
+## Screenshots
+
+| Dragon & rider select — Vhagar at true scale | King's Landing assault — dragonfire on the walls | Dragon down — the rider fights on |
+|:---:|:---:|:---:|
+| ![Dragon select screen showing Vhagar with battle stats](docs/screenshots/dragon-select.png) | ![Vhagar breathing fire during the King's Landing assault](docs/screenshots/fire-breath-assault.png) | ![The rider fighting with a sword after the dragon falls](docs/screenshots/ground-combat.png) |
+
 ## System Requirements
 
 - **Target platform**: MacBook M1, latest Google Chrome (WebGPU renderer)
