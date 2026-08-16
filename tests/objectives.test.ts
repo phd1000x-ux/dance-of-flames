@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { ObjectiveTracker } from "../src/mission/Objectives";
+import { describe, it, test, expect } from "vitest";
+import { ObjectiveTracker, ObjectiveDef } from "../src/mission/Objectives";
 
 const killObjective = {
   id: "kill-soldiers",
@@ -96,5 +96,52 @@ describe("ObjectiveTracker", () => {
     const t = new ObjectiveTracker([{ id: "cmd", type: "kill", description: "Slay the commander", targetType: "commander", count: 1, groundAlternative: { id: "cmd-g", type: "kill", description: "Slay the commander", targetType: "commander", count: 1 } }]);
     t.notifyKill("commander");
     expect(t.allCompleted()).toBe(true);
+  });
+});
+
+describe("event objectives", () => {
+  const ev = (id: string, event: string, alt?: ObjectiveDef): ObjectiveDef => ({
+    id, type: "event", description: `event ${id}`, event, groundAlternative: alt,
+  });
+
+  test("notifyEvent completes matching current objective", () => {
+    const t = new ObjectiveTracker([ev("a", "thing")]);
+    t.notifyEvent("other");
+    expect(t.allCompleted()).toBe(false);
+    t.notifyEvent("thing");
+    expect(t.allCompleted()).toBe(true);
+  });
+
+  test("notifyEvent completes ALL matching objectives regardless of chain position", () => {
+    const t = new ObjectiveTracker([
+      { id: "first", type: "kill", description: "x", targetType: "soldier", count: 2 },
+      ev("b", "castellan-transition"),
+      ev("c", "chase-complete"),
+    ]);
+    t.notifyEvent("castellan-transition");
+    t.notifyEvent("chase-complete");
+    // head not yet complete, but the events are already done behind it
+    expect(t.objectives()[1].completed).toBe(true);
+    expect(t.objectives()[2].completed).toBe(true);
+    expect(t.current()?.id).toBe("first");
+  });
+
+  test("convertToGround removes event objectives without alternatives", () => {
+    const t = new ObjectiveTracker([
+      ev("a", "x", { id: "alt", type: "survive", description: "live", seconds: 5 }),
+      ev("b", "y"),
+    ]);
+    t.convertToGround();
+    expect(t.objectives().map((o) => o.id)).toEqual(["alt"]);
+  });
+
+  test("event objective completion fires listeners", () => {
+    const t = new ObjectiveTracker([ev("a", "x")]);
+    let fired = 0;
+    t.onObjectiveComplete(() => fired++);
+    t.notifyEvent("x");
+    expect(fired).toBe(1);
+    t.notifyEvent("x"); // idempotent
+    expect(fired).toBe(1);
   });
 });

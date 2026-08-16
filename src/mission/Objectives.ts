@@ -1,4 +1,4 @@
-export type ObjectiveType = "kill" | "destroy" | "survive";
+export type ObjectiveType = "kill" | "destroy" | "survive" | "event";
 
 export interface ObjectiveDef {
   id: string;
@@ -8,6 +8,8 @@ export interface ObjectiveDef {
   targetType?: string;
   /** destroy: building tag */
   targetTag?: string;
+  /** event: finale event id — completes when that scripted event fires */
+  event?: string;
   count?: number;
   seconds?: number;
   /** objective shown in the HUD while active */
@@ -67,6 +69,17 @@ export class ObjectiveTracker {
     if (cur.targetTag !== tag && cur.targetTag !== "any") return;
     cur.progress++;
     this.checkDone(cur);
+  }
+
+  /** Complete event objectives whose event id matches — anywhere in the chain,
+   *  so short-circuits work regardless of chain position. */
+  notifyEvent(eventId: string): void {
+    for (const o of this.items) {
+      if (!o.completed && o.type === "event" && o.event === eventId) {
+        o.progress = 1;
+        this.checkDone(o);
+      }
+    }
   }
 
   /** Time-based progress for survive objectives. */

@@ -69,8 +69,9 @@ describe("mission definitions", () => {
   it("every mission objective has a ground alternative", () => {
     for (const m of MISSIONS) {
       expect(m.objectives.length).toBeGreaterThan(0);
-      for (const o of m.objectives) {
-        expect(o.groundAlternative).toBeDefined();
+      for (const obj of m.objectives) {
+        if (obj.type === "event") continue; // finale events are removed on dragon death (sanctioned splice-out)
+        expect(obj.groundAlternative, `${m.id}:${obj.id}`).toBeDefined();
       }
     }
   });
