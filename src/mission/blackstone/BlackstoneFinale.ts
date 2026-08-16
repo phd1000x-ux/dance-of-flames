@@ -82,6 +82,7 @@ export class BlackstoneFinale {
           this.castellan.update(dt, m.riderCtrl.pos, "ground");
           this.deps.bus.emit("finale-boss", { show: true, name: "THE CASTELLAN", hpFrac: this.castellan.hpFrac });
           if (this.castellan.duel.transitioned) {
+            this.mission.tracker.notifyEvent("castellan-transition");
             this.setStage("TRANSITION");
             this.mission.slowmoT = Math.max(this.mission.slowmoT, 0.5);
             this.deps.bus.emit("finale-subtitle", { text: "You came here riding a dragon.", ms: 2600 });

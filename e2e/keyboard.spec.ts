@@ -239,10 +239,17 @@ test("keyboard-only full flow: menu → rider → dragon → mission → flight"
   expect(Math.abs(leveled.roll)).toBeLessThan(0.15);
 
   // Tab opens objectives panel — dispatched on window (trusted Tab via CDP can
-  // retarget focus to another element in this harness, bypassing our listener)
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { code: "Tab" })));
+  // retarget focus to another element in this harness, bypassing our listener).
+  // Each tap is a keydown+keyup pair: InputState dedups held keys, so a second
+  // down-only dispatch would never re-edge and the panel could not close.
+  const tabTap = () =>
+    page.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "Tab" }));
+      window.dispatchEvent(new KeyboardEvent("keyup", { code: "Tab" }));
+    });
+  await tabTap();
   await page.waitForFunction(() => getComputedStyle(document.querySelector(".objectives-panel")!).display === "block", null, { timeout: 5000 });
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { code: "Tab" })));
+  await tabTap();
   await page.waitForFunction(() => getComputedStyle(document.querySelector(".objectives-panel")!).display === "none", null, { timeout: 5000 });
 
   // R with empty super gauge → NOT READY hint
