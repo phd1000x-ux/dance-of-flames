@@ -47,6 +47,8 @@ export interface Soldier {
   walkPhase: number;
   moveTarget: Vector3 | null;
   isCommander: boolean;
+  /** finale boss owns this soldier — generic AI skipped */
+  puppeted?: boolean;
 }
 
 export interface BallistaEntity {
@@ -307,6 +309,17 @@ export class EnemyManager {
     return this.soldiers.filter((s) => s.state !== "dead");
   }
 
+  /** Hand the commander to the finale boss (generic AI skipped until released). */
+  claimCommander(): Soldier | null {
+    const c = this.soldiers.find((s) => s.def.role === "commander" && s.state !== "dead");
+    if (c) c.puppeted = true;
+    return c ?? null;
+  }
+
+  releaseCommander(): void {
+    for (const s of this.soldiers) s.puppeted = false;
+  }
+
   // ---------------- main update ----------------
   update(dt: number, ctx: CombatContext): void {
     this.tierTimer += dt;
@@ -318,6 +331,11 @@ export class EnemyManager {
     for (const s of this.soldiers) {
       if (s.state === "dead") {
         this.updateDead(s, dt);
+        continue;
+      }
+      if (s.puppeted) {
+        s.root.position.copyFrom(s.pos);
+        s.root.rotation.y = damp(s.root.rotation.y, s.yaw, 12, dt);
         continue;
       }
       // burning dot
