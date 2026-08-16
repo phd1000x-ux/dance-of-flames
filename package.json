@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "House of the Dragon inspired third-person dragon combat browser game",
   "scripts": {
     "dev": "vite",

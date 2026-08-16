@@ -225,6 +225,8 @@ procedurally at runtime** — no external art or audio files. Details:
 
 ## Credits & Legal
 
-Fan-made battle simulator. Not affiliated with, endorsed by, or reproducing any
-asset from HBO's *House of the Dragon* or GRRM's works. Built with Babylon.js
-(Apache-2.0), TypeScript, Vite, WebAudio.
+Fan-made battle simulator, licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE)
+(noncommercial use only). Not affiliated with, endorsed by, or reproducing any
+asset from HBO's *House of the Dragon* or GRRM's works — rider and dragon names
+are used as text data only; all art, models, and audio are original procedural
+creations. Built with Babylon.js (Apache-2.0), TypeScript, Vite, WebAudio.

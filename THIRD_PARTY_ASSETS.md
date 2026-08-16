@@ -29,8 +29,12 @@ Every visual and audible element is generated procedurally at runtime:
 - **SFX**: every effect is an internal layered synthesis graph (Original Project Asset).
 
 No HBO video, screenshots, soundtrack recordings, voice recordings, face scans,
-logos, ripped game models, or copyrighted UI graphics are used. Characters and
-dragons are stylized fantasy interpretations used as inspiration only.
+logos, ripped game models, or copyrighted UI graphics are used. Rider and dragon
+**names** (e.g. Daemon Targaryen, Caraxes) are drawn from *House of the Dragon*
+canon as text data only — every visual and audible representation is an original,
+stylized procedural creation, not a reproduction of any HBO/GRRM asset. This is a
+noncommercial fan project, distributed under the PolyForm Noncommercial License
+(see `LICENSE`).
 
 ## Libraries (installed via npm, not bundled assets)
 
