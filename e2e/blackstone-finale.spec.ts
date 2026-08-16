@@ -51,8 +51,9 @@ test("finale: courtyard → land → ground duel → transition → remount → 
   await page.waitForFunction(() => (window as any).__GAME.mission.phase === "ground", null, { timeout: 20000 });
   await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "DUEL_GROUND", null, { timeout: 10000 });
 
-  // ground duel: un-clamp the floor (128), then dip the puppet below it —
-  // CastellanBoss.update clamps and fires the one-shot transition
+  // ground duel: setCastellanHp(150) re-arms the one-shot transition (restoreHp
+  // clears `transitioned` when HP lands above the floor), then dipping the puppet
+  // below the floor makes CastellanBoss.update clamp and fire the transition
   await page.evaluate(() => {
     const g = (window as any).__GAME;
     g.api.setCastellanHp(150); // > floor 128 → restoreHp re-arms the transition
