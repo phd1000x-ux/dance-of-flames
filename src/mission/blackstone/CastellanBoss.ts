@@ -22,6 +22,10 @@ export class CastellanBoss {
     return this.s.state !== "dead";
   }
 
+  get hpFrac(): number {
+    return this.s.maxHp > 0 ? this.s.hp / this.s.maxHp : 0;
+  }
+
   setHp(n: number): void {
     this.s.hp = Math.max(1, Math.min(this.s.maxHp, n));
     if (n > this.duel.floor) this.duel.restoreHp(this.s.hp);

@@ -54,7 +54,12 @@ export class BlackstoneFinale {
           this.courtyardDone = true;
         }
         if (this.courtyardDone) {
-          this.castellan = new CastellanBoss(this.claimCastellan(), m.enemies, m.projectiles, this.deps.bus);
+          const claimed = this.mission.enemies.claimCommander();
+          if (!claimed) {
+            if (!this.shortCircuited) this.shortCircuit();
+            return;
+          }
+          this.castellan = new CastellanBoss(claimed, m.enemies, m.projectiles, this.deps.bus);
           this.phases.transition("AWAIT_LANDING");
           this.deps.bus.emit("hud-hint", { text: "LAND IN THE COURTYARD — FACE THE CASTELLAN" });
         }
@@ -75,7 +80,7 @@ export class BlackstoneFinale {
       case "DUEL_GROUND": {
         if (this.castellan && m.riderCtrl) {
           this.castellan.update(dt, m.riderCtrl.pos, "ground");
-          this.deps.bus.emit("finale-boss", { show: true, name: "THE CASTELLAN", hpFrac: this.castellan.duel.hp / this.castellan.duel.maxHp });
+          this.deps.bus.emit("finale-boss", { show: true, name: "THE CASTELLAN", hpFrac: this.castellan.hpFrac });
           if (this.castellan.duel.transitioned) {
             this.setStage("TRANSITION");
             this.mission.slowmoT = Math.max(this.mission.slowmoT, 0.5);
@@ -116,6 +121,11 @@ export class BlackstoneFinale {
         break;
       }
       case "CHASE": {
+        if (!this.vharax) {
+          this.phases.transition("RESOLVED");
+          this.deps.bus.emit("finale-boss", { show: false });
+          break;
+        }
         const v = this.vharax!;
         this.updateVharax(dt);
         if (v.chasePathIndex === 0 && this.stageT > 4) {
@@ -131,6 +141,11 @@ export class BlackstoneFinale {
         break;
       }
       case "DUEL_AIR": {
+        if (!this.vharax) {
+          this.phases.transition("RESOLVED");
+          this.deps.bus.emit("finale-boss", { show: false });
+          break;
+        }
         this.updateVharax(dt);
         const v = this.vharax!;
         this.deps.bus.emit("finale-boss", { show: true, name: "VHARAX — WAR DRAGON OF BLACKSTONE", hpFrac: Math.max(0, (v.hp - v.floor) / (v.maxHp - v.floor)) });
@@ -198,6 +213,9 @@ export class BlackstoneFinale {
         this.forceLand();
         this.mission.scriptedDismount(this.mission.dragonCtrl.pos.add(new Vector3(3, 0, 3)));
         break;
+      case "TRANSITION":
+        this.revealVharax();
+        break;
       case "REMOUNT":
         this.mission.remountDragon();
         this.vharax?.startChase(new Vector3(0, 75, -95));
@@ -212,12 +230,6 @@ export class BlackstoneFinale {
         break;
     }
     return this.phases.transition(to);
-  }
-
-  private claimCastellan() {
-    const c = this.mission.enemies.claimCommander();
-    if (!c) throw new Error("[finale] blackstone mission has no commander to claim");
-    return c;
   }
 
   private revealVharax(): void {
