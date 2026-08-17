@@ -140,7 +140,6 @@ test("siege: volley fires 2+ bolts in a tight window", async ({ page }) => {
     };
     return g.api.triggerVolley();
   });
-  expect(fired).toBe(true);
   // insurance: if <2 alive at first try, retry over ~10s (fresh page → all 6 alive)
   let ok = fired;
   for (let i = 0; i < 10 && !ok; i++) {
