@@ -134,6 +134,7 @@ export class AmbientBattle {
       } else {
         p.a.body.rotation.x = ph.swayA * 0.12;
         p.a.body.rotation.z = ph.swayA * 0.1;
+        p.b.body.rotation.x = p.fallen ? Math.PI / 2 : ph.swayB * 0.12;
         p.b.body.rotation.z = ph.swayB * 0.1;
         p.a.body.position.z = ph.lunge * 0.35;
         p.b.body.position.z = -ph.lunge * 0.35;
