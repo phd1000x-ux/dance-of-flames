@@ -40,9 +40,10 @@ export class BlackstoneFinale {
   private assaultOn = false;
   private assaultBand: AssaultBand | null = null;
   private assaultPollT = 0;
-  // e2e spies: war-horn emission count + spire-crown detach latch
+  // e2e spies: war-horn emission count + spire-crown detach/slow-mo latches
   private warHorns = 0;
   private crashDetached_ = false;
+  private slowmoSeen_ = false;
 
   constructor(private mission: MissionScene, private deps: MissionSceneDeps) {}
 
@@ -62,6 +63,11 @@ export class BlackstoneFinale {
   /** e2e spy — the spire crown detached during the crash sequence (latched) */
   get crashDetached(): boolean {
     return this.crashDetached_;
+  }
+
+  /** e2e spy — crash-sequence slow-mo was set (latched; slowmoT itself decays within ~1 s) */
+  get slowmoSeen(): boolean {
+    return this.slowmoSeen_;
   }
 
   /** e2e spy — final assault driver state */
@@ -454,6 +460,14 @@ export class BlackstoneFinale {
         // 0.25×max crossed while dueling → he breaks off toward the citadel
         if (this.phases.current === "DUEL_AIR") this.enterReturn();
       };
+      // charge near-miss feedback: chip damage + tumble-stagger + buffet whoosh
+      this.vharax.onChargeNearMiss = () => {
+        const died = this.mission.player.damageDragon(18);
+        this.mission.dragonCam.addShake(0.5);
+        this.mission.dragonCtrl.enterStagger(0.5);
+        this.deps.bus.emit("sfx", { name: "wingBuffet" });
+        if (died) this.mission.beginDragonDeathPublic();
+      };
     }
     this.vharax.startChase(new Vector3(0, 8, -120));
     this.deps.bus.emit("sfx", { name: "deepRoar", pan: this.mission.panFromWorld({ x: this.vharax.pos.x, z: this.vharax.pos.z }) });
@@ -493,6 +507,7 @@ export class BlackstoneFinale {
     this.breaker = new SpireBreaker(this.mission.effects, this.deps.bus, (s) => this.mission.dragonCam.addShake(s));
     this.breaker.begin(crown, spireBaseTop, v.rig.root);
     this.mission.slowmoT = Math.max(this.mission.slowmoT, 1.0);
+    this.slowmoSeen_ = true;
     return true;
   }
 

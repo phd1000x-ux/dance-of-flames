@@ -102,13 +102,12 @@ test("finale3: full crash chain", async ({ page }) => {
 
   await crashToResolved(page);
 
-  // crash evidence: slow-mo opened (sampled live), crown detached and fell >30 m
-  // (slow-mo sample first — it decays within ~1 sim second of crash begin)
+  // crash evidence: slow-mo opened (latched spy), crown detached and fell >30 m
   const slowmoSeen = await page.evaluate(async () => {
     const g = (window as any).__GAME;
     const deadline = performance.now() + 90000;
     while (performance.now() < deadline) {
-      if (g.mission?.slowmoT > 0) return true;
+      if (g.api.getFinale()?.slowmoSeen) return true;
       await new Promise((r) => setTimeout(r, 100));
     }
     return false;

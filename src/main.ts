@@ -154,6 +154,7 @@ async function boot(): Promise<void> {
               ? { hp: f.warDragon.hp, maxHp: f.warDragon.maxHp, state: f.warDragon.state, pos: { x: f.warDragon.pos.x, y: f.warDragon.pos.y, z: f.warDragon.pos.z } }
               : null,
             crashDetached: f.crashDetached,
+            slowmoSeen: f.slowmoSeen,
             warHorns: f.warHornCount,
             crownY: app.mission?.worldLayout.spireCrownMesh?.position.y ?? null,
           };

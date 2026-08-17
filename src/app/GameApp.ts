@@ -159,7 +159,9 @@ export class GameApp {
   private wireBus(): void {
     this.bus.on("sfx", ({ name, intensity, pan }) => {
       const a = this.audio as any;
-      if (typeof a[name] === "function") a[name](intensity, pan);
+      // audio methods take ONE leading param — intensity (flapBeat) or pan (positional sfx);
+      // never both — route whichever is present
+      if (typeof a[name] === "function") a[name](intensity ?? pan);
     });
     this.bus.on("relic-found", () => {
       /* audio handled via sfx relic */

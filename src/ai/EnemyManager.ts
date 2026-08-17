@@ -387,10 +387,6 @@ export class EnemyManager {
     if (active) this.assaultTimer = 0; // first batch lands on the next update
   }
 
-  get assaultSpawned(): boolean {
-    return this.assaultActive;
-  }
-
   private updateAssault(dt: number): void {
     if (!this.assaultActive) return;
     this.assaultTimer -= dt;
