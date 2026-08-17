@@ -67,6 +67,7 @@ export interface BallistaEntity {
   cooldown: number;
   telegraphTime: number;
   dead: boolean;
+  volleyAimJitter?: number;
 }
 
 export interface CombatContext {
@@ -101,6 +102,13 @@ export function ballisticDir(origin: Vector3, target: Vector3, speed: number, gr
   return new Vector3(dirH.x * cos, Math.sin(elev), dirH.z * cos);
 }
 
+/** coordinated volley plan: 2-3 ballistae firing inside a 0.6s window */
+export function planVolley(aliveCount: number, rng: { range: (a: number, b: number) => number }): { count: number; window: number } {
+  if (aliveCount < 2) return { count: 0, window: 0.6 };
+  const count = Math.min(3, Math.max(2, Math.round(rng.range(2, aliveCount))));
+  return { count, window: 0.6 };
+}
+
 /**
  * Enemy soldiers + siege ballistae with LOD-tiered AI scheduling.
  * Tier A (≤24 nearest): full per-frame AI. Tier B: 4 Hz. Tier C: 1 Hz visual sim.
@@ -110,6 +118,7 @@ export class EnemyManager {
   ballistae: BallistaEntity[] = [];
   private rng: SeededRng;
   private tierTimer = 0;
+  private volleyTimer = 14;
   private factory: SoldierFactory;
   onSoldierDeath: ((s: Soldier, byFire: boolean) => void) | null = null;
   onBallistaDeath: ((b: BallistaEntity, byFire: boolean) => void) | null = null;
@@ -405,6 +414,19 @@ export class EnemyManager {
         s.material.emissiveColor = Color3.Lerp(s.material.emissiveColor, s.baseEmissive, Math.min(1, dt * 8));
       }
     }
+    this.volleyTimer -= dt;
+    if (this.volleyTimer <= 0) {
+      this.volleyTimer = this.rng.range(9, 15);
+      const alive = this.ballistae.filter((b) => !b.dead);
+      const plan = planVolley(alive.length, this.rng);
+      if (plan.count >= 2) {
+        const picked = alive.slice(0, plan.count);
+        picked.forEach((b, i) => {
+          b.cooldown = 1.0 + (i * plan.window) / plan.count;
+          b.volleyAimJitter = this.rng.range(-3, 3);
+        });
+      }
+    }
     for (const b of this.ballistae) {
       if (!b.dead) this.updateBallista(b, dt, ctx);
       else if (b.railMat.emissiveColor.r > 0.01) {
@@ -674,7 +696,12 @@ export class EnemyManager {
       const lead = ctx.playerMode === "dragon"
         ? ctx.dragonForward.scale(ctx.dragonSpeed * flightT * 0.85)
         : new Vector3(0, 0, 0);
-      const dir = ballisticDir(origin, target.add(lead), 95);
+      const jitter = b.volleyAimJitter ?? 0;
+      const aim = target.add(lead);
+      aim.x += jitter;
+      aim.z -= jitter;
+      b.volleyAimJitter = 0;
+      const dir = ballisticDir(origin, aim, 95);
       this.projectiles.spawn("bolt", origin, dir, 95, b.def.damage * this.difficulty.enemyDamage, 0.02);
       this.bus.emit("sfx", { name: "ballistaFire" });
     }
