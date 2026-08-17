@@ -1,0 +1,79 @@
+import { describe, test, expect } from "vitest";
+import { selectPattern, assaultBand, assaultProfile, validateSnapshot, type AssaultBand, type FinaleSnapshot } from "../src/mission/blackstone/FinalePatterns";
+
+const rng = { range: (a: number, _b: number) => a }; // deterministic low roll (0)
+const rngMid = { range: (_a: number, _b: number) => 0.5 };
+const rngHi = { range: (_a: number, b: number) => b }; // deterministic high roll (1)
+
+describe("aerial pattern selection", () => {
+  test("phase weights: high hp favors sweep, low-mid favors charge, return favors dive", () => {
+    // Cumulative buckets ordered [charge, sweep, dive]; row for hpFrac > 0.7 is sweep .6 / charge .3 / dive .1.
+    expect(selectPattern(0.9, null, rng)).toBe("charge"); // low roll lands first bucket (charge .3)
+    expect(selectPattern(0.9, null, rngMid)).toBe("sweep"); // mid roll consumed charge .3 → sweep .6 dominates
+    // Row for 0.4 < hpFrac ≤ 0.7 is sweep .3 / charge .45 / dive .25.
+    expect(selectPattern(0.5, null, rng)).toBe("charge"); // low roll lands first bucket (charge .45)
+    expect(selectPattern(0.5, null, rngHi)).toBe("dive"); // high roll exhausts charge+sweep → dive
+    // Row for 0.25 < hpFrac ≤ 0.4 is sweep .15 / charge .35 / dive .5.
+    expect(selectPattern(0.3, null, rngHi)).toBe("dive");
+  });
+
+  test("anti-repeat: never same twice in a row (re-roll once)", () => {
+    // r=0 → charge → equals last → re-roll excludes charge → r=0 − sweep .3 → sweep
+    expect(selectPattern(0.5, "charge", rng)).not.toBe("charge");
+    expect(selectPattern(0.5, "charge", rng)).toBe("sweep");
+    // r=1 → dive → equals last → re-roll excludes dive; remaining weights (.45+.3=.75) exhausted → fallback last positive bucket
+    expect(selectPattern(0.5, "dive", rngHi)).not.toBe("dive");
+    expect(selectPattern(0.5, "dive", rngHi)).toBe("sweep");
+  });
+});
+
+describe("assault escalation", () => {
+  test("bands by remaining time (remaining = duration - elapsed; >45→0, >20→1, >5→2, else 3)", () => {
+    expect(assaultBand(0, 75)).toBe(0); // 75 remaining
+    expect(assaultBand(25, 75)).toBe(0); // 50 remaining
+    expect(assaultBand(30, 75)).toBe(1); // 45 remaining (boundary: not >45)
+    expect(assaultBand(40, 75)).toBe(1); // 35 remaining
+    expect(assaultBand(45, 75)).toBe(1); // 30 remaining
+    expect(assaultBand(55, 75)).toBe(2); // 20 remaining (boundary: not >20)
+    expect(assaultBand(60, 75)).toBe(2); // 15 remaining
+    expect(assaultBand(69, 75)).toBe(2); // 6 remaining
+    expect(assaultBand(70, 75)).toBe(3); // 5 remaining (boundary: not >5)
+    expect(assaultBand(72, 75)).toBe(3); // 3 remaining
+  });
+
+  test("default duration is 75", () => {
+    expect(assaultBand(0)).toBe(0);
+    expect(assaultBand(72)).toBe(3);
+  });
+
+  test("profiles escalate monotonically", () => {
+    const p = ([0, 1, 2, 3] as AssaultBand[]).map(assaultProfile);
+    for (let i = 1; i < 4; i++) {
+      expect(p[i].intervalMult).toBeLessThan(p[i - 1].intervalMult);
+      expect(p[i].eliteBoost).toBeGreaterThanOrEqual(p[i - 1].eliteBoost);
+      expect(p[i].musicPeak).toBeGreaterThanOrEqual(p[i - 1].musicPeak);
+    }
+  });
+});
+
+describe("snapshot validation", () => {
+  const good: FinaleSnapshot = {
+    finalePhase: "DUEL_AIR", castellan: { hp: 128, transitioned: true }, vharax: { hp: 800 },
+    destroyedBuildings: [1, 2], deadBallistae: [0, 2],
+    objectiveProgress: [{ id: "bs-ballistae", progress: 6, completed: true }],
+    player: { dragonHp: 400, riderHp: 200, mode: "dragon", x: 0, y: 80, z: 0, yaw: 1 },
+    charges: { heal: 1, fireBoost: 0, armorWard: 0 }, time: 123.4,
+  };
+  test("valid snapshot passes through", () => {
+    expect(validateSnapshot(JSON.parse(JSON.stringify(good)))).toEqual(good);
+  });
+  test("missing field throws", () => {
+    const bad = { ...good } as Record<string, unknown>;
+    delete bad.player;
+    expect(() => validateSnapshot(bad)).toThrow();
+  });
+  test("vharax defaults to null when absent (dragon may be dead)", () => {
+    const noVharax = { ...good, vharax: undefined };
+    expect(validateSnapshot(noVharax).vharax).toBeNull();
+  });
+});
