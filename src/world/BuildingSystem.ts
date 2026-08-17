@@ -55,12 +55,12 @@ export class BuildingSystem {
   spawnFromLayout(layout: WorldLayout): void {
     const factory = new BuildingFactory(this.scene, this.rng);
     for (const b of layout.buildings) {
-      const built = factory.create(b.kind);
+      const built = factory.create(b.kind, undefined, b.variant);
       built.root.position.set(b.pos.x, b.pos.y + built.size.h / 2 - 0.4, b.pos.z);
       built.root.rotation.y = b.rotY;
       this.shadows?.addShadowCaster(built.mesh);
       built.mesh.receiveShadows = true;
-      this.buildings.push({
+      const entity: BuildingEntity = {
         id: buildingId++,
         kind: b.kind,
         tag: b.tag,
@@ -80,7 +80,12 @@ export class BuildingSystem {
         visualState: "INTACT",
         baseDiffuse: built.material.diffuseColor.clone(),
         breachHintShown: false,
-      });
+      };
+      this.buildings.push(entity);
+      if (b.hpFraction !== undefined) {
+        entity.hp = entity.maxHp * b.hpFraction;
+        this.refreshDamageVisuals(entity);
+      }
     }
   }
 

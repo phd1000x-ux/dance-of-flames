@@ -40,8 +40,11 @@ export interface BuiltBuilding {
 export class BuildingFactory {
   constructor(private scene: Scene, private rng: SeededRng) {}
 
-  create(kind: BuildingKind, stoneColor = "#6a6460"): BuiltBuilding {
-    const spec = BUILDING_SPECS[kind];
+  create(kind: BuildingKind, stoneColor = "#6a6460", variant?: string): BuiltBuilding {
+    let spec = BUILDING_SPECS[kind];
+    if (kind === "grandTower" && variant) {
+      spec = { ...spec, size: { ...spec.size, h: variant === "artillery" ? 42 : variant === "ruined" ? 24 : 38 } };
+    }
     const root = new TransformNode(`building-${kind}-${this.rng.int(0, 1e6)}`, this.scene);
     const mat = new StandardMaterial(`bmat-${kind}-${this.rng.int(0, 1e9)}`, this.scene);
     const c = Color3.FromHexString(stoneColor);
@@ -136,15 +139,39 @@ export class BuildingFactory {
         const top = MeshBuilder.CreateCylinder("gt-top", { diameter: w * 1.25, height: 1.4, tessellation: 9 }, this.scene);
         top.position.y = h / 2 + 0.7;
         parts.push(top);
+        const crens: Mesh[] = [];
         for (let i = 0; i < 7; i++) {
           const a = (i / 7) * Math.PI * 2;
           const cren = MeshBuilder.CreateBox("gt-cren", { width: 1.1, height: 1.4, depth: 1.1 }, this.scene);
           cren.position.set(Math.cos(a) * w * 0.56, h / 2 + 1.8, Math.sin(a) * w * 0.56);
+          crens.push(cren);
           parts.push(cren);
         }
         const troof = MeshBuilder.CreateCylinder("gt-roof", { diameterTop: 0, diameterBottom: w * 1.15, height: h * 0.3, tessellation: 8 }, this.scene);
         troof.position.y = h / 2 + h * 0.15 + 1.6;
         parts.push(troof);
+        if (variant === "artillery") {
+          const plat = MeshBuilder.CreateCylinder("gt-plat", { diameter: w * 1.45, height: 1.0, tessellation: 9 }, this.scene);
+          plat.position.y = h / 2 + 1.9;
+          parts.push(plat);
+          troof.isVisible = false;
+        }
+        if (variant === "gate") {
+          for (const side of [-1, 1]) {
+            const banner = MeshBuilder.CreateBox("gt-ban", { width: 0.2, height: 3.2, depth: 1.4 }, this.scene);
+            banner.position.set(side * w * 0.5, h / 2 + 3.4, 0);
+            parts.push(banner);
+          }
+        }
+        if (variant === "ruined") {
+          troof.isVisible = false;
+          crens.forEach((cr, i) => {
+            if (i % 2 === 0) cr.isVisible = false;
+          });
+          const breach = MeshBuilder.CreateBox("gt-breach", { width: w * 0.5, height: h * 0.3, depth: w * 0.6 }, this.scene);
+          breach.position.set(w * 0.25, -h / 2 + h * 0.15, 0);
+          parts.push(breach);
+        }
         break;
       }
       case "gate": {
@@ -163,7 +190,10 @@ export class BuildingFactory {
       }
     }
 
-    const walls = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
+    // variant-hidden parts (troof / alternate crenellations) must not reach the merge
+    const mergeParts = parts.filter((p) => p.isVisible);
+    for (const p of parts) if (!p.isVisible) p.dispose();
+    const walls = Mesh.MergeMeshes(mergeParts, true, true, undefined, false, false)!;
     walls.material = mat;
     walls.parent = root;
     walls.isPickable = false;

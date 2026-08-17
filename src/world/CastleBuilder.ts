@@ -65,7 +65,7 @@ export class CastleBuilder {
 
     // ============ OUTER CURTAIN WALL (220m square, 16m tall) ============
     const HALF = 110;
-    const WALL_H = 16;
+    const WALL_H = 20;
     const THICK = 5;
     const sides: { x0: number; z0: number; x1: number; z1: number }[] = [
       { x0: -HALF, z0: -HALF, x1: HALF, z1: -HALF }, // north
@@ -90,16 +90,20 @@ export class CastleBuilder {
     }
 
     // outer towers: 4 corners + 2 midpoints on long sides → 8 destructible "wallTower"s
-    const towerSpots: [number, number][] = [
-      [-HALF, -HALF], [HALF, -HALF], [-HALF, HALF], [HALF, HALF],
-      [-HALF, 0], [HALF, 0], [0, -HALF], [0, HALF - 26], // last: near-gate watchtower
+    const towerSpots: [number, number, string][] = [
+      [-HALF, -HALF, "military"], [HALF, -HALF, "military"],
+      [-HALF, HALF, "gate"], [HALF, HALF, "gate"],
+      [-HALF, 0, "artillery"], [HALF, 0, "artillery"],
+      [0, -HALF, "ruined"], [0, HALF - 26, "gate"],
     ];
-    for (const [tx, tz] of towerSpots) {
+    for (const [tx, tz, variant] of towerSpots) {
       buildings.push({
         kind: "grandTower",
         tag: "wallTower",
         pos: new Vector3(cx + tx, g(cx + tx, cz + tz), cz + tz),
         rotY: 0,
+        variant,
+        ...(variant === "ruined" ? { hpFraction: 0.45 } : {}),
       });
     }
 

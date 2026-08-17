@@ -22,6 +22,8 @@ export interface BuildingPlacement {
   pos: Vector3;
   rotY: number;
   relicId?: string;
+  variant?: string;
+  hpFraction?: number;
 }
 
 export interface SquadPlacement {
@@ -307,12 +309,12 @@ export class WorldBuilder {
         squads.push({ type: "shieldman", count: 8, center: new Vector3(-40, 0, 40), radius: 30 });
         squads.push({ type: "spearman", count: 8, center: new Vector3(40, 0, 40), radius: 30 });
         squads.push({ type: "elite", count: 5, center: new Vector3(0, 0, 0), radius: 30 });
-        // ballistae: 4 on wall towers + 2 in the courtyard
+        // ballistae: 4 on wall towers (artillery crowns at +42, wall-walks at +21) + 2 courtyard
         ballistae.push(
-          { pos: new Vector3(0, terrain.heightAt(0, -110) + 17, -104), yaw: Math.PI },
-          { pos: new Vector3(-110, terrain.heightAt(-110, 0) + 17, 0), yaw: -Math.PI / 2 },
-          { pos: new Vector3(110, terrain.heightAt(110, 0) + 17, 0), yaw: Math.PI / 2 },
-          { pos: new Vector3(-70, terrain.heightAt(-70, -70) + 17, -66), yaw: (Math.PI * 3) / 4 },
+          { pos: new Vector3(0, terrain.heightAt(0, -110) + 21, -104), yaw: Math.PI },
+          { pos: new Vector3(-110, terrain.heightAt(-110, 0) + 42, 0), yaw: -Math.PI / 2 },
+          { pos: new Vector3(110, terrain.heightAt(110, 0) + 42, 0), yaw: Math.PI / 2 },
+          { pos: new Vector3(-70, terrain.heightAt(-70, -70) + 21, -66), yaw: (Math.PI * 3) / 4 },
           { pos: new Vector3(60, terrain.heightAt(60, 60), 60), yaw: Math.PI },
           { pos: new Vector3(-60, terrain.heightAt(-60, 60), 60), yaw: Math.PI }
         );
