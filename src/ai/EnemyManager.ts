@@ -191,12 +191,14 @@ export class EnemyManager {
   spawnBallista(pos: Vector3, yaw: number): BallistaEntity {
     const def = ENEMIES.ballista;
     const { root, turret, railGlow } = this.factory.createBallista(def);
+    const groundY = this.terrain.heightAt(pos.x, pos.z);
+    const y = pos.y > groundY + 0.5 ? pos.y : groundY;
     const b: BallistaEntity = {
       id: nextId++,
       def,
       hp: def.hp,
       maxHp: def.hp,
-      pos: new Vector3(pos.x, this.terrain.heightAt(pos.x, pos.z), pos.z),
+      pos: new Vector3(pos.x, y, pos.z),
       baseYaw: yaw,
       root,
       turret,
