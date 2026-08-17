@@ -32,6 +32,7 @@ import { BuildingSystem } from "../world/BuildingSystem";
 import { LootSystem } from "../world/LootSystem";
 import { ObjectiveTracker } from "./Objectives";
 import { BlackstoneFinale } from "./blackstone/BlackstoneFinale";
+import { AmbientBattle } from "../world/AmbientBattle";
 import { emptyStats, type MissionStats } from "./Scoring";
 import { getRelic } from "../data/items";
 import { clamp } from "../core/MathUtils";
@@ -75,6 +76,7 @@ export class MissionScene {
   readonly loot: LootSystem;
   readonly effects: EffectsLibrary;
   readonly finale: BlackstoneFinale | null = null;
+  readonly ambient: AmbientBattle | null = null;
   readonly tracker: ObjectiveTracker;
   readonly stats: MissionStats = emptyStats();
   readonly rng: SeededRng;
@@ -182,6 +184,14 @@ export class MissionScene {
 
     if (d.mission.id === "blackstone") {
       this.finale = new BlackstoneFinale(this, d);
+      this.ambient = new AmbientBattle(this.scene, this.world.terrain.sampler, new SeededRng(d.mission.seed + 91));
+      this.ambient.spawn([
+        { x: 0, z: 20, r: 40, pairs: 8 },
+        { x: 0, z: 150, r: 45, pairs: 6 },
+        { x: -160, z: -170, r: 40, pairs: 4 },
+        { x: 190, z: 40, r: 35, pairs: 4 },
+        { x: 60, z: -120, r: 30, pairs: 3 },
+      ]);
     }
   }
 
@@ -510,6 +520,10 @@ export class MissionScene {
 
     // ambient prop animation (banners, birds) + static-castle collision for the rider
     this.world.props.update(dt);
+    if (this.ambient) {
+      const dp = this.dragonCtrl.pos;
+      this.ambient.update(dt, this.activeCamera().position, dp, dp.y - this.world.terrain.heightAt(dp.x, dp.z));
+    }
     if (this.phase === "ground" && this.riderCtrl) {
       const p = this.riderCtrl.pos;
       for (const a of this.castleAabbs) {

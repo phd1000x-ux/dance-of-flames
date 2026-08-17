@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { damageStateFor, DAMAGE_VISUALS, type DamageState } from "../src/world/DamageStates";
 import { planVolley } from "../src/ai/EnemyManager";
+import { tierFor, shouldLookUp, pairPhase } from "../src/world/AmbientBattle";
 
 describe("damage states", () => {
   test("threshold boundaries", () => {
@@ -50,5 +51,29 @@ describe("ballista volley planning", () => {
 
   test("window is tight and fixed", () => {
     expect(planVolley(3, rng).window).toBe(0.6);
+  });
+});
+
+describe("ambient battle helpers", () => {
+  test("distance tiers", () => {
+    expect(tierFor(50)).toBe(0);
+    expect(tierFor(120)).toBe(1);
+    expect(tierFor(300)).toBe(2);
+  });
+
+  test("look up only for low nearby dragons", () => {
+    expect(shouldLookUp({ x: 0, y: 10, z: 0 }, { x: 30, z: 0 }, 8)).toBe(true);
+    expect(shouldLookUp({ x: 0, y: 100, z: 0 }, { x: 30, z: 0 }, 95)).toBe(false);
+    expect(shouldLookUp({ x: 0, y: 10, z: 0 }, { x: 90, z: 0 }, 8)).toBe(false);
+  });
+
+  test("pair phase deterministic per seed and bounded", () => {
+    const a = pairPhase(3.5, 7);
+    const b = pairPhase(3.5, 7);
+    const c = pairPhase(3.5, 8);
+    expect(a).toEqual(b);
+    expect(a).not.toEqual(c);
+    expect(Math.abs(a.swayA)).toBeLessThanOrEqual(1);
+    expect(Math.abs(a.lunge)).toBeLessThanOrEqual(1);
   });
 });
