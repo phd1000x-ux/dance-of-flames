@@ -145,3 +145,67 @@ describe("event objectives", () => {
     expect(fired).toBe(1);
   });
 });
+
+describe("restoreState (checkpoint retry)", () => {
+  const defs: ObjectiveDef[] = [
+    { id: "a", type: "kill", description: "x", targetType: "soldier", count: 5 },
+    { id: "b", type: "event", description: "y", event: "boom" },
+    { id: "c", type: "survive", description: "z", seconds: 75 },
+  ];
+
+  test("sets exact progress and completion", () => {
+    const t = new ObjectiveTracker(defs);
+    t.restoreState([
+      { id: "a", progress: 3, completed: false },
+      { id: "b", progress: 1, completed: true },
+      { id: "c", progress: 0, completed: false },
+    ]);
+    const [a, b, c] = t.objectives();
+    expect(a.progress).toBe(3);
+    expect(a.completed).toBe(false);
+    expect(b.completed).toBe(true);
+    expect(c.progress).toBe(0);
+    expect(t.current()?.id).toBe("a");
+  });
+
+  test("keeps the listener list — completion after restore still fires", () => {
+    const t = new ObjectiveTracker(defs);
+    const fired: string[] = [];
+    t.onObjectiveComplete((o) => fired.push(o.id));
+    t.restoreState([{ id: "a", progress: 4, completed: false }]);
+    t.notifyKill("soldier");
+    expect(fired).toEqual(["a"]);
+  });
+
+  test("restoring an already-complete chain leaves no current objective", () => {
+    const t = new ObjectiveTracker(defs);
+    t.restoreState([
+      { id: "a", progress: 5, completed: true },
+      { id: "b", progress: 1, completed: true },
+      { id: "c", progress: 75, completed: true },
+    ]);
+    expect(t.current()).toBeUndefined();
+    expect(t.allCompleted()).toBe(true);
+  });
+
+  test("resumes a partially-survived survive objective from restored progress", () => {
+    const t = new ObjectiveTracker(defs);
+    t.restoreState([
+      { id: "a", progress: 5, completed: true },
+      { id: "b", progress: 1, completed: true },
+      { id: "c", progress: 30, completed: false },
+    ]);
+    expect(t.current()?.id).toBe("c");
+    t.update(1);
+    expect(t.objectives()[2].progress).toBe(31);
+    t.update(44);
+    expect(t.objectives()[2].completed).toBe(true);
+  });
+
+  test("unknown ids are ignored", () => {
+    const t = new ObjectiveTracker(defs);
+    t.restoreState([{ id: "nope", progress: 9, completed: true }]);
+    expect(t.allCompleted()).toBe(false);
+    expect(t.objectives().every((o) => o.progress === 0)).toBe(true);
+  });
+});

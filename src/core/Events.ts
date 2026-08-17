@@ -30,4 +30,5 @@ export interface GameEvents {
   "finale-boss": { show: boolean; name?: string; hpFrac?: number };
   "finale-subtitle": { text: string; ms: number };
   "finale-music": { state: "chase" | "boss" | "resolve" };
+  "finale-checkpoint": { snapshot: unknown };
 }

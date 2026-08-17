@@ -14,6 +14,7 @@ import { detectCapabilities, type EngineInfo } from "../engine/EngineFactory";
 import { UIManager } from "../ui/UIManager";
 import { MenuShowcase } from "../scenes/MenuShowcase";
 import { MissionScene } from "../mission/MissionScene";
+import { validateSnapshot, type FinaleSnapshot } from "../mission/blackstone/FinalePatterns";
 import { getMission, MISSIONS } from "../data/missions";
 import { applyDamageTint } from "../world/DragonMaterials";
 import { getRider } from "../data/riders";
@@ -43,6 +44,8 @@ export class GameApp {
   ui!: UIManager;
   showcase: MenuShowcase | null = null;
   mission: MissionScene | null = null;
+  /** in-memory finale checkpoint — captured at finale beats, offered on DEFEAT retry */
+  checkpoint: FinaleSnapshot | null = null;
   rendererName = "…";
   private instrumentation: SceneInstrumentation | null = null;
   private paused = false;
@@ -176,6 +179,13 @@ export class GameApp {
         this.music.setState(e.state);
       }
     });
+    this.bus.on("finale-checkpoint", ({ snapshot }) => {
+      try {
+        this.checkpoint = validateSnapshot(snapshot);
+      } catch (e) {
+        console.warn("[checkpoint] invalid snapshot ignored", e);
+      }
+    });
   }
 
   // ---------------- mission lifecycle ----------------
@@ -184,7 +194,10 @@ export class GameApp {
     await this.loadMission();
   }
 
-  private async loadMission(): Promise<void> {
+  /** Load (or reload) the configured mission. With a checkpoint snapshot the
+   *  freshly built deterministic mission is restored from it; without one any
+   *  previously captured checkpoint is cleared. */
+  private async loadMission(snapshot?: FinaleSnapshot): Promise<void> {
     const cfg = this.missionCfg!;
     this.state.transition(GameState.LOADING);
     this.input.resetAllInputs();
@@ -231,6 +244,18 @@ export class GameApp {
       particleScale: () => this.governor.particleScale,
     });
     this.mission = mission;
+    // checkpoint restore: apply to the deterministic fresh build; on failure
+    // fall through as a clean start (never brick the retry)
+    let restored = false;
+    if (snapshot && mission.finale) {
+      try {
+        mission.applySnapshot(validateSnapshot(snapshot));
+        restored = true;
+      } catch (e) {
+        console.warn("[checkpoint] restore failed — starting clean", e);
+      }
+    }
+    this.checkpoint = restored ? snapshot! : null;
     this.instrumentation = new SceneInstrumentation(mission.scene);
     this.instrumentation.captureFrameTime = true;
 
@@ -292,7 +317,7 @@ export class GameApp {
 
     this.state.transition(victory ? GameState.VICTORY : GameState.DEFEAT);
     this.input.exitPointerLock();
-    this.ui.showResults(victory, stats, score, coinsEarned);
+    this.ui.showResults(victory, stats, score, coinsEarned, !victory && !!this.checkpoint);
     this.ui.showScreen("results");
     console.log(`[mission] ${victory ? "VICTORY" : "DEFEAT"} score=${score} rank=${rank} coins=+${coinsEarned}`);
   }
@@ -400,10 +425,10 @@ export class GameApp {
           this.backToMenu();
         }
       },
-      onRetryMission: () => {
+      onRetryMission: (fromCheckpoint?: boolean) => {
         if (this.missionCfg) {
           this.setPaused(false);
-          this.loadMission();
+          this.loadMission(fromCheckpoint ? (this.checkpoint ?? undefined) : undefined);
         } else {
           this.backToMenu();
         }

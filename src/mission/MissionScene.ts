@@ -32,6 +32,8 @@ import { BuildingSystem } from "../world/BuildingSystem";
 import { LootSystem } from "../world/LootSystem";
 import { ObjectiveTracker } from "./Objectives";
 import { BlackstoneFinale } from "./blackstone/BlackstoneFinale";
+import type { FinalePhase } from "./blackstone/FinalePhases";
+import type { FinaleSnapshot } from "./blackstone/FinalePatterns";
 import { AmbientBattle } from "../world/AmbientBattle";
 import { emptyStats, type MissionStats } from "./Scoring";
 import { getRelic } from "../data/items";
@@ -676,6 +678,70 @@ export class MissionScene {
     this.dragonCtrl.pitch = 0.12;
     this.dragonCam.reset(this.dragonCtrl);
     this.scene.activeCamera = this.dragonCam.camera;
+  }
+
+  // ---------------- finale checkpoints ----------------
+
+  /** In-memory checkpoint of the full mission state (called at finale beats).
+   *  Buildings/ballistae are stored as ARRAY INDICES, not entity ids — layout
+   *  order is seed-deterministic, while BuildingSystem ids are session-cumulative
+   *  and would shift across loads. */
+  captureSnapshot(): FinaleSnapshot | null {
+    const f = this.finale;
+    if (!f) return null;
+    return {
+      finalePhase: f.phase,
+      castellan: f.castellanState ?? { hp: 0, transitioned: false },
+      vharax: f.warDragon ? { hp: f.warDragon.hp } : null,
+      destroyedBuildings: this.buildings.buildings.flatMap((b, i) => (b.collapsed ? [i] : [])),
+      deadBallistae: this.enemies.ballistae.flatMap((b, i) => (b.dead ? [i] : [])),
+      objectiveProgress: this.tracker.objectives().map((o) => ({ id: o.id, progress: o.progress, completed: o.completed })),
+      player: {
+        dragonHp: this.player.dragonHp,
+        riderHp: this.player.riderHp,
+        mode: this.player.mode,
+        x: this.dragonCtrl.pos.x,
+        y: this.dragonCtrl.pos.y,
+        z: this.dragonCtrl.pos.z,
+        yaw: this.dragonCtrl.yaw,
+      },
+      charges: {
+        heal: this.player.healCharges,
+        fireBoost: this.player.fireBoostCharges,
+        armorWard: this.player.armorWardCharges,
+      },
+      time: this.time,
+    };
+  }
+
+  /** Apply a captured checkpoint to a freshly constructed mission.
+   *  Ordering matters: buildings collapse first (their objective notifies fire),
+   *  then the tracker restore OVERWRITES that progress; ballistae die next
+   *  (post-restore notifies are no-ops — every capture point is past bs-defenses);
+   *  player state before the finale walk so dismount/remount during skipTo spawn
+   *  from the restored dragon position; finale last, with boss HP reapplied. */
+  applySnapshot(s: FinaleSnapshot): void {
+    for (const i of s.destroyedBuildings) {
+      const b = this.buildings.buildings[i];
+      if (b && !b.collapsed) this.buildings.damageBuilding(b, b.maxHp + 1);
+    }
+    this.tracker.restoreState(s.objectiveProgress);
+    for (const i of s.deadBallistae) {
+      const b = this.enemies.ballistae[i];
+      if (b && !b.dead) this.enemies.damageBallista(b, b.maxHp + 1, true);
+    }
+    this.player.dragonHp = Math.max(1, s.player.dragonHp);
+    this.player.riderHp = Math.max(1, s.player.riderHp);
+    this.player.healCharges = s.charges.heal;
+    this.player.fireBoostCharges = s.charges.fireBoost;
+    this.player.armorWardCharges = s.charges.armorWard;
+    this.dragonCtrl.pos.set(s.player.x, s.player.y, s.player.z);
+    this.dragonCtrl.yaw = s.player.yaw;
+    this.time = s.time;
+    if (this.finale) {
+      this.finale.skipTo(s.finalePhase as FinalePhase);
+      this.finale.restoreBossState(s.castellan, s.vharax);
+    }
   }
 
   private updateTutorial(dt: number): void {

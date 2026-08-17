@@ -51,6 +51,27 @@ export class BlackstoneFinale {
     return this.vharax;
   }
 
+  /** checkpoint capture source — castellan duel state (null before the claim) */
+  get castellanState(): { hp: number; transitioned: boolean } | null {
+    const c = this.castellan;
+    return c ? { hp: c.hp, transitioned: c.transitioned } : null;
+  }
+
+  /** checkpoint beat — snapshot the mission and broadcast it (GameApp stores it) */
+  captureCheckpoint(): void {
+    const snap = this.mission.captureSnapshot();
+    if (snap) this.deps.bus.emit("finale-checkpoint", { snapshot: snap });
+  }
+
+  /** checkpoint restore — reapply boss state after skipTo walked the phase chain */
+  restoreBossState(castellan: { hp: number; transitioned: boolean }, vharax: { hp: number } | null): void {
+    if (this.castellan) {
+      this.castellan.setHp(castellan.hp);
+      if (castellan.transitioned) this.castellan.markTransitioned();
+    }
+    if (vharax && this.vharax) this.damageWarDragon(Math.max(0, this.vharax.hp - vharax.hp));
+  }
+
   update(dt: number): void {
     const m = this.mission;
     this.stageT += dt;
@@ -76,14 +97,13 @@ export class BlackstoneFinale {
           this.courtyardDone = true;
         }
         if (this.courtyardDone) {
-          const claimed = this.mission.enemies.claimCommander();
-          if (!claimed) {
+          if (!this.claimCastellan()) {
             if (!this.shortCircuited) this.shortCircuit();
             return;
           }
-          this.castellan = new CastellanBoss(claimed, m.enemies, m.projectiles, this.deps.bus);
           this.phases.transition("AWAIT_LANDING");
           this.deps.bus.emit("hud-hint", { text: "LAND IN THE COURTYARD — FACE THE CASTELLAN" });
+          this.captureCheckpoint();
         }
         break;
       }
@@ -96,6 +116,7 @@ export class BlackstoneFinale {
           this.setStage("DUEL_GROUND");
           this.deps.bus.emit("finale-music", { state: "boss" });
           this.deps.bus.emit("finale-boss", { show: true, name: "THE CASTELLAN", hpFrac: 1 });
+          this.captureCheckpoint();
         }
         break;
       }
@@ -140,6 +161,7 @@ export class BlackstoneFinale {
           this.setStage("CHASE");
           this.deps.bus.emit("finale-music", { state: "chase" });
           this.deps.bus.emit("finale-subtitle", { text: "PURSUE THE CASTELLAN", ms: 2400 });
+          this.captureCheckpoint();
         }
         break;
       }
@@ -166,6 +188,7 @@ export class BlackstoneFinale {
             this.deps.bus.emit("finale-music", { state: "boss" });
             this.deps.bus.emit("finale-boss", { show: true, name: "VHARAX — WAR DRAGON OF BLACKSTONE", hpFrac: 1 });
             this.mission.tracker.notifyEvent("chase-complete");
+            this.captureCheckpoint();
           }
         }
         break;
@@ -229,6 +252,7 @@ export class BlackstoneFinale {
           this.breaker = null;
           this.resolveVharaxEvents();
           this.setStage("RESOLVED");
+          this.captureCheckpoint();
         }
         break;
       }
@@ -315,6 +339,7 @@ export class BlackstoneFinale {
   private forceAdvance(): boolean {
     const cur = this.phases.current;
     const next: Partial<Record<FinalePhase, FinalePhase>> = {
+      INACTIVE: "AWAIT_LANDING",
       AWAIT_LANDING: "DUEL_GROUND",
       DUEL_GROUND: "TRANSITION",
       TRANSITION: "REVEAL",
@@ -331,6 +356,11 @@ export class BlackstoneFinale {
     if (!to) return false;
     // perform mandatory side effects so skipped states are consistent
     switch (cur) {
+      case "INACTIVE":
+        // checkpoint-restore path: skipTo from a fresh finale must be able to
+        // claim the castellan exactly like the organic INACTIVE case
+        if (!this.claimCastellan()) return false;
+        break;
       case "AWAIT_LANDING":
         this.forceLand();
         this.mission.scriptedDismount(this.mission.dragonCtrl.pos.add(new Vector3(3, 0, 3)));
@@ -341,6 +371,7 @@ export class BlackstoneFinale {
       case "REMOUNT":
         this.mission.remountDragon();
         this.vharax?.startChase(new Vector3(0, 75, -95));
+        this.chaseLoopNeeded = CHASE_LOOPS;
         break;
       case "CHASE":
         this.vharax?.startDuel();
@@ -375,8 +406,15 @@ export class BlackstoneFinale {
     return this.phases.transition(to);
   }
 
-  private revealVharax(): void {
-    if (!this.vharax) {
+  /** claim the commander + create the castellan boss (organic INACTIVE entry and forceAdvance) */
+  private claimCastellan(): boolean {
+    const claimed = this.mission.enemies.claimCommander();
+    if (!claimed) return false;
+    this.castellan = new CastellanBoss(claimed, this.mission.enemies, this.mission.projectiles, this.deps.bus);
+    return true;
+  }
+
+  private revealVharax(): void {    if (!this.vharax) {
       this.vharax = new WarDragon(this.mission.scene, this.mission.effects, this.deps.bus);
       this.vharax.onSweepHitPlayer = (dps, dt) => {
         const died = this.mission.player.damageDragon(dps * dt);

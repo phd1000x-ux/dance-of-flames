@@ -109,6 +109,20 @@ export class ObjectiveTracker {
     this.surviveTimer = 0;
   }
 
+  /** Restore exact progress/completion from a checkpoint snapshot.
+   *  Pure: no listener callbacks fire; the listener list itself is kept.
+   *  A partially-survived current survive objective resumes from its progress. */
+  restoreState(list: { id: string; progress: number; completed: boolean }[]): void {
+    for (const r of list) {
+      const item = this.items.find((o) => o.id === r.id);
+      if (!item) continue;
+      item.progress = r.progress;
+      item.completed = r.completed;
+    }
+    const cur = this.current();
+    this.surviveTimer = cur && cur.type === "survive" && !cur.completed ? cur.progress : 0;
+  }
+
   private matchesTarget(obj: ObjectiveState, enemyType: string): boolean {
     const t = obj.targetType;
     if (!t || t === "any") return true;

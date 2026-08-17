@@ -27,7 +27,7 @@ export interface UiCallbacks {
   onShopBuy(upgradeId: string): void;
   onShopClose(nextMission: boolean): void;
   onResultsContinue(): void;
-  onRetryMission(): void;
+  onRetryMission(fromCheckpoint?: boolean): void;
   onMissionSelect(): void;
 }
 
@@ -762,7 +762,8 @@ export class UIManager {
       this.click();
       switch (t.dataset.act) {
         case "continue": this.cb.onResultsContinue(); break;
-        case "retry": this.cb.onRetryMission(); break;
+        case "retryCheckpoint": this.cb.onRetryMission(true); break;
+        case "retry": this.cb.onRetryMission(false); break;
         case "missionselect": this.cb.onMissionSelect(); break;
         case "mainmenu": this.cb.onAbandon(); break;
       }
@@ -770,7 +771,7 @@ export class UIManager {
     return d;
   }
 
-  showResults(victory: boolean, stats: MissionStats, score: number, coinsEarned: number): void {
+  showResults(victory: boolean, stats: MissionStats, score: number, coinsEarned: number, checkpointAvailable = false): void {
     const screen = this.screens.get("results");
     if (!screen) return;
     const rank = victory ? rankFor(score) : "—";
@@ -793,9 +794,14 @@ export class UIManager {
       .join("");
     (screen.querySelector("#results-btns") as HTMLElement).innerHTML = victory
       ? `<button class="btn" data-act="continue">CONTINUE</button>`
-      : `<button class="btn" data-act="retry">RETRY</button>
-         <button class="btn ghost" data-act="missionselect">RETURN TO MISSION SELECT</button>
-         <button class="btn ghost" data-act="mainmenu">MAIN MENU</button>`;
+      : checkpointAvailable
+        ? `<button class="btn" data-act="retryCheckpoint">RETRY (CHECKPOINT)</button>
+           <button class="btn ghost" data-act="retry">RESTART MISSION</button>
+           <button class="btn ghost" data-act="missionselect">RETURN TO MISSION SELECT</button>
+           <button class="btn ghost" data-act="mainmenu">MAIN MENU</button>`
+        : `<button class="btn" data-act="retry">RETRY</button>
+           <button class="btn ghost" data-act="missionselect">RETURN TO MISSION SELECT</button>
+           <button class="btn ghost" data-act="mainmenu">MAIN MENU</button>`;
     this.applyFocusIfActive("results");
   }
 

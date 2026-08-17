@@ -22,6 +22,19 @@ export class CastellanBoss {
     return this.s.state !== "dead";
   }
 
+  get hp(): number {
+    return this.s.hp;
+  }
+
+  get transitioned(): boolean {
+    return this.duel.transitioned;
+  }
+
+  /** checkpoint restore: force the one-shot transition state without the duel */
+  markTransitioned(): void {
+    this.duel.markTransitioned();
+  }
+
   get hpFrac(): number {
     return this.s.maxHp > 0 ? this.s.hp / this.s.maxHp : 0;
   }
