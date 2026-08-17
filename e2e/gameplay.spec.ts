@@ -134,8 +134,15 @@ test("E2E 5: dragon dies → death sequence → rider spawns → ground camera �
     g.mission.dragonCtrl.pos.set(-200, 40, -200); // away from the horde
     g.api.damageDragon(99999);
   });
-  // death sequence → ground mode
-  await page.waitForFunction(() => (window as any).__GAME.state === "GROUND_GAMEPLAY", null, { timeout: 30000 });
+  // death sequence → ground mode (HUD sync is throttled to ~33ms, so the state
+  // can flip before .hud-ground becomes visible — poll for both)
+  await page.waitForFunction(
+    () =>
+      (window as any).__GAME.state === "GROUND_GAMEPLAY" &&
+      getComputedStyle(document.querySelector(".hud-ground")!).display === "block",
+    null,
+    { timeout: 30000 },
+  );
   const ground = await page.evaluate(() => {
     const g = (window as any).__GAME;
     return {
@@ -152,17 +159,30 @@ test("E2E 5: dragon dies → death sequence → rider spawns → ground camera �
   expect(ground.activeCamera).toBe("groundCam"); // renderer must follow the rider, not the frozen dragonCam
   expect(ground.objective.length).toBeGreaterThan(5); // converted objective text
 
-  // place an enemy in front and swing
+  // place an enemy in front and swing — archers kite, so re-pin the victim in
+  // range and re-edge the attack until the kill lands (load-dependent timing)
   await page.evaluate(() => {
     const g = (window as any).__GAME;
     const rider = g.mission.riderCtrl;
     const victim = g.mission.enemies.getGroundEnemies().find((s: any) => s.hp > 20);
-    victim.pos.set(rider.pos.x + Math.sin(rider.yaw) * 1.6, rider.pos.y, rider.pos.z + Math.cos(rider.yaw) * 1.6);
     (window as any).__victim = victim;
-    g.api.mouse(0, true);
   });
-  await page.waitForFunction(() => (window as any).__victim.hp <= 0, null, { timeout: 10000 });
-  await page.evaluate(() => (window as any).__GAME.api.mouse(0, false));
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    const dead = await page.evaluate(() => {
+      const g = (window as any).__GAME;
+      const v = (window as any).__victim;
+      if (v.hp <= 0) return true;
+      const rider = g.mission.riderCtrl;
+      v.pos.set(rider.pos.x + Math.sin(rider.yaw) * 1.6, rider.pos.y, rider.pos.z + Math.cos(rider.yaw) * 1.6);
+      g.api.mouse(0, true);
+      g.api.mouse(0, false);
+      return false;
+    });
+    if (dead) break;
+    await page.waitForTimeout(500);
+  }
+  await page.waitForFunction(() => (window as any).__victim.hp <= 0, null, { timeout: 2000 });
   const victimState = await page.evaluate(() => (window as any).__victim.state);
   expect(victimState).toBe("dead");
 });

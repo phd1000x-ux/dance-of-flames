@@ -143,6 +143,10 @@ export class CastleBuilder {
       this.staticTower(cx + kx, cz + kz, 4.4, 12, base + 42, this.darkStoneMat);
     }
 
+    // BLACKSTONE SPIRE — north landmark behind the keep (finale framing)
+    this.staticTower(cx, cz - 85, 7, 58, base + 2, this.darkStoneMat);
+    aabbs.push({ x: cx, z: cz - 85, hx: 7, hz: 7 });
+
     // barracks + chapel silhouettes in the outer ward (destructible)
     buildings.push({ kind: "barracks", tag: "barracks", pos: new Vector3(cx - 70, g(cx - 70, cz - 60), cz - 60), rotY: 0.1 });
     buildings.push({ kind: "barracks", tag: "supply", pos: new Vector3(cx + 68, g(cx + 68, cz - 58), cz - 58), rotY: -0.15, relicId: "emberCapacitor" });

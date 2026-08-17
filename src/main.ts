@@ -139,6 +139,28 @@ async function boot(): Promise<void> {
         forceVictory() {
           app.mission?.forceEnd(true);
         },
+        setCastellanHp(n: number) {
+          app.mission?.finale?.setCastellanHp(n);
+        },
+        damageWarDragon(n: number) {
+          app.mission?.finale?.damageWarDragon(n);
+        },
+        getFinale() {
+          const f = app.mission?.finale;
+          if (!f) return null;
+          return {
+            phase: f.phase,
+            vharax: f.warDragon
+              ? { hp: f.warDragon.hp, maxHp: f.warDragon.maxHp, state: f.warDragon.state, pos: { x: f.warDragon.pos.x, y: f.warDragon.pos.y, z: f.warDragon.pos.z } }
+              : null,
+          };
+        },
+        forceLand() {
+          app.mission?.finale?.forceLand();
+        },
+        setFinalePhase(p: string) {
+          return app.mission?.finale?.skipTo(p as any) ?? false;
+        },
       },
     };
   }

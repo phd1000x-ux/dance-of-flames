@@ -5,6 +5,7 @@ import { StatBlock, computeFinalStats } from "../src/progression/StatBlock";
 import { DRAGONS } from "../src/data/dragons";
 import { RIDERS } from "../src/data/riders";
 import { RELICS } from "../src/data/items";
+import { VHARAX } from "../src/data/wardragon";
 
 describe("UpgradeSystem", () => {
   it("cannot purchase without enough coins", () => {
@@ -136,6 +137,19 @@ describe("stat composition", () => {
         expect(k).toBeTruthy();
         expect(v).toBeGreaterThan(0);
       }
+    }
+  });
+});
+
+describe("war dragon definition", () => {
+  it("vharax is a valid, distinct, oversized dragon definition", () => {
+    expect(VHARAX.id).toBe("vharax");
+    expect(DRAGONS.find((d) => d.id === "vharax")).toBeUndefined(); // not player-selectable
+    expect(VHARAX.scale).toBeGreaterThan(Math.max(...DRAGONS.map((d) => d.scale)));
+    expect(VHARAX.bulk).toBeGreaterThan(1);
+    expect(VHARAX.wingShape.membraneNotch).toBeGreaterThan(0.3); // torn membrane
+    for (const k of ["bodyColor", "wingColor", "accentColor"] as const) {
+      expect(VHARAX[k]).toMatch(/^#[0-9a-f]{6}$/i);
     }
   });
 });

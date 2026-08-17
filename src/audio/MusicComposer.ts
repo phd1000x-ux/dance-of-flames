@@ -18,7 +18,9 @@ export type MusicStateId =
   | "ground"
   | "dragon_fallen"
   | "victory"
-  | "defeat";
+  | "defeat"
+  | "chase"
+  | "boss";
 
 export interface NoteEvent {
   voice: "cello" | "violin" | "drum" | "pad";
@@ -95,6 +97,8 @@ const STATE_CONFIG: Record<
   dragon_fallen: { bpm: 60, loop: false, intensity: 1 },
   victory: { bpm: 84, loop: false, intensity: 0.8 },
   defeat: { bpm: 56, loop: false, intensity: 0.9 },
+  chase: { bpm: 132, loop: true, intensity: 0.9 },
+  boss: { bpm: 116, loop: true, intensity: 0.95 },
 };
 
 export function stateConfig(id: MusicStateId) {
@@ -241,6 +245,32 @@ export function composeBar(state: MusicStateId, barIndex: number, seed: number):
       notes.push({ voice: "cello", midi: midi(1, PC.D), start: 0, dur: 4, vel: 0.5 });
       notes.push({ voice: "cello", midi: midi(2, PC.Bb) - 1, start: 0.5, dur: 3.5, vel: 0.3 }); // Ab against D — unresolved tritone
       notes.push({ voice: "violin", midi: midi(4, PC.Bb), start: 1, dur: 3, vel: 0.16 });
+      break;
+    }
+    case "chase": {
+      // fast violin ostinato over pounding cello roots
+      for (let i = 0; i < 16; i++) {
+        notes.push({ voice: "violin", midi: midi(5, chord[i % chord.length]), start: i * 0.25, dur: 0.22, vel: i % 4 === 0 ? 0.26 : 0.15 });
+      }
+      for (const b of [0, 1, 2, 3]) {
+        notes.push({ voice: "cello", midi: root, start: b, dur: 0.9, vel: 0.4 });
+        notes.push({ voice: "drum", midi: 36, start: b, dur: 0.2, vel: 0.6 });
+        notes.push({ voice: "drum", midi: 36, start: b + 0.5, dur: 0.15, vel: 0.35 });
+      }
+      break;
+    }
+    case "boss": {
+      // aggressive interplay: cello ostinato vs violin stabs a fifth above
+      let t = 0;
+      for (const [m, d] of OSTINATO) {
+        notes.push({ voice: "cello", midi: m - 5, start: t, dur: d * 0.9, vel: 0.5 });
+        t += d;
+      }
+      for (let i = 0; i < 8; i++) {
+        notes.push({ voice: "violin", midi: midi(4, chord[i % chord.length]) + 7, start: i * 0.5 + 0.25, dur: 0.3, vel: 0.22 });
+      }
+      for (const b of [0, 2]) notes.push({ voice: "drum", midi: 36, start: b, dur: 0.4, vel: 0.65 });
+      notes.push({ voice: "pad", midi: root - 12, start: 0, dur: 4, vel: 0.12 });
       break;
     }
   }

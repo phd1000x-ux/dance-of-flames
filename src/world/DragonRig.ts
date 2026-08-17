@@ -59,6 +59,7 @@ export class DragonRig {
 
   constructor(private scene: Scene, private def: DragonDefinition, riderDef?: import("../data/riders").RiderDefinition) {
     const s = def.scale;
+    const bulk = def.bulk ?? 1;
     this.riderLook = riderDef?.look ?? { gender: "male", hairStyle: "short", hairColor: "#6b543c", skin: "#d9b48f", build: 1 };
     this.root = new TransformNode(`dragon-${def.id}`, scene);
     this.materials = buildDragonMaterials(scene, def);
@@ -71,7 +72,7 @@ export class DragonRig {
     const torso = MeshBuilder.CreateCapsule(`torso`, { height: 5.4 * s, radius: 0.95 * s, tessellation: 10, subdivisions: 2 }, scene);
     torso.rotation.x = Math.PI / 2;
     parts.push(torso);
-    const chest = MeshBuilder.CreateCapsule(`chest`, { height: 3.2 * s, radius: 1.12 * s, tessellation: 10, subdivisions: 2 }, scene);
+    const chest = MeshBuilder.CreateCapsule(`chest`, { height: 3.2 * s, radius: 1.12 * s * bulk, tessellation: 10, subdivisions: 2 }, scene);
     chest.rotation.x = Math.PI / 2;
     chest.position.set(0, 0.06 * s, 1.1 * s);
     parts.push(chest);
@@ -104,7 +105,7 @@ export class DragonRig {
     this.neckPivot.position.set(0, 0.55 * s, 2.5 * s);
     const neckParts: Mesh[] = [];
     for (let i = 0; i < 3; i++) {
-      const seg = MeshBuilder.CreateCapsule(`neckSeg${i}`, { height: 1.5 * s, radius: (0.52 - i * 0.07) * s, tessellation: 10, subdivisions: 1 }, scene);
+      const seg = MeshBuilder.CreateCapsule(`neckSeg${i}`, { height: 1.5 * s, radius: (0.52 - i * 0.07) * s * bulk, tessellation: 10, subdivisions: 1 }, scene);
       seg.rotation.x = Math.PI / 2 - 0.55 - i * 0.1;
       seg.position.set(0, (0.42 + i * 0.5) * s, (0.55 + i * 0.72) * s);
       neckParts.push(seg);
@@ -359,6 +360,8 @@ export class DragonRig {
     // ---- saddle + articulated rider ----
     this.buildRider(s, M);
 
+    if (def.bulk) this.buildWarArmor();
+
     this.root.rotationQuaternion = Quaternion.Identity();
   }
 
@@ -603,6 +606,54 @@ export class DragonRig {
 
   setRiderVisible(v: boolean): void {
     this.riderFigure.getChildMeshes().forEach((m) => (m.isVisible = v));
+  }
+
+  /** partial war armor (~25% coverage). Brow plate rides headPivot and the neck
+   *  rings ride neckPivot at the segment positions, so they follow neck/head
+   *  animation; chest plate, war-saddle and chains stay on the root. */
+  private buildWarArmor(): void {
+    const s = this.def.scale;
+    const bulk = this.def.bulk ?? 1;
+    const mat = new StandardMaterial(`war-armor-${this.def.id}`, this.scene);
+    mat.diffuseColor = Color3.FromHexString("#2e2a26");
+    mat.specularColor = new Color3(0.22, 0.2, 0.18);
+    mat.specularPower = 60;
+    const mount = (name: string, part: Mesh, parent: TransformNode): void => {
+      part.name = `armor-${this.def.id}-${name}`;
+      part.material = mat;
+      part.parent = parent;
+      part.isPickable = false;
+      part.receiveShadows = false;
+    };
+
+    // brow plate — proud of the head's brow ridge (headPivot-local)
+    const brow = MeshBuilder.CreateBox(`armor-${this.def.id}-brow`, { width: 1.0 * s, height: 0.22 * s, depth: 0.4 * s }, this.scene);
+    brow.position.set(0, 0.33 * s, 0.44 * s);
+    mount("brow", brow, this.headPivot);
+
+    // neck rings — one per neck segment, hole axis aligned with the capsule tilt
+    for (let i = 0; i < 3; i++) {
+      const ring = MeshBuilder.CreateTorus(`armor-${this.def.id}-neck${i}`, { diameter: (1.3 - i * 0.17) * s * bulk, thickness: 0.13 * s, tessellation: 10 }, this.scene);
+      ring.position.set(0, (0.42 + i * 0.5) * s, (0.55 + i * 0.72) * s);
+      ring.rotation.x = Math.PI / 2 - 0.55 - i * 0.1; // same tilt as neckSeg capsules
+      mount(`neck${i}`, ring, this.neckPivot);
+    }
+
+    // chest plate — straddles the crest of the chest capsule (root-local)
+    const plate = MeshBuilder.CreateBox(`armor-${this.def.id}-chest`, { width: 2.3 * s * bulk, height: 0.45 * s, depth: 1.9 * s }, this.scene);
+    plate.position.set(0, (0.06 + 1.12 * bulk * 0.95) * s, 0.9 * s);
+    mount("chest", plate, this.root);
+
+    // war-saddle on the chest crest + girth chains down the flanks
+    const saddle = MeshBuilder.CreateBox(`armor-${this.def.id}-saddle`, { width: 1.0 * s, height: 0.25 * s, depth: 1.4 * s }, this.scene);
+    saddle.position.set(0, (0.06 + 1.12 * bulk) * s, 0.2 * s);
+    mount("saddle", saddle, this.root);
+    for (const side of [-1, 1]) {
+      const chain = MeshBuilder.CreateCylinder(`armor-${this.def.id}-chain${side}`, { diameter: 0.07 * s, height: 1.1 * s, tessellation: 4 }, this.scene);
+      chain.position.set(side * 1.18 * s * bulk, (0.06 + 1.12 * bulk * 0.55) * s, 0.9 * s);
+      chain.rotation.z = side * 0.25;
+      mount(`chain${side}`, chain, this.root);
+    }
   }
 
   animate(p: DragonAnimParams): void {

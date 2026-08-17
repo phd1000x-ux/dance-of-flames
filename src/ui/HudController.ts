@@ -73,6 +73,11 @@ export class HudController {
   private hintTimer: ReturnType<typeof setTimeout> | null = null;
   private fallenOverlay!: HTMLElement;
   private fallenTimer: ReturnType<typeof setTimeout> | null = null;
+  private bossBar!: HTMLElement;
+  private bossName!: HTMLElement;
+  private bossFill!: HTMLElement;
+  private subtitleBar!: HTMLElement;
+  private subtitleTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private parent: HTMLElement,
@@ -214,6 +219,19 @@ export class HudController {
     this.fallenOverlay.style.display = "none";
     this.parent.appendChild(this.fallenOverlay);
 
+    // finale boss bar + cinematic subtitles
+    this.bossBar = this.el("div", "boss-bar", `
+      <div class="bb-name">—</div>
+      <div class="bb-track"><div class="bb-fill"></div></div>`);
+    this.bossBar.style.display = "none";
+    this.parent.appendChild(this.bossBar);
+    this.bossName = this.bossBar.querySelector(".bb-name") as HTMLElement;
+    this.bossFill = this.bossBar.querySelector(".bb-fill") as HTMLElement;
+
+    this.subtitleBar = this.el("div", "finale-subtitle", "");
+    this.subtitleBar.style.display = "none";
+    this.parent.appendChild(this.subtitleBar);
+
     this.root.appendChild(this.hudDragon);
     this.root.appendChild(this.hudGround);
 
@@ -243,6 +261,22 @@ export class HudController {
     });
     this.bus.on("dragon-fallen", () => this.showFallenTransition());
     this.bus.on("ground-begun", () => this.hideFallenTransition());
+    this.bus.on("finale-boss", (e) => {
+      this.bossBar.style.display = e.show ? "block" : "none";
+      if (e.show) {
+        this.bossName.textContent = e.name ?? "—";
+        this.bossFill.style.width = `${Math.max(0, Math.min(1, e.hpFrac ?? 1)) * 100}%`;
+      }
+    });
+    this.bus.on("finale-subtitle", (e) => {
+      this.subtitleBar.textContent = e.text;
+      this.subtitleBar.style.display = "block";
+      if (this.subtitleTimer) clearTimeout(this.subtitleTimer);
+      this.subtitleTimer = setTimeout(() => {
+        this.subtitleBar.style.display = "none";
+        this.subtitleTimer = null;
+      }, e.ms);
+    });
   }
 
   /** Bug B: DRAGON FALLEN cinematic transition (~2.6s) into ground combat */

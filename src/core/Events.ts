@@ -27,4 +27,7 @@ export interface GameEvents {
   "target-lock-changed": { locked: boolean; kind: string | null };
   "dragon-fallen": Record<string, never>;
   "ground-begun": Record<string, never>;
+  "finale-boss": { show: boolean; name?: string; hpFrac?: number };
+  "finale-subtitle": { text: string; ms: number };
+  "finale-music": { state: "chase" | "boss" | "resolve" };
 }

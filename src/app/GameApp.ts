@@ -167,6 +167,15 @@ export class GameApp {
     this.bus.on("ground-begun", () => {
       this.music.setState("ground");
     });
+    this.bus.on("finale-music", (e) => {
+      if (e.state === "resolve") {
+        this.finaleMusicOverride = false;
+        this.updateMusicAndAmbient();
+      } else {
+        this.finaleMusicOverride = true;
+        this.music.setState(e.state);
+      }
+    });
   }
 
   // ---------------- mission lifecycle ----------------
@@ -421,6 +430,8 @@ export class GameApp {
   }
 
   private musicAmbientTimer = 0;
+  // finale-music ("chase"/"boss") holds until "resolve" — adaptive selection must not clobber it
+  private finaleMusicOverride = false;
 
   /** adaptive score state + ambient audio zone from the live mission */
   private updateMusicAndAmbient(): void {
@@ -442,7 +453,7 @@ export class GameApp {
     } else {
       target = "explore";
     }
-    this.music.setState(target);
+    if (!this.finaleMusicOverride) this.music.setState(target);
     this.audio.setBattleIntensity(m.musicIntensity);
     // governor tier ≥ 2: cull far decorative props to protect framerate
     m.world.props.setCullingRadius(this.governor.tier >= 2 ? 380 : 6000);
@@ -542,6 +553,8 @@ export class GameApp {
         this.state.transition(GameState.DRAGON_DEATH);
       } else if (this.mission.phase === "ground" && this.state.is(GameState.DRAGON_DEATH, GameState.DRAGON_GAMEPLAY)) {
         this.state.transition(GameState.GROUND_GAMEPLAY);
+      } else if (this.mission.phase === "dragon" && this.state.is(GameState.GROUND_GAMEPLAY)) {
+        this.state.transition(GameState.DRAGON_GAMEPLAY); // finale remount
       }
       // HUD at ~30Hz
       this.lastHudUpdate += frameMs;
