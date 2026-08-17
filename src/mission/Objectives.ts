@@ -33,6 +33,17 @@ export class ObjectiveTracker {
   private items: ObjectiveState[];
   private listeners: CompleteCallback[] = [];
   private surviveTimer = 0;
+  /** every destroy/kill ever notified, so objectives activated late catch up
+   *  (the world does not wait for the chain head — out-of-order play must not soft-lock) */
+  private destroyedByTag = new Map<string, number>();
+  private killsByType = new Map<string, number>();
+  /** matched events already reflected in the current objective's progress —
+   *  fresh activations absorb nothing (retroactive jump); restored progress
+   *  absorbs the full history so replayed events are not double-counted */
+  private absorbedKillKey: string | null = null;
+  private absorbedKill = 0;
+  private absorbedDestroyKey: string | null = null;
+  private absorbedDestroy = 0;
 
   constructor(defs: ObjectiveDef[]) {
     this.items = defs.map((d) => ({ ...d, progress: 0, completed: false }));
@@ -54,21 +65,16 @@ export class ObjectiveTracker {
     return this.items.every((o) => o.completed);
   }
 
-  /** Advance objective counters; only the current (first incomplete) objective accepts progress. */
+  /** Advance objective counters; progress derives from the full event history,
+   *  so actions taken before an objective becomes current still count. */
   notifyKill(enemyType: string): void {
-    const cur = this.current();
-    if (!cur || cur.type !== "kill") return;
-    if (!this.matchesTarget(cur, enemyType)) return;
-    cur.progress++;
-    this.checkDone(cur);
+    this.killsByType.set(enemyType, (this.killsByType.get(enemyType) ?? 0) + 1);
+    this.applyKillProgress();
   }
 
   notifyBuildingDestroyed(tag: string): void {
-    const cur = this.current();
-    if (!cur || cur.type !== "destroy") return;
-    if (cur.targetTag !== tag && cur.targetTag !== "any") return;
-    cur.progress++;
-    this.checkDone(cur);
+    this.destroyedByTag.set(tag, (this.destroyedByTag.get(tag) ?? 0) + 1);
+    this.applyDestroyProgress();
   }
 
   /** Complete event objectives whose event id matches — anywhere in the chain,
@@ -82,7 +88,8 @@ export class ObjectiveTracker {
     }
   }
 
-  /** Time-based progress for survive objectives. */
+  /** Time-based progress for survive objectives + retroactive catch-up for the
+   *  current kill/destroy objective (covers objectives activated after the fact). */
   update(dt: number): void {
     const cur = this.current();
     if (cur && cur.type === "survive" && !cur.completed) {
@@ -90,6 +97,9 @@ export class ObjectiveTracker {
       cur.progress = Math.min(cur.seconds ?? 0, this.surviveTimer);
       this.checkDone(cur);
     }
+    const now = this.current();
+    if (now && now.type === "kill") this.applyKillProgress();
+    if (now && now.type === "destroy") this.applyDestroyProgress();
   }
 
   /** Replace incomplete objectives with their ground-play alternatives. */
@@ -121,6 +131,75 @@ export class ObjectiveTracker {
     }
     const cur = this.current();
     this.surviveTimer = cur && cur.type === "survive" && !cur.completed ? cur.progress : 0;
+    // absorb the FULL history into the restored current objective — its progress
+    // already embeds those events; only events after this restore may add to it
+    if (cur && cur.type === "kill") {
+      this.absorbedKillKey = cur.id;
+      this.absorbedKill = this.matchedKillTotal(cur);
+    } else {
+      this.absorbedKillKey = null;
+      this.absorbedKill = 0;
+    }
+    if (cur && cur.type === "destroy") {
+      this.absorbedDestroyKey = cur.id;
+      this.absorbedDestroy = this.matchedDestroyTotal(cur);
+    } else {
+      this.absorbedDestroyKey = null;
+      this.absorbedDestroy = 0;
+    }
+  }
+
+  private matchedKillTotal(cur: ObjectiveState): number {
+    let total = 0;
+    for (const [type, n] of this.killsByType) {
+      if (this.matchesTarget(cur, type)) total += n;
+    }
+    return total;
+  }
+
+  private matchedDestroyTotal(cur: ObjectiveState): number {
+    if (!cur.targetTag || cur.targetTag === "any") {
+      // synthetic bookkeeping keys are not buildings — each real tag counts once
+      let total = 0;
+      for (const [tag, n] of this.destroyedByTag) {
+        if (tag === "any" || tag === "relic-building") continue;
+        total += n;
+      }
+      return total;
+    }
+    return this.destroyedByTag.get(cur.targetTag) ?? 0;
+  }
+
+  private applyKillProgress(): void {
+    const cur = this.current();
+    if (!cur || cur.type !== "kill" || cur.completed) return;
+    const total = this.matchedKillTotal(cur);
+    if (this.absorbedKillKey !== cur.id) {
+      this.absorbedKillKey = cur.id;
+      this.absorbedKill = cur.progress > 0 ? total : 0;
+    }
+    const next = Math.min(cur.count ?? 1, cur.progress + Math.max(0, total - this.absorbedKill));
+    if (next > cur.progress) {
+      cur.progress = next;
+      this.absorbedKill = total;
+      this.checkDone(cur);
+    }
+  }
+
+  private applyDestroyProgress(): void {
+    const cur = this.current();
+    if (!cur || cur.type !== "destroy" || cur.completed) return;
+    const total = this.matchedDestroyTotal(cur);
+    if (this.absorbedDestroyKey !== cur.id) {
+      this.absorbedDestroyKey = cur.id;
+      this.absorbedDestroy = cur.progress > 0 ? total : 0;
+    }
+    const next = Math.min(cur.count ?? 1, cur.progress + Math.max(0, total - this.absorbedDestroy));
+    if (next > cur.progress) {
+      cur.progress = next;
+      this.absorbedDestroy = total;
+      this.checkDone(cur);
+    }
   }
 
   private matchesTarget(obj: ObjectiveState, enemyType: string): boolean {

@@ -195,6 +195,31 @@ test("siege: no regression — §90 phased castle completion", async ({ page }) 
   await expect(page.locator("#results-title")).toHaveText("VICTORY");
 });
 
+test("siege: out-of-order gatehouse destruction counts retroactively (soft-lock regression)", async ({ page }) => {
+  await bootBlackstone(page);
+  // destroy the gatehouse BEFORE its objective is current (found in live MCP testing:
+  // sequential head-only counting discarded it and bs-gate stalled at 0/1 forever)
+  await page.evaluate(() => {
+    const g = (window as any).__GAME;
+    g.api.collapseBuildingWithTag("gatehouse");
+    g.api.killBallistae(6);
+    g.api.collapseBuildingsWithTag("wallTower", 4);
+    g.api.killByType("soldier", 12);
+  });
+  // the chain must still walk past the already-destroyed gate into the castellan beat
+  await page.waitForFunction(() => {
+    const f = (window as any).__GAME.api.getFinale();
+    return f === null || f === undefined ? false : f.phase === "AWAIT_LANDING";
+  }, null, { timeout: 30000 });
+  const obj = await page.evaluate(() => (window as any).__GAME.api.getObjective());
+  expect(obj.description).toContain("Castellan");
+  const completed = await page.evaluate(() => {
+    const m = (window as any).__GAME.mission;
+    return m.tracker.objectives().filter((o: any) => o.completed).map((o: any) => o.id);
+  });
+  expect(completed).toContain("bs-gate");
+});
+
 test("siege: finale music override clears on next mission (§10 regression)", async ({ page }) => {
   await bootBlackstone(page);
   // engage the finale: clear the siege chain in order (kills only count toward

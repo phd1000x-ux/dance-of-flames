@@ -209,3 +209,84 @@ describe("restoreState (checkpoint retry)", () => {
     expect(t.objectives().every((o) => o.progress === 0)).toBe(true);
   });
 });
+
+describe("retroactive progress (out-of-order actions)", () => {
+  const obj = (id: string, type: ObjectiveDef["type"], opts: Partial<ObjectiveDef> = {}): ObjectiveDef =>
+    ({ id, type, description: id, ...opts });
+
+  test("building destroyed before its objective becomes current counts retroactively", () => {
+    const t = new ObjectiveTracker([
+      obj("first", "kill", { targetType: "swordsman", count: 1 }),
+      obj("gate", "destroy", { targetTag: "gatehouse", count: 1 }),
+    ]);
+    t.notifyBuildingDestroyed("gatehouse");
+    expect(t.current()?.id).toBe("first");
+    t.notifyKill("swordsman");
+    t.update(0);
+    expect(t.objectives()[1].completed).toBe(true);
+    expect(t.allCompleted()).toBe(true);
+  });
+
+  test("partial retroactive destroy counts (2 of 4 pre-destroyed)", () => {
+    const t = new ObjectiveTracker([
+      obj("first", "kill", { targetType: "archer", count: 2 }),
+      obj("towers", "destroy", { targetTag: "wallTower", count: 4 }),
+    ]);
+    t.notifyBuildingDestroyed("wallTower");
+    t.notifyBuildingDestroyed("watchtower");
+    t.notifyBuildingDestroyed("wallTower");
+    t.notifyKill("archer");
+    t.notifyKill("archer");
+    t.update(0);
+    expect(t.objectives()[1].progress).toBe(2);
+    t.notifyBuildingDestroyed("wallTower");
+    t.notifyBuildingDestroyed("wallTower");
+    expect(t.objectives()[1].completed).toBe(true);
+  });
+
+  test("any-tag counts each destroyed building once (no synthetic-key double count)", () => {
+    const t = new ObjectiveTracker([obj("any", "destroy", { targetTag: "any", count: 2 })]);
+    t.notifyBuildingDestroyed("wallTower");
+    t.notifyBuildingDestroyed("relic-building");
+    t.notifyBuildingDestroyed("any");
+    t.update(0);
+    expect(t.objectives()[0].progress).toBe(1);
+    t.notifyBuildingDestroyed("gatehouse");
+    t.update(0);
+    expect(t.objectives()[0].completed).toBe(true);
+  });
+
+  test("kills before objective current count retroactively", () => {
+    const t = new ObjectiveTracker([
+      obj("first", "destroy", { targetTag: "watchtower", count: 1 }),
+      obj("archers", "kill", { targetType: "archer", count: 2 }),
+    ]);
+    t.notifyKill("archer");
+    t.notifyKill("archer");
+    t.notifyKill("swordsman");
+    t.notifyBuildingDestroyed("watchtower");
+    t.update(0);
+    expect(t.objectives()[1].completed).toBe(true);
+  });
+
+  test("progress clamps at need", () => {
+    const t = new ObjectiveTracker([obj("t", "destroy", { targetTag: "wallTower", count: 2 })]);
+    t.notifyBuildingDestroyed("wallTower");
+    t.notifyBuildingDestroyed("wallTower");
+    t.notifyBuildingDestroyed("wallTower");
+    expect(t.objectives()[0].progress).toBe(2);
+    expect(t.objectives()[0].completed).toBe(true);
+  });
+
+  test("soldier-role kills accumulate per concrete type across the role", () => {
+    const t = new ObjectiveTracker([
+      obj("first", "survive", { seconds: 1 }),
+      obj("inf", "kill", { targetType: "soldier", count: 3 }),
+    ]);
+    t.notifyKill("swordsman");
+    t.notifyKill("archer");
+    t.notifyKill("spearman");
+    t.update(1);
+    expect(t.objectives()[1].completed).toBe(true);
+  });
+});
