@@ -309,11 +309,11 @@ export class WorldBuilder {
         squads.push({ type: "shieldman", count: 8, center: new Vector3(-40, 0, 40), radius: 30 });
         squads.push({ type: "spearman", count: 8, center: new Vector3(40, 0, 40), radius: 30 });
         squads.push({ type: "elite", count: 5, center: new Vector3(0, 0, 0), radius: 30 });
-        // ballistae: 4 on wall towers (artillery crowns at +42, N wall-walk +21, NW corner tower crown +38) + 2 courtyard
+        // ballistae: 4 on wall towers (artillery crowns at +44 deck top, N wall-walk +21, NW corner tower crown +38) + 2 courtyard
         ballistae.push(
           { pos: new Vector3(0, terrain.heightAt(0, -110) + 21, -104), yaw: Math.PI },
-          { pos: new Vector3(-110, terrain.heightAt(-110, 0) + 42, 0), yaw: -Math.PI / 2 },
-          { pos: new Vector3(110, terrain.heightAt(110, 0) + 42, 0), yaw: Math.PI / 2 },
+          { pos: new Vector3(-110, terrain.heightAt(-110, 0) + 44, 0), yaw: -Math.PI / 2 },
+          { pos: new Vector3(110, terrain.heightAt(110, 0) + 44, 0), yaw: Math.PI / 2 },
           { pos: new Vector3(-110, terrain.heightAt(-110, -110) + 38, -110), yaw: (Math.PI * 3) / 4 },
           { pos: new Vector3(60, terrain.heightAt(60, 60), 60), yaw: Math.PI },
           { pos: new Vector3(-60, terrain.heightAt(-60, 60), 60), yaw: Math.PI }

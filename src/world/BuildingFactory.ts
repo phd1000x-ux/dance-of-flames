@@ -156,6 +156,9 @@ export class BuildingFactory {
           parts.push(plat);
           troof.isVisible = false;
         }
+        if (variant === "military") {
+          troof.isVisible = false;
+        }
         if (variant === "gate") {
           for (const side of [-1, 1]) {
             const banner = MeshBuilder.CreateBox("gt-ban", { width: 0.2, height: 3.2, depth: 1.4 }, this.scene);
