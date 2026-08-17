@@ -283,6 +283,13 @@ export class GameApp {
     }
   }
 
+  /** test/E2E hook — reload the mission from the captured finale checkpoint */
+  restoreCheckpoint(): boolean {
+    if (!this.checkpoint) return false;
+    void this.loadMission(this.checkpoint);
+    return true;
+  }
+
   private endMission(victory: boolean, stats: MissionStats): void {
     this.handleMissionEnd(victory, stats);
   }

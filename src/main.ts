@@ -153,7 +153,22 @@ async function boot(): Promise<void> {
             vharax: f.warDragon
               ? { hp: f.warDragon.hp, maxHp: f.warDragon.maxHp, state: f.warDragon.state, pos: { x: f.warDragon.pos.x, y: f.warDragon.pos.y, z: f.warDragon.pos.z } }
               : null,
+            crashDetached: f.crashDetached,
+            warHorns: f.warHornCount,
+            crownY: app.mission?.worldLayout.spireCrownMesh?.position.y ?? null,
           };
+        },
+        assaultInfo() {
+          const m = app.mission;
+          const f = m?.finale;
+          if (!m || !f) return null;
+          return { ...f.assaultState, soldiers: m.enemies.aliveSoldierCount() };
+        },
+        checkpoint() {
+          return app.checkpoint;
+        },
+        restoreCheckpoint() {
+          return app.restoreCheckpoint();
         },
         forceLand() {
           app.mission?.finale?.forceLand();

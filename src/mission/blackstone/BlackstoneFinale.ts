@@ -40,6 +40,9 @@ export class BlackstoneFinale {
   private assaultOn = false;
   private assaultBand: AssaultBand | null = null;
   private assaultPollT = 0;
+  // e2e spies: war-horn emission count + spire-crown detach latch
+  private warHorns = 0;
+  private crashDetached_ = false;
 
   constructor(private mission: MissionScene, private deps: MissionSceneDeps) {}
 
@@ -49,6 +52,21 @@ export class BlackstoneFinale {
 
   get warDragon(): WarDragon | null {
     return this.vharax;
+  }
+
+  /** e2e spy — war horn stabs emitted (long assault start + short band escalations) */
+  get warHornCount(): number {
+    return this.warHorns;
+  }
+
+  /** e2e spy — the spire crown detached during the crash sequence (latched) */
+  get crashDetached(): boolean {
+    return this.crashDetached_;
+  }
+
+  /** e2e spy — final assault driver state */
+  get assaultState(): { active: boolean; band: AssaultBand | null } {
+    return { active: this.assaultOn, band: this.assaultBand };
   }
 
   /** checkpoint capture source — castellan duel state (null before the claim) */
@@ -253,6 +271,8 @@ export class BlackstoneFinale {
           this.resolveVharaxEvents();
           this.setStage("RESOLVED");
           this.captureCheckpoint();
+        } else if (breaker.detached) {
+          this.crashDetached_ = true;
         }
         break;
       }
@@ -286,6 +306,7 @@ export class BlackstoneFinale {
         this.assaultBand = assaultBand(cur.progress, cur.seconds ?? 75);
         m.enemies.setAssault(true, assaultProfile(this.assaultBand));
         this.deps.bus.emit("sfx", { name: "warHorn", pan: this.mission.panFromWorld({ x: 0, z: 0 }) });
+        this.warHorns++;
       }
       return;
     }
@@ -301,6 +322,7 @@ export class BlackstoneFinale {
       this.assaultBand = assaultBand(cur.progress, cur.seconds ?? 75);
       m.enemies.setAssault(true, assaultProfile(this.assaultBand));
       this.deps.bus.emit("sfx", { name: "warHornShort", pan: this.mission.panFromWorld({ x: 0, z: 0 }) });
+      this.warHorns++;
     }
   }
 
@@ -406,6 +428,7 @@ export class BlackstoneFinale {
         break;
       case "FINAL_CRASH":
         this.breaker?.finish();
+        if (this.breaker?.detached) this.crashDetached_ = true;
         this.resolveVharaxEvents();
         break;
     }
