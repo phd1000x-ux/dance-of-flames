@@ -8,6 +8,9 @@ export type FinalePhase =
   | "REMOUNT"
   | "CHASE"
   | "DUEL_AIR"
+  | "RETURN"
+  | "FINAL_STAGGER"
+  | "FINAL_CRASH"
   | "RESOLVED";
 
 /** legal successors — RESOLVED is the universal fallback (dragon death, short-circuit) */
@@ -20,7 +23,10 @@ export const FINALE_TRANSITIONS: Record<FinalePhase, FinalePhase[]> = {
   MOUNT: ["REMOUNT", "RESOLVED"],
   REMOUNT: ["CHASE", "RESOLVED"],
   CHASE: ["DUEL_AIR", "RESOLVED"],
-  DUEL_AIR: ["RESOLVED"],
+  DUEL_AIR: ["RETURN", "RESOLVED"],
+  RETURN: ["FINAL_STAGGER", "RESOLVED"],
+  FINAL_STAGGER: ["FINAL_CRASH", "RESOLVED"],
+  FINAL_CRASH: ["RESOLVED"],
   RESOLVED: [],
 };
 

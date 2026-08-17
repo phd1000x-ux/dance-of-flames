@@ -25,6 +25,10 @@ export interface CastleBuildResult {
   center: Vector3;
   gatePosition: Vector3;
   radius: number;
+  /** breakable spire crown (finale crash choreography) — animated later, so NOT frozen */
+  spireCrownMesh: Mesh;
+  /** world position of the crown tip */
+  spireCrownTop: Vector3;
 }
 
 /**
@@ -147,9 +151,23 @@ export class CastleBuilder {
       this.staticTower(cx + kx, cz + kz, 4.4, 12, base + 42, this.darkStoneMat);
     }
 
-    // BLACKSTONE SPIRE — north landmark behind the keep (finale framing)
-    this.staticTower(cx, cz - 85, 7, 58, base + 2, this.darkStoneMat);
+    // BLACKSTONE SPIRE — north landmark behind the keep (finale framing).
+    // Split: static base tower + separate breakable crown the finale animates
+    // (must NOT go through staticTower — that merges + freezes its meshes).
+    this.staticTower(cx, cz - 85, 7, 40, base + 2, this.darkStoneMat);
     aabbs.push({ x: cx, z: cz - 85, hx: 7, hz: 7 });
+    const SPIRE_BASE_H = 40;
+    const SPIRE_CROWN_H = 18;
+    const spireCrownMesh = MeshBuilder.CreateCylinder(
+      "spireCrown",
+      { diameterTop: 0, diameterBottom: 13, height: SPIRE_CROWN_H, tessellation: 8 },
+      this.scene
+    );
+    spireCrownMesh.material = this.darkStoneMat;
+    spireCrownMesh.position.set(cx, base + 2 + SPIRE_BASE_H + SPIRE_CROWN_H / 2, cz - 85);
+    spireCrownMesh.isPickable = false;
+    spireCrownMesh.receiveShadows = true;
+    const spireCrownTop = new Vector3(cx, base + 2 + SPIRE_BASE_H + SPIRE_CROWN_H, cz - 85);
 
     // barracks + chapel silhouettes in the outer ward (destructible)
     buildings.push({ kind: "barracks", tag: "barracks", pos: new Vector3(cx - 70, g(cx - 70, cz - 60), cz - 60), rotY: 0.1 });
@@ -179,6 +197,8 @@ export class CastleBuilder {
       center: new Vector3(cx, base, cz),
       gatePosition: new Vector3(cx, base, cz + HALF + 8),
       radius: 190,
+      spireCrownMesh,
+      spireCrownTop,
     };
   }
 

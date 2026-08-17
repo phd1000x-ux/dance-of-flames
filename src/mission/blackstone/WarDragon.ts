@@ -29,13 +29,15 @@ export type WarDragonState =
   | "CLIMB"
   | "DIVE_TEL"
   | "DIVING"
+  | "STAGGERED"
   | "FLEEING"
   | "GONE";
 
 export class WarDragon {
   readonly rig: DragonRig;
   readonly maxHp = VHARAX.maxHealth;
-  readonly floor = VHARAX.maxHealth * 0.4;
+  /** staged-finale HP floor — the FINAL_STAGGER/crash threshold (owned by BlackstoneFinale) */
+  readonly floor = VHARAX.maxHealth * 0.1;
   hp = VHARAX.maxHealth;
   pos = new Vector3(0, 60, -95);
   yaw = 0;
@@ -45,6 +47,8 @@ export class WarDragon {
   onSweepHitPlayer: ((dps: number, dt: number) => void) | null = null;
   onResolved: (() => void) | null = null;
   onChargeNearMiss: ((dist: number) => void) | null = null;
+  /** fired ONCE when hp first drops to the RETURN threshold (0.25×max) — finale owns the phase switch */
+  onHpFloor: (() => void) | null = null;
   pendingPattern: AirPattern | null = null;
   private state_: WarDragonState = "CHASE";
   private sm = new FlameSweepSM({ telegraph: 1.1, attack: 1.4, recovery: 2.2 });
@@ -58,6 +62,11 @@ export class WarDragon {
   private minApproach = Infinity;
   private patternTarget = new Vector3();
   private lastPlayerPos = new Vector3();
+  private hpFloorFired = false;
+  private returnMode = false;
+  private restrictPatterns = false;
+  private staggerCenter = new Vector3();
+  private staggerAngle = 0;
   private fireLight: PointLight;
   private readonly tmp = new Vector3();
 
@@ -84,11 +93,37 @@ export class WarDragon {
     this.rig.root.setEnabled(true);
     this.rig.root.position.copyFrom(this.pos);
     this.state_ = "CHASE";
+    this.returnMode = false;
+    this.restrictPatterns = false;
   }
 
   startDuel(): void {
     this.state_ = "ORBIT";
     this.sweepCooldown = 2.5;
+    this.returnMode = false;
+    this.restrictPatterns = false;
+  }
+
+  /** staged finale: retreat to a castle-top ring at reduced speed; dive/sweep patterns only */
+  startReturn(): void {
+    this.state_ = "ORBIT";
+    this.sweepCooldown = 2.5;
+    this.returnMode = true;
+    this.restrictPatterns = true;
+    this.pendingPattern = null;
+    this.patternRecoveryT = 0;
+  }
+
+  /** staged finale: near-hover wobble around the spire top — the finishing-blow window */
+  startStagger(spireTop: Vector3): void {
+    this.state_ = "STAGGERED";
+    this.returnMode = false;
+    this.pendingPattern = null;
+    this.patternRecoveryT = 0;
+    this.patternT = 0;
+    this.staggerCenter.copyFrom(spireTop);
+    this.staggerCenter.y += 10;
+    this.staggerAngle = Math.atan2(this.pos.x - spireTop.x, this.pos.z - spireTop.z);
   }
 
   flee(): void {
@@ -97,6 +132,7 @@ export class WarDragon {
     this.fleeT = 0;
     this.pendingPattern = null;
     this.patternRecoveryT = 0;
+    this.returnMode = false;
   }
 
   private enterPatternRecovery(seconds: number): void {
@@ -111,7 +147,8 @@ export class WarDragon {
     this.pendingPattern = null;
   }
 
-  private resolve(): void {
+  /** short-circuit resolve — the staged finale path resolves via BlackstoneFinale instead */
+  resolve(): void {
     if (this.state_ === "GONE") return;
     this.flee();
     this.onResolved?.();
@@ -119,7 +156,12 @@ export class WarDragon {
 
   update(dt: number, playerPos: Vector3, playerAlive: boolean, terrainHeight: number): void {
     if (this.state_ === "GONE") return;
-    if (this.hp <= this.floor && this.state_ !== "FLEEING") this.resolve();
+    // staged-finale threshold: notify ONCE at the RETURN line (0.25×max) — the
+    // finale decides what happens; WarDragon no longer auto-resolves at a floor
+    if (!this.hpFloorFired && this.hp <= this.maxHp * 0.25) {
+      this.hpFloorFired = true;
+      this.onHpFloor?.();
+    }
 
     let target: Vector3;
     let speed = 42;
@@ -132,12 +174,20 @@ export class WarDragon {
       speed *= 1 + rubberBandFactor(dist);
     } else if (this.state_ === "ORBIT") {
       this.orbitAngle += dt * 0.35;
-      target = playerPos.add(new Vector3(Math.cos(this.orbitAngle) * 70, 18, Math.sin(this.orbitAngle) * 70));
-      speed = 34;
+      if (this.returnMode) {
+        // staged finale: castle-top ring over the keep/spire band at reduced speed
+        target = new Vector3(Math.cos(this.orbitAngle) * 95, 78, -60 + Math.sin(this.orbitAngle) * 95);
+        speed = 30;
+      } else {
+        target = playerPos.add(new Vector3(Math.cos(this.orbitAngle) * 70, 18, Math.sin(this.orbitAngle) * 70));
+        speed = 34;
+      }
       this.sweepCooldown -= dt;
       const facing = Vector3.Dot(this.forward(), Vector3.Normalize(playerPos.subtract(this.pos)));
       if (this.sweepCooldown <= 0 && facing > 0.86 && Vector3.Distance(this.pos, playerPos) < 95) {
         this.pattern = selectPattern(this.hp / this.maxHp, this.pattern, RNG);
+        // RETURN constrains patterns to dive/sweep — no charges back out of the citadel
+        if (this.restrictPatterns && this.pattern === "charge") this.pattern = "dive";
         if (this.pattern === "sweep") {
           this.sm.start();
           this.state_ = "TELEGRAPH";
@@ -238,6 +288,16 @@ export class WarDragon {
           this.onSweepHitPlayer?.(VHARAX.fireDamage, dt);
         }
       }
+    } else if (this.state_ === "STAGGERED") {
+      // near-hover death wobble: slow circle (radius 25, ~12 m/s) around the spire top
+      this.patternT += dt;
+      this.staggerAngle += dt * (12 / 25);
+      target = new Vector3(
+        this.staggerCenter.x + Math.sin(this.staggerAngle) * 25,
+        this.staggerCenter.y + Math.sin(this.patternT * 1.7) * 4,
+        this.staggerCenter.z + Math.cos(this.staggerAngle) * 25
+      );
+      speed = 12;
     } else {
       // FLEEING — straight out, despawn past fog
       this.fleeT += dt;
@@ -289,11 +349,13 @@ export class WarDragon {
 
     this.lastPlayerPos.copyFrom(playerPos);
     this.rig.root.position.copyFrom(this.pos);
-    this.rig.root.rotationQuaternion = Quaternion.FromEulerAngles(pitch, this.yaw, this.roll);
+    // STAGGERED adds a wing-wobble roll bias on top of the steering roll
+    const staggerRoll = this.state_ === "STAGGERED" ? Math.sin(this.patternT * 3.1) * 0.28 : 0;
+    this.rig.root.rotationQuaternion = Quaternion.FromEulerAngles(pitch, this.yaw, this.roll + staggerRoll);
     const jawOpen =
       this.state_ === "TELEGRAPH" || this.state_ === "ATTACK" || this.state_ === "DIVE_TEL" ? 1 : this.state_ === "CHARGE_TEL" ? 0.2 : 0;
     const wingSweep = this.state_ === "CHASE" ? 0.25 : this.state_ === "DIVING" ? 0.7 : 0.1;
-    this.rig.animate({ flapRate: 5.2, flapAmp: 0.8, sweep: wingSweep, jawOpen, dt });
+    this.rig.animate({ flapRate: this.state_ === "STAGGERED" ? 2.4 : 5.2, flapAmp: 0.8, sweep: wingSweep, jawOpen, dt });
 
     this.fireLight.position.copyFrom(this.rig.headTip.getAbsolutePosition());
     this.fireLight.intensity = this.state_ === "ATTACK" ? 2.2 : this.state_ === "TELEGRAPH" ? 0.8 : 0;
@@ -303,22 +365,27 @@ export class WarDragon {
     return new Vector3(Math.sin(this.yaw) * Math.cos(0), 0, Math.cos(this.yaw));
   }
 
-  applyFire(origin: Vector3, dir: Vector3, range: number, halfAngle: number, dps: number, dt: number): void {
-    // damage-out is a DUEL_AIR mechanic — player fire only lands in duel states
-    if (this.state_ !== "ORBIT" && this.state_ !== "TELEGRAPH" && this.state_ !== "ATTACK" && this.state_ !== "RECOVERY") return;
+  /** returns whether the cone connected — hp may be floor-clamped, so a hit is not an hp delta */
+  applyFire(origin: Vector3, dir: Vector3, range: number, halfAngle: number, dps: number, dt: number): boolean {
+    // damage-out is a duel/staged mechanic — player fire only lands in those states
+    if (
+      this.state_ !== "ORBIT" && this.state_ !== "TELEGRAPH" && this.state_ !== "ATTACK" &&
+      this.state_ !== "RECOVERY" && this.state_ !== "STAGGERED"
+    ) return false;
     const head = this.pos.add(this.forward().scale(4 * VHARAX.scale));
     const tail = this.pos.subtract(this.forward().scale(4 * VHARAX.scale));
     const closest = closestPointOnSegment(origin, head, tail);
     const d = Vector3.Distance(origin, closest);
-    if (d > range) return;
+    if (d > range) return false;
     const toDragon = closest.subtract(origin);
     toDragon.y = 0;
     const flat = Vector3.Normalize(toDragon);
     const flatDir = new Vector3(dir.x, 0, dir.z).normalize();
-    if (Vector3.Dot(flat, flatDir) < Math.cos(halfAngle + 0.15)) return;
+    if (Vector3.Dot(flat, flatDir) < Math.cos(halfAngle + 0.15)) return false;
     const falloff = 1 - 0.35 * (d / range);
     this.hp = Math.max(this.floor, this.hp - dps * dt * falloff);
     if (Math.random() < dt * 6) this.bus.emit("sfx", { name: "bossHit" });
+    return true;
   }
 
   dispose(): void {

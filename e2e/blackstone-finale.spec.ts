@@ -77,11 +77,20 @@ test("finale: courtyard → land → ground duel → transition → remount → 
   // the CHASE un-strand instead of dead-ending the loop)
   await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "DUEL_AIR", null, { timeout: 120000 });
 
-  // aerial duel: war dragon is revealed; damage floors at 40% → resolve/flee (not death)
+  // aerial duel: war dragon is revealed; the staged finale now walks
+  // RETURN → FINAL_STAGGER → FINAL_CRASH → RESOLVED. damageWarDragon floors
+  // at the crash threshold (10%) → RETURN fires immediately; the wall-clock
+  // stage budgets carry the chain through the authored crash into RESOLVED
+  // (RETURN 12×1.8 + STAGGER 30×1.8 + CRASH ≈ 90 s worst case → 120 s wait)
   const v = await page.evaluate(() => (window as any).__GAME.api.getFinale()?.vharax);
   expect(v).not.toBeNull();
   await page.evaluate(() => (window as any).__GAME.api.damageWarDragon(99999));
-  await page.waitForFunction(() => ["FLEEING", "GONE"].includes((window as any).__GAME.api.getFinale()?.vharax?.state ?? ""), null, { timeout: 20000 });
+  await page.waitForFunction(
+    (list) => list.includes((window as any).__GAME.api.getFinale()?.phase),
+    ["RETURN", "FINAL_STAGGER", "FINAL_CRASH", "RESOLVED"],
+    { timeout: 90000 }
+  );
+  await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "RESOLVED", null, { timeout: 120000 });
 
   // final assault (bs-final, survive 75 sim seconds) → VICTORY
   await page.waitForFunction(() => (window as any).__GAME.state === "VICTORY", null, { timeout: 180000 });

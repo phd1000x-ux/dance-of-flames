@@ -55,6 +55,9 @@ export interface WorldLayout {
   villageZones: AmbientZonePlacement[];
   /** static castle wall collision for ground mode */
   castleAabbs: CastleAabb[];
+  /** breakable spire crown + its world tip (blackstone finale crash choreography) */
+  spireCrownMesh?: Mesh;
+  spireCrownTop?: Vector3;
 }
 
 export interface WorldContext {
@@ -202,6 +205,8 @@ export class WorldBuilder {
     let castleZone: { center: Vector3; radiusSq: number } | null = null;
     const villageZones: AmbientZonePlacement[] = [];
     let castleAabbs: CastleAabb[] = [];
+    let spireCrownMesh: Mesh | undefined;
+    let spireCrownTop: Vector3 | undefined;
     let playerStart = new Vector3(-380, 150, -380);
     let playerStartYaw = Math.PI / 4;
 
@@ -302,6 +307,8 @@ export class WorldBuilder {
         buildings.push(...res.buildingPlacements);
         castleAabbs = res.wallAabbs;
         castleZone = { center: res.center, radiusSq: res.radius * res.radius };
+        spireCrownMesh = res.spireCrownMesh;
+        spireCrownTop = res.spireCrownTop;
         // defenders: wall archers, courtyard infantry + elites, castellan at the keep gate
         squads.push({ type: "archer", count: 12, center: new Vector3(0, 0, 80), radius: 95 });
         squads.push({ type: "archer", count: 8, center: new Vector3(0, 0, -80), radius: 95 });
@@ -340,6 +347,8 @@ export class WorldBuilder {
       castleZone,
       villageZones,
       castleAabbs,
+      spireCrownMesh,
+      spireCrownTop,
     };
   }
 

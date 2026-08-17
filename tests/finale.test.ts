@@ -32,6 +32,30 @@ describe("finale phase machine", () => {
     expect(m.transition("RESOLVED")).toBe(false);
     expect(FINALE_TRANSITIONS.RESOLVED).toEqual([]);
   });
+
+  test("finale crash chain: DUEL_AIR → RETURN → FINAL_STAGGER → FINAL_CRASH → RESOLVED", () => {
+    const m = new PhaseMachine();
+    for (const p of [
+      "AWAIT_LANDING", "DUEL_GROUND", "TRANSITION", "REVEAL", "MOUNT",
+      "REMOUNT", "CHASE", "DUEL_AIR", "RETURN", "FINAL_STAGGER", "FINAL_CRASH", "RESOLVED",
+    ] as FinalePhase[]) {
+      expect(m.transition(p), `→ ${p}`).toBe(true);
+      expect(m.current).toBe(p);
+    }
+    expect(m.isTerminal()).toBe(true);
+  });
+
+  test("RESOLVED fallback legal from each new phase; MOUNT → RETURN illegal", () => {
+    for (const from of ["RETURN", "FINAL_STAGGER", "FINAL_CRASH"] as FinalePhase[]) {
+      expect(canTransition(from, "RESOLVED"), from).toBe(true);
+    }
+    const m = new PhaseMachine();
+    for (const p of ["AWAIT_LANDING", "DUEL_GROUND", "TRANSITION", "REVEAL", "MOUNT"] as FinalePhase[]) {
+      m.transition(p);
+    }
+    expect(m.transition("RETURN")).toBe(false);
+    expect(m.current).toBe("MOUNT");
+  });
 });
 
 describe("castellan duel core", () => {
