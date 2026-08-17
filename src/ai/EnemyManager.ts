@@ -419,15 +419,7 @@ export class EnemyManager {
     this.volleyTimer -= dt;
     if (this.volleyTimer <= 0) {
       this.volleyTimer = this.rng.range(9, 15);
-      const alive = this.ballistae.filter((b) => !b.dead);
-      const plan = planVolley(alive.length, this.rng);
-      if (plan.count >= 2) {
-        const picked = alive.slice(0, plan.count);
-        picked.forEach((b, i) => {
-          b.cooldown = 1.0 + (i * plan.window) / plan.count;
-          b.volleyAimJitter = this.rng.range(-3, 3);
-        });
-      }
+      this.runVolley();
     }
     for (const b of this.ballistae) {
       if (!b.dead) this.updateBallista(b, dt, ctx);
@@ -435,6 +427,24 @@ export class EnemyManager {
         b.railMat.emissiveColor = Color3.Lerp(b.railMat.emissiveColor, Color3.Black(), Math.min(1, dt * 8));
       }
     }
+  }
+
+  private runVolley(): boolean {
+    const alive = this.ballistae.filter((b) => !b.dead);
+    const plan = planVolley(alive.length, this.rng);
+    if (plan.count >= 2) {
+      const picked = alive.slice(0, plan.count);
+      picked.forEach((b, i) => {
+        b.cooldown = 1.0 + (i * plan.window) / plan.count;
+        b.volleyAimJitter = this.rng.range(-3, 3);
+      });
+      return true;
+    }
+    return false;
+  }
+
+  forceVolley(): boolean {
+    return this.runVolley();
   }
 
   private updateDead(s: Soldier, dt: number): void {

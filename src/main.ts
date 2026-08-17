@@ -161,6 +161,25 @@ async function boot(): Promise<void> {
         setFinalePhase(p: string) {
           return app.mission?.finale?.skipTo(p as any) ?? false;
         },
+        getBuildingStates() {
+          const m = app.mission;
+          if (!m) return [];
+          return m.buildings.buildings.map((b) => ({
+            tag: b.tag,
+            hp: Math.round(b.hp),
+            maxHp: b.maxHp,
+            state: b.visualState,
+            collapsed: b.collapsed,
+          }));
+        },
+        getAmbientPairs() {
+          const amb = app.mission?.ambient;
+          if (!amb) return null;
+          return { count: amb.pairCount(), tiers: amb.tierHistogram() };
+        },
+        triggerVolley() {
+          return app.mission?.enemies.forceVolley() ?? false;
+        },
       },
     };
   }
