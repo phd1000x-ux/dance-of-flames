@@ -163,4 +163,15 @@ describe("boss ai core", () => {
     expect(sm.state).toBe("IDLE"); // recovery window is the player's attack opening
     expect(sm.start()).toBe(true); // can re-arm
   });
+
+  test("flame sweep SM: reset() from mid-ATTACK → IDLE, start() re-arms", () => {
+    const sm = new FlameSweepSM({ telegraph: 1.1, attack: 1.4, recovery: 2.2 });
+    sm.start();
+    sm.update(1.3); // mid-ATTACK
+    expect(sm.state).toBe("ATTACK");
+    sm.reset(); // state exit that bypasses the cycle (RETURN/STAGGER/flee)
+    expect(sm.state).toBe("IDLE");
+    expect(sm.start()).toBe(true); // no stale mid-cycle remnant
+    expect(sm.state).toBe("TELEGRAPH");
+  });
 });

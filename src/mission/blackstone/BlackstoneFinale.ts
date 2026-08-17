@@ -5,6 +5,7 @@ import { PhaseMachine, type FinalePhase } from "./FinalePhases";
 import { CastellanBoss } from "./CastellanBoss";
 import { WarDragon } from "./WarDragon";
 import { SpireBreaker } from "./SpireBreaker";
+import { RETURN_HP } from "./FinalePatterns";
 
 const STAGE_BUDGET: Partial<Record<FinalePhase, number>> = {
   TRANSITION: 7,
@@ -17,7 +18,6 @@ const STAGE_BUDGET: Partial<Record<FinalePhase, number>> = {
 };
 
 /** staged-finale thresholds (fractions of vharax maxHp) */
-const RETURN_HP = 0.25;
 const STAGGER_HP = 0.1;
 /** horizontal distance (m) to the spire within which FINAL_STAGGER may begin */
 const SPIRE_ZONE = 80;
@@ -341,11 +341,6 @@ export class BlackstoneFinale {
       this.vharax.onSweepHitPlayer = (dps, dt) => {
         const died = this.mission.player.damageDragon(dps * dt);
         if (died) this.mission.beginDragonDeathPublic();
-      };
-      this.vharax.onResolved = () => {
-        this.mission.tracker.notifyEvent("vharax-resolved");
-        this.deps.bus.emit("finale-music", { state: "resolve" });
-        this.deps.bus.emit("finale-boss", { show: false });
       };
       this.vharax.onHpFloor = () => {
         // 0.25×max crossed while dueling → he breaks off toward the citadel

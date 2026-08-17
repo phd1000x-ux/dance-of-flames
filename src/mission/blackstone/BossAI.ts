@@ -38,6 +38,11 @@ export class FlameSweepSM {
     this._t = 0;
     return true;
   }
+  /** hard reset — state exits that bypass the cycle (RETURN/STAGGER/flee) must not leave a mid-sweep remnant */
+  reset(): void {
+    this._state = "IDLE";
+    this._t = 0;
+  }
   update(dt: number): void {
     if (this._state === "IDLE") return;
     this._t += dt;

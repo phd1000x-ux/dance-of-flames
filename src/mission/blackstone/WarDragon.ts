@@ -4,7 +4,7 @@ import type { EffectsLibrary } from "../../world/EffectsLibrary";
 import { DragonRig } from "../../world/DragonRig";
 import { VHARAX } from "../../data/wardragon";
 import { FlameSweepSM, advanceWaypoint, rubberBandFactor, type PathPoint } from "./BossAI";
-import { selectPattern, type AirPattern } from "./FinalePatterns";
+import { selectPattern, RETURN_HP, type AirPattern } from "./FinalePatterns";
 
 const CHASE_PATH: (PathPoint & { y: number })[] = [
   { x: 0, z: -60, y: 75 },    // keep
@@ -45,7 +45,6 @@ export class WarDragon {
   speed = 40;
   chasePathIndex = 0;
   onSweepHitPlayer: ((dps: number, dt: number) => void) | null = null;
-  onResolved: (() => void) | null = null;
   onChargeNearMiss: ((dist: number) => void) | null = null;
   /** fired ONCE when hp first drops to the RETURN threshold (0.25×max) — finale owns the phase switch */
   onHpFloor: (() => void) | null = null;
@@ -112,6 +111,7 @@ export class WarDragon {
     this.restrictPatterns = true;
     this.pendingPattern = null;
     this.patternRecoveryT = 0;
+    this.sm.reset();
   }
 
   /** staged finale: near-hover wobble around the spire top — the finishing-blow window */
@@ -124,6 +124,7 @@ export class WarDragon {
     this.staggerCenter.copyFrom(spireTop);
     this.staggerCenter.y += 10;
     this.staggerAngle = Math.atan2(this.pos.x - spireTop.x, this.pos.z - spireTop.z);
+    this.sm.reset();
   }
 
   flee(): void {
@@ -133,6 +134,7 @@ export class WarDragon {
     this.pendingPattern = null;
     this.patternRecoveryT = 0;
     this.returnMode = false;
+    this.sm.reset();
   }
 
   private enterPatternRecovery(seconds: number): void {
@@ -147,18 +149,11 @@ export class WarDragon {
     this.pendingPattern = null;
   }
 
-  /** short-circuit resolve — the staged finale path resolves via BlackstoneFinale instead */
-  resolve(): void {
-    if (this.state_ === "GONE") return;
-    this.flee();
-    this.onResolved?.();
-  }
-
   update(dt: number, playerPos: Vector3, playerAlive: boolean, terrainHeight: number): void {
     if (this.state_ === "GONE") return;
-    // staged-finale threshold: notify ONCE at the RETURN line (0.25×max) — the
+    // staged-finale threshold: notify ONCE at the RETURN line — the
     // finale decides what happens; WarDragon no longer auto-resolves at a floor
-    if (!this.hpFloorFired && this.hp <= this.maxHp * 0.25) {
+    if (!this.hpFloorFired && this.hp <= this.maxHp * RETURN_HP) {
       this.hpFloorFired = true;
       this.onHpFloor?.();
     }
@@ -189,9 +184,11 @@ export class WarDragon {
         // RETURN constrains patterns to dive/sweep — no charges back out of the citadel
         if (this.restrictPatterns && this.pattern === "charge") this.pattern = "dive";
         if (this.pattern === "sweep") {
-          this.sm.start();
-          this.state_ = "TELEGRAPH";
-          this.bus.emit("sfx", { name: "inhale" });
+          // defensive: a non-IDLE sm (stale mid-cycle) must not enter TELEGRAPH
+          if (this.sm.start()) {
+            this.state_ = "TELEGRAPH";
+            this.bus.emit("sfx", { name: "inhale" });
+          }
         } else {
           this.pendingPattern = this.pattern;
           this.patternT = 0;

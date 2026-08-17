@@ -1,5 +1,8 @@
 export type AirPattern = "sweep" | "charge" | "dive";
 
+/** staged-finale threshold (fraction of maxHp) at which the war dragon breaks off to RETURN */
+export const RETURN_HP = 0.25;
+
 const WEIGHTS: { above: number; w: Record<AirPattern, number> }[] = [
   { above: 0.7, w: { sweep: 0.6, charge: 0.3, dive: 0.1 } },
   { above: 0.4, w: { sweep: 0.3, charge: 0.45, dive: 0.25 } },
