@@ -242,6 +242,7 @@ export class MissionScene {
       this.tracker.notifyBuildingDestroyed(b.tag);
       if (b.relicId) this.tracker.notifyBuildingDestroyed("relic-building");
       this.tracker.notifyBuildingDestroyed("any");
+      this.enemies.applyCollapseImpact(b.pos, Math.max(b.size.w, b.size.d) * 1.2);
     };
     this.buildings.onRelicReveal = (b) => {
       if (b.relicId) {

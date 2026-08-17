@@ -309,6 +309,35 @@ export class EnemyManager {
     return this.soldiers.filter((s) => s.state !== "dead");
   }
 
+  /** tower/wall collapse: knock down nearby soldiers, destroy nearby ballistae */
+  applyCollapseImpact(pos: Vector3, radius: number): void {
+    const r2 = radius * radius;
+    for (const s of this.soldiers) {
+      if (s.state === "dead") continue;
+      const dx = s.pos.x - pos.x;
+      const dz = s.pos.z - pos.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > r2) continue;
+      const isLeader = s.def.role === "elite" || s.def.role === "commander" || s.puppeted;
+      if (isLeader) {
+        s.staggered = Math.max(s.staggered, 1.0);
+        continue;
+      }
+      s.staggered = Math.max(s.staggered, 1.2);
+      s.hp -= 12;
+      s.state = "flee";
+      s.stateTime = 0;
+      s.moveTarget = new Vector3(s.pos.x + dx * 2, 0, s.pos.z + dz * 2);
+      if (s.hp <= 0) this.killSoldier(s, true);
+    }
+    for (const b of this.ballistae) {
+      if (b.dead) continue;
+      const dx = b.pos.x - pos.x;
+      const dz = b.pos.z - pos.z;
+      if (dx * dx + dz * dz <= r2) this.damageBallista(b, b.hp + 1, true);
+    }
+  }
+
   /** Hand the commander to the finale boss (generic AI skipped until released). */
   claimCommander(): Soldier | null {
     const c = this.soldiers.find((s) => s.def.role === "commander" && s.state !== "dead");
