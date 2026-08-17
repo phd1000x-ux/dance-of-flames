@@ -362,6 +362,9 @@ export class BlackstoneFinale {
         if (!this.claimCastellan()) return false;
         break;
       case "AWAIT_LANDING":
+        // checkpoint-restore walk to an airborne phase: applySnapshot already
+        // restored dragon mode — do not ground the player mid-walk
+        if (this.mission.skipLandingSideEffect) break;
         this.forceLand();
         this.mission.scriptedDismount(this.mission.dragonCtrl.pos.add(new Vector3(3, 0, 3)));
         break;
@@ -369,7 +372,10 @@ export class BlackstoneFinale {
         this.revealVharax();
         break;
       case "REMOUNT":
-        this.mission.remountDragon();
+        // checkpoint-restore walk: the fresh build is already mounted in dragon
+        // mode at the restored position — remountDragon would reset speed/pitch
+        // and dispose a rider figure that does not exist
+        if (!this.mission.skipLandingSideEffect) this.mission.remountDragon();
         this.vharax?.startChase(new Vector3(0, 75, -95));
         this.chaseLoopNeeded = CHASE_LOOPS;
         break;

@@ -58,6 +58,9 @@ export interface MissionSceneDeps {
 
 export type MissionPhase = "dragon" | "dragonDying" | "ground" | "ended";
 
+/** finale phases whose checkpoints are captured with the player airborne (dragon mode) */
+const AIRBORNE_RESTORE_PHASES = ["CHASE", "DUEL_AIR", "RETURN", "FINAL_STAGGER", "FINAL_CRASH", "RESOLVED"];
+
 /**
  * Full mission runtime: world, player, AI, combat, loot, objectives,
  * dragon-death → ground conversion, tutorial, stats.
@@ -120,6 +123,10 @@ export class MissionScene {
   private deathStartedAt = 0;
   /** cinematic slow-motion window (seconds of real time remaining) */
   slowmoT = 0;
+  /** checkpoint-restore replay guard — suppresses minting side effects (loot/super/stats/relic sfx) */
+  restoring = false;
+  /** checkpoint-restore walk guard — skipTo past DUEL_GROUND must not ground an airborne restore */
+  skipLandingSideEffect = false;
 
   constructor(private deps: MissionSceneDeps) {
     const d = deps;
@@ -224,6 +231,8 @@ export class MissionScene {
     // enemies death → loot + score
     this.enemies.onSoldierDeath = (s, byFire) => {
       void byFire;
+      // checkpoint-restore replay: no death-loot minting
+      if (this.restoring) return;
       this.loot.rollDeathLoot(s.pos, this.deps.difficulty.healDropRate);
     };
     this.enemies.onMeleeHitRider = (damage, fromX, fromZ) => {
@@ -244,25 +253,32 @@ export class MissionScene {
 
     // buildings
     this.buildings.onDestroyed = (b) => {
-      this.stats.buildingsDestroyed++;
-      this.player.addSuper(12);
-      // building coin bonus
-      for (let i = 0; i < 3; i++) {
-        this.loot.spawn("coin", 2, b.pos.subtract(new Vector3(0, b.size.h / 2, 0)));
+      // checkpoint-restore replay: collapse visuals + tracker notifies only —
+      // no coin/super/stat minting, no collapse damage (would corrupt the
+      // freshly restored world state and farm coins on every die-retry)
+      if (!this.restoring) {
+        this.stats.buildingsDestroyed++;
+        this.player.addSuper(12);
+        // building coin bonus
+        for (let i = 0; i < 3; i++) {
+          this.loot.spawn("coin", 2, b.pos.subtract(new Vector3(0, b.size.h / 2, 0)));
+        }
       }
       // objectives
       this.tracker.notifyBuildingDestroyed(b.tag);
       if (b.relicId) this.tracker.notifyBuildingDestroyed("relic-building");
       this.tracker.notifyBuildingDestroyed("any");
-      this.enemies.applyCollapseImpact(b.pos, Math.max(b.size.w, b.size.d) * 1.2);
+      if (!this.restoring) this.enemies.applyCollapseImpact(b.pos, Math.max(b.size.w, b.size.d) * 1.2);
     };
     this.buildings.onRelicReveal = (b) => {
       if (b.relicId) {
-        this.player.addRelic(b.relicId);
-        this.stats.relicsFound++;
-        this.player.addSuper(30);
-        this.deps.bus.emit("relic-found", { relicId: b.relicId });
-        this.deps.audio.relic();
+        this.player.addRelic(b.relicId); // relic application always runs — stat fidelity on restore
+        if (!this.restoring) {
+          this.stats.relicsFound++;
+          this.player.addSuper(30);
+          this.deps.bus.emit("relic-found", { relicId: b.relicId });
+          this.deps.audio.relic();
+        }
       }
     };
     this.shakeListener = (pos, strength) => {
@@ -314,8 +330,11 @@ export class MissionScene {
   private wireEvents(): void {
     const d = this.deps;
     d.bus.on("enemy-killed", (p) => {
-      this.stats.kills++;
-      this.player.addSuper(5);
+      // checkpoint-restore replay: tracker notify only — no kill-stat/super minting
+      if (!this.restoring) {
+        this.stats.kills++;
+        this.player.addSuper(5);
+      }
       this.tracker.notifyKill(p.type);
     });
     d.bus.on("player-damaged", (p) => {
@@ -719,28 +738,48 @@ export class MissionScene {
    *  then the tracker restore OVERWRITES that progress; ballistae die next
    *  (post-restore notifies are no-ops — every capture point is past bs-defenses);
    *  player state before the finale walk so dismount/remount during skipTo spawn
-   *  from the restored dragon position; finale last, with boss HP reapplied. */
+   *  from the restored dragon position; finale last, with boss HP reapplied.
+   *  During the replay `restoring` gates every minting side effect (loot spawn,
+   *  addSuper, stat counters, relic jingle, collapse impact) so a die-retry loop
+   *  can never farm coins; `skipLandingSideEffect` keeps the forceAdvance walk
+   *  from grounding a player restored to an airborne (post-dismount) phase. */
   applySnapshot(s: FinaleSnapshot): void {
-    for (const i of s.destroyedBuildings) {
-      const b = this.buildings.buildings[i];
-      if (b && !b.collapsed) this.buildings.damageBuilding(b, b.maxHp + 1);
-    }
-    this.tracker.restoreState(s.objectiveProgress);
-    for (const i of s.deadBallistae) {
-      const b = this.enemies.ballistae[i];
-      if (b && !b.dead) this.enemies.damageBallista(b, b.maxHp + 1, true);
-    }
-    this.player.dragonHp = Math.max(1, s.player.dragonHp);
-    this.player.riderHp = Math.max(1, s.player.riderHp);
-    this.player.healCharges = s.charges.heal;
-    this.player.fireBoostCharges = s.charges.fireBoost;
-    this.player.armorWardCharges = s.charges.armorWard;
-    this.dragonCtrl.pos.set(s.player.x, s.player.y, s.player.z);
-    this.dragonCtrl.yaw = s.player.yaw;
-    this.time = s.time;
-    if (this.finale) {
-      this.finale.skipTo(s.finalePhase as FinalePhase);
-      this.finale.restoreBossState(s.castellan, s.vharax);
+    this.restoring = true;
+    try {
+      for (const i of s.destroyedBuildings) {
+        const b = this.buildings.buildings[i];
+        if (b && !b.collapsed) this.buildings.damageBuilding(b, b.maxHp + 1);
+      }
+      this.tracker.restoreState(s.objectiveProgress);
+      for (const i of s.deadBallistae) {
+        const b = this.enemies.ballistae[i];
+        if (b && !b.dead) this.enemies.damageBallista(b, b.maxHp + 1, true);
+      }
+      this.player.dragonHp = Math.max(1, s.player.dragonHp);
+      this.player.riderHp = Math.max(1, s.player.riderHp);
+      this.player.healCharges = s.charges.heal;
+      this.player.fireBoostCharges = s.charges.fireBoost;
+      this.player.armorWardCharges = s.charges.armorWard;
+      this.player.mode = s.player.mode === "ground" ? "ground" : "dragon"; // never restore "dying"
+      this.dragonCtrl.pos.set(s.player.x, s.player.y, s.player.z);
+      this.dragonCtrl.yaw = s.player.yaw;
+      this.time = s.time;
+      if (this.finale) {
+        // targets beyond the ground duel were captured with the player airborne —
+        // the skipTo walk must not forceLand/dismount/remount mid-chain
+        this.skipLandingSideEffect = AIRBORNE_RESTORE_PHASES.includes(s.finalePhase);
+        this.finale.skipTo(s.finalePhase as FinalePhase);
+        this.skipLandingSideEffect = false;
+        this.finale.restoreBossState(s.castellan, s.vharax);
+      }
+      // camera per restored mode (the dismount path already set up the ground cam)
+      if (this.phase !== "ground") {
+        this.scene.activeCamera = this.dragonCam.camera;
+        this.dragonCam.reset(this.dragonCtrl);
+      }
+    } finally {
+      this.restoring = false;
+      this.skipLandingSideEffect = false;
     }
   }
 
