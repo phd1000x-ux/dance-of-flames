@@ -18,6 +18,10 @@ on foot with a sword until the mission is done.
 |:---:|:---:|
 | ![Vhagar approaching the colossal Blackstone Citadel fortress](docs/screenshots/citadel-approach.png) | ![The rider fighting with a sword after the dragon falls](docs/screenshots/ground-combat.png) |
 
+| Dragon vs dragon — the Castellan's war dragon over Blackstone |
+|:---:|
+| ![Aerial duel against Vharax, the armored war dragon, with the Blackstone Citadel below](docs/screenshots/aerial-duel.png) |
+
 ## System Requirements
 
 - **Target platform**: MacBook M1, latest Google Chrome (WebGPU renderer)
