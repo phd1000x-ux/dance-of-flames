@@ -132,6 +132,8 @@ export class EnemyManager {
   onSoldierDeath: ((s: Soldier, byFire: boolean) => void) | null = null;
   onBallistaDeath: ((b: BallistaEntity, byFire: boolean) => void) | null = null;
   onMeleeHitRider: ((damage: number, fromX: number, fromZ: number) => void) | null = null;
+  /** stereo pan provider for positional sfx (wired by MissionScene) — null → centered */
+  panFromWorld: ((pos: { x: number; z: number }) => number) | null = null;
 
   constructor(
     private scene: Scene,
@@ -448,7 +450,9 @@ export class EnemyManager {
         s.walkPhase += dt * 14;
         continue;
       }
-      if (now >= s.nextAiTick) {
+      // staggered (collapse shockwave / parry): no AI decisions until it wears off
+      if (s.staggered > 0) s.staggered = Math.max(0, s.staggered - dt);
+      if (now >= s.nextAiTick && s.staggered <= 0) {
         s.aiInterval = s.tier === 0 ? 0 : s.tier === 1 ? 0.25 : 1.0;
         s.nextAiTick = now + s.aiInterval;
         this.updateSoldierAI(s, s.aiInterval === 0 ? dt : s.aiInterval, ctx);
@@ -739,7 +743,7 @@ export class EnemyManager {
     const aimOk = Math.abs(angleDelta(b.turret.rotation.y, desiredYaw)) < 0.15;
     if (b.cooldown <= 1.2 && b.state !== "telegraph") {
       b.state = "telegraph";
-      this.bus.emit("sfx", { name: "ballistaTelegraph" });
+      this.bus.emit("sfx", { name: "ballistaTelegraph", pan: this.panFromWorld?.({ x: b.pos.x, z: b.pos.z }) });
     }
     // telegraph glow
     const glow = clamp(1 - b.cooldown / 1.2, 0, 1);
@@ -763,7 +767,7 @@ export class EnemyManager {
       b.volleyAimJitter = 0;
       const dir = ballisticDir(origin, aim, 95);
       this.projectiles.spawn("bolt", origin, dir, 95, b.def.damage * this.difficulty.enemyDamage, 0.02);
-      this.bus.emit("sfx", { name: "ballistaFire" });
+      this.bus.emit("sfx", { name: "ballistaFire", pan: this.panFromWorld?.({ x: b.pos.x, z: b.pos.z }) });
     }
   }
 

@@ -20,7 +20,7 @@ export interface GameEvents {
   "bounds-warning": { distance: number };
   "hit-enemy": { killed: boolean };
   "melee-hit-rider": { amount: number };
-  sfx: { name: string; intensity?: number };
+  sfx: { name: string; intensity?: number; pan?: number };
   "thunder": Record<string, never>;
   "hud-hint": { text: string };
   "toggle-objectives": { visible: boolean };

@@ -1,5 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { selectPattern, assaultBand, assaultProfile, bandChanged, validateSnapshot, type AssaultBand, type FinaleSnapshot } from "../src/mission/blackstone/FinalePatterns";
+import { AudioManager } from "../src/audio/AudioManager";
 
 const rng = { range: (a: number, _b: number) => a }; // deterministic low roll (0)
 const rngMid = { range: (_a: number, _b: number) => 0.5 };
@@ -88,5 +89,34 @@ describe("snapshot validation", () => {
   test("vharax defaults to null when absent (dragon may be dead)", () => {
     const noVharax = { ...good, vharax: undefined };
     expect(validateSnapshot(noVharax).vharax).toBeNull();
+  });
+});
+
+describe("stereo panFor (AudioManager)", () => {
+  // listener at origin facing +Z (yaw 0): forward (0,1), right +X
+  const L = { x: 0, z: 0, yaw: 0 };
+  test("source directly right of listener → +1; left → −1", () => {
+    expect(AudioManager.panFor({ x: 50, z: 0 }, L)).toBeCloseTo(1, 5);
+    expect(AudioManager.panFor({ x: -50, z: 0 }, L)).toBeCloseTo(-1, 5);
+  });
+  test("source dead ahead and directly behind → ~0 (sin front/back ambiguity)", () => {
+    expect(Math.abs(AudioManager.panFor({ x: 0, z: 40 }, L))).toBeLessThan(0.1);
+    expect(Math.abs(AudioManager.panFor({ x: 0, z: -40 }, L))).toBeLessThan(0.1);
+  });
+  test("diagonal right-front → ~+0.71", () => {
+    expect(AudioManager.panFor({ x: 40, z: 40 }, L)).toBeCloseTo(Math.SQRT1_2, 5);
+  });
+  test("listener yaw rotates the frame: east-facing listener (yaw π/2) hears a +Z source on its left", () => {
+    expect(AudioManager.panFor({ x: 0, z: 40 }, { x: 0, z: 0, yaw: Math.PI / 2 })).toBeCloseTo(-1, 5);
+    expect(AudioManager.panFor({ x: 50, z: 0 }, { x: 0, z: 0, yaw: Math.PI / 2 })).toBeCloseTo(0, 5);
+  });
+  test("bearing is computed from the listener position, not the origin", () => {
+    expect(AudioManager.panFor({ x: 60, z: -100 }, { x: 10, z: -100, yaw: 0 })).toBeCloseTo(1, 5);
+  });
+  test("unwrapped listener yaw is normalized (5π/2 ≡ π/2)", () => {
+    expect(AudioManager.panFor({ x: 0, z: 40 }, { x: 0, z: 0, yaw: Math.PI * 2.5 })).toBeCloseTo(-1, 5);
+  });
+  test("pan is distance-invariant along a bearing", () => {
+    expect(AudioManager.panFor({ x: 5, z: 0 }, L)).toBeCloseTo(AudioManager.panFor({ x: 500, z: 0 }, L), 5);
   });
 });

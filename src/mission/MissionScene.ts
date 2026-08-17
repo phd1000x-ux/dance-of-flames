@@ -13,7 +13,7 @@ import type { DragonDefinition } from "../data/dragons";
 import type { DifficultyDef } from "../data/difficulty";
 import type { GameSettings } from "../save/SaveSystem";
 import type { InputManager } from "../input/InputManager";
-import type { AudioManager } from "../audio/AudioManager";
+import { AudioManager } from "../audio/AudioManager";
 import { EventBus } from "../core/EventBus";
 import type { GameEvents } from "../core/Events";
 import { SeededRng } from "../core/SeededRng";
@@ -210,6 +210,9 @@ export class MissionScene {
 
   private wireSystems(): void {
     const d = this.deps;
+    // stereo pan providers — emitters attach pan numbers to sfx events
+    this.enemies.panFromWorld = (p) => this.panFromWorld(p);
+    this.buildings.panFromWorld = (p) => this.panFromWorld(p);
     // fire → damage
     this.fire.onFireHit = (origin, dir, range, halfAngle, dps, dt) => {
       this.enemies.applyFireDamage(origin, dir, range, halfAngle, dps, dt);
@@ -366,6 +369,14 @@ export class MissionScene {
 
   activeCamera() {
     return this.phase === "ground" ? this.groundCam.camera : this.dragonCam.camera;
+  }
+
+  /** stereo pan (−1..1) of a world position relative to the active camera (audio listener) */
+  panFromWorld(pos: { x: number; z: number }): number {
+    const cam = this.activeCamera();
+    const dir = cam.getForwardRay().direction;
+    const yaw = Math.atan2(dir.x, dir.z);
+    return AudioManager.panFor(pos, { x: cam.position.x, z: cam.position.z, yaw });
   }
 
   playerPosition(): Vector3 {

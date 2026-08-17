@@ -48,6 +48,8 @@ export class WarDragon {
   onChargeNearMiss: ((dist: number) => void) | null = null;
   /** fired ONCE when hp first drops to the RETURN threshold (0.25×max) — finale owns the phase switch */
   onHpFloor: (() => void) | null = null;
+  /** stereo pan provider for positional sfx (wired by BlackstoneFinale) — null → centered */
+  panFromWorld: ((pos: { x: number; z: number }) => number) | null = null;
   pendingPattern: AirPattern | null = null;
   private state_: WarDragonState = "CHASE";
   private sm = new FlameSweepSM({ telegraph: 1.1, attack: 1.4, recovery: 2.2 });
@@ -187,7 +189,7 @@ export class WarDragon {
           // defensive: a non-IDLE sm (stale mid-cycle) must not enter TELEGRAPH
           if (this.sm.start()) {
             this.state_ = "TELEGRAPH";
-            this.bus.emit("sfx", { name: "inhale" });
+            this.bus.emit("sfx", { name: "inhale", pan: this.panFromWorld?.({ x: this.pos.x, z: this.pos.z }) });
           }
         } else {
           this.pendingPattern = this.pattern;
@@ -209,7 +211,7 @@ export class WarDragon {
       if (this.patternT > 2.5 || Vector3.Distance(this.pos, this.patternTarget) < 15) {
         this.state_ = "CHARGE_TEL";
         this.patternT = 0;
-        this.bus.emit("sfx", { name: "deepRoar" });
+        this.bus.emit("sfx", { name: "deepRoar", pan: this.panFromWorld?.({ x: this.pos.x, z: this.pos.z }) });
       }
     } else if (this.state_ === "CHARGE_TEL") {
       this.patternT += dt;
@@ -242,7 +244,7 @@ export class WarDragon {
       if (this.patternT > 1.5 || Vector3.Distance(this.pos, this.patternTarget) < 8) {
         this.state_ = "DIVE_TEL";
         this.patternT = 0;
-        this.bus.emit("sfx", { name: "inhale" });
+        this.bus.emit("sfx", { name: "inhale", pan: this.panFromWorld?.({ x: this.pos.x, z: this.pos.z }) });
       }
     } else if (this.state_ === "DIVE_TEL") {
       this.patternT += dt;
@@ -346,13 +348,16 @@ export class WarDragon {
 
     this.lastPlayerPos.copyFrom(playerPos);
     this.rig.root.position.copyFrom(this.pos);
-    // STAGGERED adds a wing-wobble roll bias on top of the steering roll
+    // STAGGERED adds a wing-wobble roll bias on top of the steering roll;
+    // damaged (<0.25×max) adds a permanent list to port — visible hurt state
     const staggerRoll = this.state_ === "STAGGERED" ? Math.sin(this.patternT * 3.1) * 0.28 : 0;
-    this.rig.root.rotationQuaternion = Quaternion.FromEulerAngles(pitch, this.yaw, this.roll + staggerRoll);
+    const damagedRoll = this.hp < this.maxHp * 0.25 ? 0.06 : 0;
+    this.rig.root.rotationQuaternion = Quaternion.FromEulerAngles(pitch, this.yaw, this.roll + staggerRoll + damagedRoll);
     const jawOpen =
       this.state_ === "TELEGRAPH" || this.state_ === "ATTACK" || this.state_ === "DIVE_TEL" ? 1 : this.state_ === "CHARGE_TEL" ? 0.2 : 0;
     const wingSweep = this.state_ === "CHASE" ? 0.25 : this.state_ === "DIVING" ? 0.7 : 0.1;
-    this.rig.animate({ flapRate: this.state_ === "STAGGERED" ? 2.4 : 5.2, flapAmp: 0.8, sweep: wingSweep, jawOpen, dt });
+    const flapRate = this.state_ === "STAGGERED" ? 2.4 : this.hp < this.maxHp * 0.25 ? 4.4 : 5.2;
+    this.rig.animate({ flapRate, flapAmp: 0.8, sweep: wingSweep, jawOpen, dt });
 
     this.fireLight.position.copyFrom(this.rig.headTip.getAbsolutePosition());
     this.fireLight.intensity = this.state_ === "ATTACK" ? 2.2 : this.state_ === "TELEGRAPH" ? 0.8 : 0;

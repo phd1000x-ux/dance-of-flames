@@ -285,7 +285,7 @@ export class BlackstoneFinale {
         this.assaultPollT = 0;
         this.assaultBand = assaultBand(cur.progress, cur.seconds ?? 75);
         m.enemies.setAssault(true, assaultProfile(this.assaultBand));
-        this.deps.bus.emit("sfx", { name: "warHorn" });
+        this.deps.bus.emit("sfx", { name: "warHorn", pan: this.mission.panFromWorld({ x: 0, z: 0 }) });
       }
       return;
     }
@@ -300,7 +300,7 @@ export class BlackstoneFinale {
     if (bandChanged(this.assaultBand, cur.progress, cur.seconds ?? 75)) {
       this.assaultBand = assaultBand(cur.progress, cur.seconds ?? 75);
       m.enemies.setAssault(true, assaultProfile(this.assaultBand));
-      this.deps.bus.emit("sfx", { name: "warHornShort" });
+      this.deps.bus.emit("sfx", { name: "warHornShort", pan: this.mission.panFromWorld({ x: 0, z: 0 }) });
     }
   }
 
@@ -422,6 +422,7 @@ export class BlackstoneFinale {
 
   private revealVharax(): void {    if (!this.vharax) {
       this.vharax = new WarDragon(this.mission.scene, this.mission.effects, this.deps.bus);
+      this.vharax.panFromWorld = (p) => this.mission.panFromWorld(p);
       this.vharax.onSweepHitPlayer = (dps, dt) => {
         const died = this.mission.player.damageDragon(dps * dt);
         if (died) this.mission.beginDragonDeathPublic();
@@ -432,7 +433,7 @@ export class BlackstoneFinale {
       };
     }
     this.vharax.startChase(new Vector3(0, 8, -120));
-    this.deps.bus.emit("sfx", { name: "deepRoar" });
+    this.deps.bus.emit("sfx", { name: "deepRoar", pan: this.mission.panFromWorld({ x: this.vharax.pos.x, z: this.vharax.pos.z }) });
     this.mission.dragonCam.addShake(1.0);
   }
 

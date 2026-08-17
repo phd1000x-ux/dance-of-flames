@@ -110,6 +110,11 @@ export class CastleBuilder {
         ...(variant === "ruined" ? { hpFraction: 0.45 } : {}),
       });
     }
+    // weapon racks at the N-corner military tower bases (outer-ward siege staging)
+    for (const sx of [-1, 1]) {
+      props.place("weaponRack", cx + sx * (HALF - 12), cz - HALF + 14, {});
+      props.place("weaponRack", cx + sx * (HALF - 26), cz - HALF + 14, {});
+    }
 
     // gatehouse (destructible) spanning the south gap
     buildings.push({

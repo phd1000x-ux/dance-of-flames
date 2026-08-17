@@ -92,6 +92,26 @@ export class AudioManager {
   }
 
   // ============ primitive layers ============
+  /** stereo pan of a world position relative to a listener (pure — unit-tested) */
+  static panFor(pos: { x: number; z: number }, listener: { x: number; z: number; yaw: number }): number {
+    const dx = pos.x - listener.x;
+    const dz = pos.z - listener.z;
+    const bearing = Math.atan2(dx, dz);
+    let rel = bearing - listener.yaw;
+    while (rel > Math.PI) rel -= Math.PI * 2;
+    while (rel < -Math.PI) rel += Math.PI * 2;
+    return Math.max(-1, Math.min(1, Math.sin(rel)));
+  }
+
+  /** per-voice stereo panner inserted before dest when pan is audible */
+  private panDest(pan: number | undefined, dest: AudioNode): AudioNode {
+    if (pan === undefined || Math.abs(pan) < 0.01 || !this.ctx) return dest;
+    const p = this.ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    p.connect(dest);
+    return p;
+  }
+
   private noise(
     dur: number,
     filter: BiquadFilterType,
@@ -100,7 +120,8 @@ export class AudioManager {
     gain: number,
     q = 1,
     dest?: AudioNode,
-    when = 0
+    when = 0,
+    pan?: number
   ): void {
     if (!this.ctx || !this.sfx || this.activeVoices > 24) return;
     const ctx = this.ctx;
@@ -117,7 +138,7 @@ export class AudioManager {
     const g = ctx.createGain();
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(bq).connect(g).connect(dest ?? this.sfx);
+    src.connect(bq).connect(g).connect(this.panDest(pan, dest ?? this.sfx));
     this.activeVoices++;
     src.onended = () => this.activeVoices--;
     src.start(t);
@@ -130,7 +151,7 @@ export class AudioManager {
     dur: number,
     type: OscillatorType,
     gain: number,
-    opts: { when?: number; dest?: AudioNode; attack?: number; am?: number; detune?: number } = {}
+    opts: { when?: number; dest?: AudioNode; attack?: number; am?: number; detune?: number; pan?: number } = {}
   ): void {
     if (!this.ctx || !this.sfx || this.activeVoices > 24) return;
     const ctx = this.ctx;
@@ -160,7 +181,7 @@ export class AudioManager {
       out = g;
     }
     osc.connect(g);
-    g.connect(opts.dest ?? this.sfx);
+    g.connect(this.panDest(opts.pan, opts.dest ?? this.sfx));
     this.activeVoices++;
     osc.onended = () => this.activeVoices--;
     osc.start(t);
@@ -234,18 +255,18 @@ export class AudioManager {
   }
 
   /** war-dragon roar: pitched-down, slower, heavier than the player roar */
-  deepRoar(): void {
+  deepRoar(pan = 0): void {
     if (this.throttled("deepRoar", 2500)) return;
     const dur = 2.6;
-    this.tone(34, 20, dur, "sine", 0.5, { am: 14, attack: 0.15 });
-    this.tone(17, 12, dur, "sine", 0.3, { attack: 0.2 });
-    this.noise(dur, "bandpass", 240, 120, 0.16, 1.2);
+    this.tone(34, 20, dur, "sine", 0.5, { am: 14, attack: 0.15, pan });
+    this.tone(17, 12, dur, "sine", 0.3, { attack: 0.2, pan });
+    this.noise(dur, "bandpass", 240, 120, 0.16, 1.2, undefined, 0, pan);
     this.impactDuck(0.7, 2);
   }
 
   // ============ war horn ============
   /** brass horn voice: detuned root+fifth saws, lowpass body, slow brass vibrato */
-  private hornBlast(dur: number, gain: number): void {
+  private hornBlast(dur: number, gain: number, pan = 0): void {
     if (!this.ctx || !this.sfx || this.activeVoices > 24) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
@@ -278,7 +299,7 @@ export class AudioManager {
       o.connect(lp);
       oscs.push(o);
     }
-    lp.connect(env).connect(this.sfx);
+    lp.connect(env).connect(this.panDest(pan, this.sfx));
     lfo.start(t);
     lfo.stop(t + dur + 0.05);
     for (const o of oscs) {
@@ -290,22 +311,22 @@ export class AudioManager {
   }
 
   /** long war horn — assault begins */
-  warHorn(): void {
+  warHorn(pan = 0): void {
     if (this.throttled("warHorn", 10000)) return;
-    this.hornBlast(2.4, 0.16); // 0.35 attack + 1.8 sustain + release
+    this.hornBlast(2.4, 0.16, pan); // 0.35 attack + 1.8 sustain + release
     this.impactDuck(0.55, 1.4);
   }
 
   /** short war horn stab — escalation band change */
-  warHornShort(): void {
+  warHornShort(pan = 0): void {
     if (this.throttled("warHornShort", 2000)) return;
-    this.hornBlast(0.5, 0.13);
+    this.hornBlast(0.5, 0.13, pan);
   }
 
   /** flame-sweep telegraph inhale */
-  inhale(): void {
-    this.noise(1.0, "bandpass", 400, 1600, 0.14, 2);
-    this.tone(140, 320, 1.0, "sine", 0.06);
+  inhale(pan = 0): void {
+    this.noise(1.0, "bandpass", 400, 1600, 0.14, 2, undefined, 0, pan);
+    this.tone(140, 320, 1.0, "sine", 0.06, { pan });
   }
 
   /** near-miss / wing buffet whoosh */
@@ -548,32 +569,32 @@ export class AudioManager {
     this.noise(0.1, "highpass", 2200, 3800, 0.1);
     this.tone(300, 120, 0.08, "triangle", 0.07);
   }
-  ballistaFire(): void {
+  ballistaFire(pan = 0): void {
     // mechanical: click + spring + heavy launch
-    this.tone(1300, 900, 0.03, "square", 0.06);
-    this.tone(420, 90, 0.11, "sawtooth", 0.08);
-    this.tone(140, 55, 0.3, "sine", 0.22);
-    this.noise(0.28, "lowpass", 900, 160, 0.22);
+    this.tone(1300, 900, 0.03, "square", 0.06, { pan });
+    this.tone(420, 90, 0.11, "sawtooth", 0.08, { pan });
+    this.tone(140, 55, 0.3, "sine", 0.22, { pan });
+    this.noise(0.28, "lowpass", 900, 160, 0.22, 1, undefined, 0, pan);
   }
-  ballistaTelegraph(): void {
+  ballistaTelegraph(pan = 0): void {
     if (this.throttled("bt", 800)) return;
-    this.tone(300, 430, 0.5, "sawtooth", 0.035);
+    this.tone(300, 430, 0.5, "sawtooth", 0.035, { pan });
   }
-  explosion(): void {
+  explosion(pan = 0): void {
     if (this.throttled("explosion", 100)) return;
-    this.noise(0.9, "lowpass", 3200, 90, 0.34);
-    this.tone(110, 28, 0.85, "sine", 0.3);
-    this.noise(0.25, "highpass", 2500, 3500, 0.08);
+    this.noise(0.9, "lowpass", 3200, 90, 0.34, 1, undefined, 0, pan);
+    this.tone(110, 28, 0.85, "sine", 0.3, { pan });
+    this.noise(0.25, "highpass", 2500, 3500, 0.08, 1, undefined, 0, pan);
     this.impactDuck(0.45, 1.0);
   }
-  buildingCollapse(): void {
+  buildingCollapse(pan = 0): void {
     if (this.throttled("collapse", 150)) return;
     // crack → rumble → debris patter
-    this.noise(0.22, "highpass", 900, 1400, 0.16);
-    this.tone(65, 26, 1.5, "sine", 0.28, { attack: 0.02 });
-    this.noise(1.4, "lowpass", 620, 70, 0.3);
+    this.noise(0.22, "highpass", 900, 1400, 0.16, 1, undefined, 0, pan);
+    this.tone(65, 26, 1.5, "sine", 0.28, { attack: 0.02, pan });
+    this.noise(1.4, "lowpass", 620, 70, 0.3, 1, undefined, 0, pan);
     for (let i = 0; i < 7; i++) {
-      this.noise(0.03, "bandpass", 1300 + Math.random() * 1800, 900, 0.045, 3, undefined, 0.25 + Math.random() * 0.85);
+      this.noise(0.03, "bandpass", 1300 + Math.random() * 1800, 900, 0.045, 3, undefined, 0.25 + Math.random() * 0.85, pan);
     }
     this.impactDuck(0.5, 1.4);
   }

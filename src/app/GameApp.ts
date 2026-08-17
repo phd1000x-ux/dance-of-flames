@@ -157,9 +157,9 @@ export class GameApp {
   }
 
   private wireBus(): void {
-    this.bus.on("sfx", ({ name, intensity }) => {
+    this.bus.on("sfx", ({ name, intensity, pan }) => {
       const a = this.audio as any;
-      if (typeof a[name] === "function") a[name](intensity);
+      if (typeof a[name] === "function") a[name](intensity, pan);
     });
     this.bus.on("relic-found", () => {
       /* audio handled via sfx relic */

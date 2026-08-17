@@ -40,6 +40,8 @@ export class BuildingSystem {
   onDestroyed: ((b: BuildingEntity) => void) | null = null;
   onRelicReveal: ((b: BuildingEntity) => void) | null = null;
   onShakeRequest: ((pos: Vector3, strength: number) => void) | null = null;
+  /** stereo pan provider for positional sfx (wired by MissionScene) — null → centered */
+  panFromWorld: ((pos: { x: number; z: number }) => number) | null = null;
 
   constructor(
     private scene: Scene,
@@ -124,6 +126,7 @@ export class BuildingSystem {
     b.material.diffuseColor = b.baseDiffuse.scale(v.diffuseScale);
     b.material.emissiveColor = new Color3(v.ember[0], v.ember[1], v.ember[2]);
     if (v.fireRate > 0 && !b.firePs) this.attachFire(b);
+    if (v.smokeRate > 0 && !b.smokePs) this.attachSmoke(b);
     if (b.firePs) b.firePs.emitRate = v.fireRate;
     if (b.smokePs) b.smokePs.emitRate = v.smokeRate;
     if (b.tag === "gatehouse" && state === "CRITICAL" && !b.breachHintShown) {
@@ -133,6 +136,13 @@ export class BuildingSystem {
     }
   }
 
+  /** smoke-only damage visual (SCORCHED) — fire attach reuses this */
+  private attachSmoke(b: BuildingEntity): void {
+    b.smokePs = this.effects.createSmokeColumn(`bsmoke${b.id}`);
+    (b.smokePs.emitter as Vector3).set(b.pos.x, b.pos.y + b.size.h * 0.5, b.pos.z);
+    b.smokePs.start();
+  }
+
   private attachFire(b: BuildingEntity): void {
     b.firePs = this.effects.createFireStream(`bfire${b.id}`, "#ff8a3c");
     (b.firePs.emitter as Vector3).copyFrom(b.pos);
@@ -140,9 +150,7 @@ export class BuildingSystem {
     b.firePs.maxEmitPower = 5;
     b.firePs.gravity.set(0, 6, 0);
     b.firePs.start();
-    b.smokePs = this.effects.createSmokeColumn(`bsmoke${b.id}`);
-    (b.smokePs.emitter as Vector3).set(b.pos.x, b.pos.y + b.size.h * 0.5, b.pos.z);
-    b.smokePs.start();
+    this.attachSmoke(b);
   }
 
   private collapse(b: BuildingEntity): void {
@@ -156,8 +164,9 @@ export class BuildingSystem {
     if (isGate) b.rubble.position.z -= b.size.d * 0.25;
     this.effects.dust(b.pos.subtract(new Vector3(0, b.size.h / 2, 0)), Math.max(1, b.size.w / 8) * (isGate ? 2 : 1));
     this.effects.explosion(b.pos, Math.max(1, b.size.w / 7) * (isGate ? 1.8 : 1));
-    this.bus.emit("sfx", { name: "buildingCollapse" });
-    if (isGate) this.bus.emit("sfx", { name: "explosion" });
+    const pan = this.panFromWorld?.({ x: b.pos.x, z: b.pos.z });
+    this.bus.emit("sfx", { name: "buildingCollapse", pan });
+    if (isGate) this.bus.emit("sfx", { name: "explosion", pan });
     this.onShakeRequest?.(b.pos, Math.min(isGate ? 1.2 : 1.0, b.size.w / 12));
     if (b.firePs) {
       b.firePs.emitRate = 30;
