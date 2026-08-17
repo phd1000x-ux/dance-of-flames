@@ -44,6 +44,11 @@ export function assaultProfile(band: AssaultBand): { intervalMult: number; elite
   ][band];
 }
 
+/** true when the assault band at `elapsed` differs from the previous band */
+export function bandChanged(prev: AssaultBand | null, elapsed: number, duration = 75): boolean {
+  return assaultBand(elapsed, duration) !== prev;
+}
+
 export interface FinaleSnapshot {
   finalePhase: string;
   castellan: { hp: number; transitioned: boolean };

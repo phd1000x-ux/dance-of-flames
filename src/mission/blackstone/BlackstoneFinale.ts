@@ -5,7 +5,7 @@ import { PhaseMachine, type FinalePhase } from "./FinalePhases";
 import { CastellanBoss } from "./CastellanBoss";
 import { WarDragon } from "./WarDragon";
 import { SpireBreaker } from "./SpireBreaker";
-import { RETURN_HP } from "./FinalePatterns";
+import { RETURN_HP, assaultBand, assaultProfile, bandChanged, type AssaultBand } from "./FinalePatterns";
 
 const STAGE_BUDGET: Partial<Record<FinalePhase, number>> = {
   TRANSITION: 7,
@@ -36,6 +36,10 @@ export class BlackstoneFinale {
   private breaker: SpireBreaker | null = null;
   private staggerHintShown = false;
   private hardSteering = false;
+  // final assault (bs-final survive window)
+  private assaultOn = false;
+  private assaultBand: AssaultBand | null = null;
+  private assaultPollT = 0;
 
   constructor(private mission: MissionScene, private deps: MissionSceneDeps) {}
 
@@ -62,6 +66,8 @@ export class BlackstoneFinale {
       this.vharax?.flee();
       this.phases.transition("RESOLVED");
     }
+
+    this.updateFinalAssault(dt);
 
     switch (this.phases.current) {
       case "INACTIVE": {
@@ -239,8 +245,42 @@ export class BlackstoneFinale {
     }
   }
 
-  applyFire(origin: Vector3, dir: Vector3, range: number, halfAngle: number, dps: number, dt: number): void {
-    const hit = this.vharax?.applyFire(origin, dir, range, halfAngle, dps, dt) ?? false;
+  /**
+   * Final assault driver — runs while bs-final (survive the counterattack) is the
+   * current objective. Long war horn once at assault start, profile refresh +
+   * short horn stab on each escalation band. Band polling uses the objective's
+   * own progress (sim seconds survived) so a checkpoint-restored assault resumes
+   * at the right intensity. Stands down when the objective completes or converts.
+   */
+  private updateFinalAssault(dt: number): void {
+    const m = this.mission;
+    const cur = m.tracker.current();
+    if (!this.assaultOn) {
+      if (cur?.id === "bs-final" && cur.type === "survive") {
+        this.assaultOn = true;
+        this.assaultPollT = 0;
+        this.assaultBand = assaultBand(cur.progress, cur.seconds ?? 75);
+        m.enemies.setAssault(true, assaultProfile(this.assaultBand));
+        this.deps.bus.emit("sfx", { name: "warHorn" });
+      }
+      return;
+    }
+    if (!cur || cur.id !== "bs-final") {
+      this.assaultOn = false;
+      m.enemies.setAssault(false);
+      return;
+    }
+    this.assaultPollT += dt;
+    if (this.assaultPollT < 1) return; // poll band once per sim second
+    this.assaultPollT = 0;
+    if (bandChanged(this.assaultBand, cur.progress, cur.seconds ?? 75)) {
+      this.assaultBand = assaultBand(cur.progress, cur.seconds ?? 75);
+      m.enemies.setAssault(true, assaultProfile(this.assaultBand));
+      this.deps.bus.emit("sfx", { name: "warHornShort" });
+    }
+  }
+
+  applyFire(origin: Vector3, dir: Vector3, range: number, halfAngle: number, dps: number, dt: number): void {    const hit = this.vharax?.applyFire(origin, dir, range, halfAngle, dps, dt) ?? false;
     // the finishing blow: first fire hit in FINAL_STAGGER begins the crash choreography
     if (hit && this.phases.current === "FINAL_STAGGER" && this.beginCrashSequence()) {
       this.setStage("FINAL_CRASH");

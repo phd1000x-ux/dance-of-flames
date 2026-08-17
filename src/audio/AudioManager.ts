@@ -243,6 +243,65 @@ export class AudioManager {
     this.impactDuck(0.7, 2);
   }
 
+  // ============ war horn ============
+  /** brass horn voice: detuned root+fifth saws, lowpass body, slow brass vibrato */
+  private hornBlast(dur: number, gain: number): void {
+    if (!this.ctx || !this.sfx || this.activeVoices > 24) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const attack = Math.min(0.35, dur * 0.35);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 5.5;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 2.2; // pitch vibrato depth (Hz)
+    lfo.connect(lfoGain);
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(480, t);
+    lp.frequency.linearRampToValueAtTime(900, t + Math.max(0.1, attack));
+    lp.Q.value = 1.0;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(gain, t + attack);
+    env.gain.setValueAtTime(gain, Math.max(t + attack, t + dur - 0.22));
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const oscs: OscillatorNode[] = [];
+    for (const [f, det] of [
+      [110, -7],
+      [165, 6],
+    ] as [number, number][]) {
+      const o = ctx.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.value = f;
+      o.detune.value = det;
+      lfoGain.connect(o.frequency);
+      o.connect(lp);
+      oscs.push(o);
+    }
+    lp.connect(env).connect(this.sfx);
+    lfo.start(t);
+    lfo.stop(t + dur + 0.05);
+    for (const o of oscs) {
+      this.activeVoices++;
+      o.onended = () => this.activeVoices--;
+      o.start(t);
+      o.stop(t + dur + 0.05);
+    }
+  }
+
+  /** long war horn — assault begins */
+  warHorn(): void {
+    if (this.throttled("warHorn", 10000)) return;
+    this.hornBlast(2.4, 0.16); // 0.35 attack + 1.8 sustain + release
+    this.impactDuck(0.55, 1.4);
+  }
+
+  /** short war horn stab — escalation band change */
+  warHornShort(): void {
+    if (this.throttled("warHornShort", 2000)) return;
+    this.hornBlast(0.5, 0.13);
+  }
+
   /** flame-sweep telegraph inhale */
   inhale(): void {
     this.noise(1.0, "bandpass", 400, 1600, 0.14, 2);

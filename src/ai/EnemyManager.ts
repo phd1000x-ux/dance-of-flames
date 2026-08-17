@@ -84,6 +84,15 @@ export interface CombatContext {
 
 let nextId = 1;
 
+/** final-assault reinforcement anchors: castle courtyard + gate approach */
+const ASSAULT_ANCHORS = [
+  { x: 0, z: 20, r: 30 },
+  { x: 0, z: 140, r: 20 },
+];
+
+/** live-soldier hard cap for the assault spawner (tier-0 stays capped at 24 in reassignTiers) */
+const ASSAULT_LIVE_CAP = 60;
+
 /** Exact low-arc ballistic launch direction from origin to target at given speed. */
 export function ballisticDir(origin: Vector3, target: Vector3, speed: number, gravity = 9.8): Vector3 {
   const delta = target.subtract(origin);
@@ -364,8 +373,47 @@ export class EnemyManager {
     for (const s of this.soldiers) s.puppeted = false;
   }
 
+  // ---------------- final assault reinforcements ----------------
+  private assaultActive = false;
+  private assaultProfile: { intervalMult: number; eliteBoost: number } = { intervalMult: 1, eliteBoost: 0 };
+  private assaultTimer = 0;
+
+  /** Escalating reinforcement spawner for the bs-final survive window. */
+  setAssault(active: boolean, profile?: { intervalMult: number; eliteBoost: number }): void {
+    this.assaultActive = active;
+    if (profile) this.assaultProfile = profile;
+    if (active) this.assaultTimer = 0; // first batch lands on the next update
+  }
+
+  get assaultSpawned(): boolean {
+    return this.assaultActive;
+  }
+
+  private updateAssault(dt: number): void {
+    if (!this.assaultActive) return;
+    this.assaultTimer -= dt;
+    if (this.assaultTimer > 0) return;
+    this.assaultTimer = 4 * this.assaultProfile.intervalMult;
+    if (this.soldiers.filter((s) => s.state !== "dead").length >= ASSAULT_LIVE_CAP) return;
+    const a = ASSAULT_ANCHORS[this.rng.int(0, ASSAULT_ANCHORS.length - 1)];
+    const batch = this.rng.int(2, 3);
+    for (let i = 0; i < batch; i++) {
+      const ang = this.rng.range(0, Math.PI * 2);
+      const r = this.rng.range(0, a.r);
+      const type = this.rng.chance(0.8) ? "swordsman" : "archer";
+      this.spawnSoldier(type, new Vector3(a.x + Math.cos(ang) * r, 0, a.z + Math.sin(ang) * r));
+    }
+    const boost = this.assaultProfile.eliteBoost;
+    if (boost > 0 && this.rng.chance(0.3 * (boost / 4))) {
+      const ang = this.rng.range(0, Math.PI * 2);
+      const r = a.r * 0.5;
+      this.spawnSoldier("elite", new Vector3(a.x + Math.cos(ang) * r, 0, a.z + Math.sin(ang) * r));
+    }
+  }
+
   // ---------------- main update ----------------
   update(dt: number, ctx: CombatContext): void {
+    this.updateAssault(dt);
     this.tierTimer += dt;
     if (this.tierTimer > 0.5) {
       this.tierTimer = 0;

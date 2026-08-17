@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { selectPattern, assaultBand, assaultProfile, validateSnapshot, type AssaultBand, type FinaleSnapshot } from "../src/mission/blackstone/FinalePatterns";
+import { selectPattern, assaultBand, assaultProfile, bandChanged, validateSnapshot, type AssaultBand, type FinaleSnapshot } from "../src/mission/blackstone/FinalePatterns";
 
 const rng = { range: (a: number, _b: number) => a }; // deterministic low roll (0)
 const rngMid = { range: (_a: number, _b: number) => 0.5 };
@@ -53,6 +53,19 @@ describe("assault escalation", () => {
       expect(p[i].eliteBoost).toBeGreaterThanOrEqual(p[i - 1].eliteBoost);
       expect(p[i].musicPeak).toBeGreaterThanOrEqual(p[i - 1].musicPeak);
     }
+  });
+
+  test("bandChanged fires exactly at band boundaries (30/55/70 elapsed of 75)", () => {
+    expect(bandChanged(0, 0)).toBe(false); // same band 0
+    expect(bandChanged(0, 29)).toBe(false);
+    expect(bandChanged(0, 30)).toBe(true); // → band 1
+    expect(bandChanged(1, 54)).toBe(false);
+    expect(bandChanged(1, 55)).toBe(true); // → band 2
+    expect(bandChanged(2, 69)).toBe(false);
+    expect(bandChanged(2, 70)).toBe(true); // → band 3
+    expect(bandChanged(3, 74)).toBe(false); // stays band 3 to the end
+    // custom duration boundaries shift with it (40s survive: >45→0 is never true past t=0)
+    expect(bandChanged(0, 0, 40)).toBe(true); // remaining 40 ≤ 45 → band 1 immediately
   });
 });
 
