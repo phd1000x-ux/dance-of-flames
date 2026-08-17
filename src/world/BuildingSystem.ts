@@ -157,6 +157,7 @@ export class BuildingSystem {
     this.effects.dust(b.pos.subtract(new Vector3(0, b.size.h / 2, 0)), Math.max(1, b.size.w / 8) * (isGate ? 2 : 1));
     this.effects.explosion(b.pos, Math.max(1, b.size.w / 7) * (isGate ? 1.8 : 1));
     this.bus.emit("sfx", { name: "buildingCollapse" });
+    if (isGate) this.bus.emit("sfx", { name: "explosion" });
     this.onShakeRequest?.(b.pos, Math.min(isGate ? 1.2 : 1.0, b.size.w / 12));
     if (b.firePs) {
       b.firePs.emitRate = 30;

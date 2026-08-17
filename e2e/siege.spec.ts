@@ -8,6 +8,7 @@ import { test, expect, type Page } from "@playwright/test";
  *   3. coordinated volley: forceVolley fires 2+ bolts within a tight sim window
  *   4. ambient battle pairs: 25 spawned, tier histogram sums to count
  *   5. §90-style phased castle completion still reaches VICTORY on the new build
+ *   6. §10 regression: finale music override clears when switching missions
  *
  * SwiftShader headless (2-6 FPS): every gameplay wait polls game state or the
  * fixed-timestep sim clock (mission.time) — never wall-clock. The §90 survive
@@ -192,4 +193,39 @@ test("siege: no regression — §90 phased castle completion", async ({ page }) 
   });
   await page.waitForFunction(() => (window as any).__GAME.state === "VICTORY", null, { timeout: 15000 });
   await expect(page.locator("#results-title")).toHaveText("VICTORY");
+});
+
+test("siege: finale music override clears on next mission (§10 regression)", async ({ page }) => {
+  await bootBlackstone(page);
+  // engage the finale: clear the siege chain in order (kills only count toward
+  // the current objective) so bs-castellan becomes current and the finale claims
+  // the commander — skipTo cannot walk from INACTIVE, and it emits no
+  // finale-music events, so the override must be armed by the organic path
+  await page.evaluate(() => {
+    const g = (window as any).__GAME;
+    g.api.killBallistae(6);
+    g.api.collapseBuildingsWithTag("wallTower", 4);
+    g.api.collapseBuildingWithTag("gatehouse");
+    g.api.killByType("soldier", 12);
+  });
+  await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "AWAIT_LANDING", null, { timeout: 30000 });
+  // land → ground duel: the organic DUEL_GROUND entry emits finale-music "boss",
+  // which holds GameApp.finaleMusicOverride on (adaptive selection must not clobber it)
+  await page.evaluate(() => (window as any).__GAME.api.forceLand());
+  await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "DUEL_GROUND", null, { timeout: 10000 });
+  await page.waitForFunction(() => (window as any).__GAME.app.music.currentState === "boss", null, { timeout: 5000 });
+  // leave mid-finale — no "resolve" finale-music event ever fires on this path,
+  // so only the startMission reset (GameApp.loadMission) can clear the override
+  await page.evaluate(() => (window as any).__APP.startMission("dragonstone", "rhaenyra", "syrax", "normal"));
+  await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 60000 });
+  // adaptive music selection must be live again: state should be one of the adaptive
+  // set, not stuck on boss/chase. Override handler runs at ~1 Hz — poll with timeout
+  // instead of a single read.
+  await page.waitForFunction(
+    () => ["explore", "combat_low", "combat_high", "menu"].includes((window as any).__GAME.app.music.currentState),
+    null,
+    { timeout: 8000 }
+  );
+  const state = await page.evaluate(() => (window as any).__GAME.app.music.currentState);
+  expect(["explore", "combat_low", "combat_high", "menu"]).toContain(state);
 });
