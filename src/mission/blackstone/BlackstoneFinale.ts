@@ -271,6 +271,7 @@ export class BlackstoneFinale {
     t.notifyEvent("chase-complete");
     t.notifyEvent("vharax-resolved");
     this.vharax?.flee();
+    this.deps.bus.emit("finale-music", { state: "resolve" });
     this.phases.transition("RESOLVED");
     this.deps.bus.emit("finale-boss", { show: false });
   }

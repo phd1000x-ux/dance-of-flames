@@ -188,6 +188,7 @@ export class GameApp {
     const cfg = this.missionCfg!;
     this.state.transition(GameState.LOADING);
     this.input.resetAllInputs();
+    this.finaleMusicOverride = false;
     const loading = document.getElementById("loading-screen")!;
     const fill = document.getElementById("loading-bar-fill")!;
     const status = document.getElementById("loading-status")!;
