@@ -49,6 +49,8 @@ export interface Soldier {
   isCommander: boolean;
   /** finale boss owns this soldier — generic AI skipped */
   puppeted?: boolean;
+  scatterT?: number;
+  scatterDir?: { x: number; z: number };
 }
 
 export interface BallistaEntity {
@@ -325,9 +327,11 @@ export class EnemyManager {
       }
       s.staggered = Math.max(s.staggered, 1.2);
       s.hp -= 12;
-      s.state = "flee";
+      const d = Math.max(0.001, Math.sqrt(d2));
+      s.scatterT = 1.6;
+      s.scatterDir = { x: dx / d, z: dz / d };
+      s.state = "alert";
       s.stateTime = 0;
-      s.moveTarget = new Vector3(s.pos.x + dx * 2, 0, s.pos.z + dz * 2);
       if (s.hp <= 0) this.killSoldier(s, true);
     }
     for (const b of this.ballistae) {
@@ -372,6 +376,18 @@ export class EnemyManager {
         s.burnTime -= dt;
         this.damageSoldier(s, 9 * dt, true);
         if ((s.state as SoldierState) === "dead") continue;
+      }
+      if (s.scatterT && s.scatterT > 0) {
+        s.scatterT -= dt;
+        const sp = 8;
+        s.pos.x += (s.scatterDir?.x ?? 0) * sp * dt;
+        s.pos.z += (s.scatterDir?.z ?? 0) * sp * dt;
+        s.pos.y = this.terrain.heightAt(s.pos.x, s.pos.z);
+        s.yaw = Math.atan2(s.scatterDir?.x ?? 0, s.scatterDir?.z ?? 0);
+        s.root.position.copyFrom(s.pos);
+        s.root.rotation.y = s.yaw;
+        s.walkPhase += dt * 14;
+        continue;
       }
       if (now >= s.nextAiTick) {
         s.aiInterval = s.tier === 0 ? 0 : s.tier === 1 ? 0.25 : 1.0;
