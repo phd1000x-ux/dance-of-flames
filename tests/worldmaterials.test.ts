@@ -1,6 +1,6 @@
 // tests/worldmaterials.test.ts
 import { describe, test, expect } from "vitest";
-import { stoneMaps, woodMaps, roofMaps, heightToNormalRGBA } from "../src/world/WorldMaterials";
+import { stoneMaps, woodMaps, roofMaps, heightToNormalRGBA, clothMaps, leatherMaps, metalMaps, barkMaps, rockMaps, groundMaps } from "../src/world/WorldMaterials";
 
 describe("map generators", () => {
   test("deterministic for same seed", () => {
@@ -38,5 +38,31 @@ describe("map generators", () => {
     const h = new Float32Array(64 * 64).fill(0.5);
     const n = heightToNormalRGBA(h, 64, 2, 0, 1);
     expect(n[(32 * 64 + 32) * 4 + 2]).toBeGreaterThan(200);
+  });
+});
+
+describe("more map generators", () => {
+  const GEN = { cloth: clothMaps, leather: leatherMaps, metal: metalMaps, bark: barkMaps, rock: rockMaps, ground: groundMaps };
+  test("all deterministic, sized, opaque, tint-friendly", () => {
+    for (const gen of Object.values(GEN)) {
+      const a = gen(96, 13);
+      const b = gen(96, 13);
+      expect([...a.albedo]).toEqual([...b.albedo]);
+      expect(a.albedo.length).toBe(96 * 96 * 4);
+      for (let i = 3; i < a.albedo.length; i += 4) expect(a.albedo[i]).toBe(255);
+      let s = 0;
+      for (let i = 0; i < a.albedo.length; i += 4) s += a.albedo[i];
+      const avg = s / (a.albedo.length / 4) / 255;
+      expect(avg).toBeGreaterThan(0.7);
+    }
+  });
+  test("bark is rougher than cloth (normal variance)", () => {
+    const variance = (n: Uint8Array) => {
+      let m = 0, m2 = 0;
+      for (let i = 0; i < n.length; i += 4) { m += n[i]; m2 += n[i] * n[i]; }
+      const c = m / (n.length / 4);
+      return m2 / (n.length / 4) - c * c;
+    };
+    expect(variance(barkMaps(96, 1).normal)).toBeGreaterThan(variance(clothMaps(96, 1).normal));
   });
 });

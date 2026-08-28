@@ -171,3 +171,155 @@ export function roofMaps(size: number, seed: number): MapSet {
   }
   return { albedo, normal: heightToNormalRGBA(h, size, 2.2, 0.4, seed + 11), size };
 }
+
+// ---- cloth: 2px weave checker + thread noise ----
+export function clothMaps(size: number, seed: number): MapSet {
+  const h = new Float32Array(size * size);
+  const albedo = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const weave = ((x >> 1) + (y >> 1)) % 2;
+      const thread = hash01((x * 131 + y * 57) ^ Math.imul(seed, 2246822519));
+      const b = 1.0 + (weave - 0.5) * 0.12 + (thread - 0.5) * 0.10 + (fbm(x / 24, y / 24, seed) - 0.5) * 0.10;
+      h[i] = 0.5 + (weave - 0.5) * 0.12 + (thread - 0.5) * 0.08;
+      const o = i * 4;
+      albedo[o] = clampByte(b);
+      albedo[o + 1] = clampByte(b);
+      albedo[o + 2] = clampByte(b);
+      albedo[o + 3] = 255;
+    }
+  }
+  return { albedo, normal: heightToNormalRGBA(h, size, 1.2, 0.3, seed + 5), size };
+}
+
+// ---- leather: two-frequency grain + creases ----
+export function leatherMaps(size: number, seed: number): MapSet {
+  const h = new Float32Array(size * size);
+  const albedo = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const g1 = fbm(x * 0.5, y * 0.5, seed);
+      const g2 = fbm(x * 2.2, y * 2.2, seed + 9);
+      const ridge = 1 - Math.abs(2 * fbm(x * 0.12, y * 0.12, seed + 3) - 1);
+      h[i] = g1 * 0.55 + g2 * 0.3;
+      const b = 1.0 + (g1 - 0.5) * 0.25 + (g2 - 0.5) * 0.12 - ridge * 0.10;
+      const o = i * 4;
+      albedo[o] = clampByte(b);
+      albedo[o + 1] = clampByte(b);
+      albedo[o + 2] = clampByte(b * 0.98);
+      albedo[o + 3] = 255;
+    }
+  }
+  return { albedo, normal: heightToNormalRGBA(h, size, 1.8, 0.5, seed + 7), size };
+}
+
+// ---- metal: horizontal brushing + sparse scratch grooves ----
+export function metalMaps(size: number, seed: number): MapSet {
+  const scratches: { y: number; x0: number; len: number }[] = [];
+  for (let s = 0; s < 7; s++) {
+    scratches.push({ y: hash01(seed * 101 + s) * size, x0: hash01(seed * 211 + s) * size, len: size * (0.08 + hash01(seed * 307 + s) * 0.2) });
+  }
+  const h = new Float32Array(size * size);
+  const albedo = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const brushed = valueNoise(x * 0.9, y * 0.04, seed);
+      let b = 1.0 + (brushed - 0.5) * 0.16 + (fbm(x / 40, y / 40, seed + 2) - 0.5) * 0.08;
+      let hv = 0.5;
+      for (const s of scratches) {
+        const dx = Math.min(Math.abs(x - s.x0), Math.abs(x - s.x0 - size));
+        if (dx < s.len && Math.abs(y - s.y) < 1.2) { b -= 0.18; hv = 0.3; }
+      }
+      h[i] = hv;
+      const o = i * 4;
+      albedo[o] = clampByte(b * 0.99);
+      albedo[o + 1] = clampByte(b * 0.995);
+      albedo[o + 2] = clampByte(b);
+      albedo[o + 3] = 255;
+    }
+  }
+  return { albedo, normal: heightToNormalRGBA(h, size, 1.4, 0.35, seed + 13), size };
+}
+
+// ---- bark: vertical ridges + deep fissures ----
+export function barkMaps(size: number, seed: number): MapSet {
+  const h = new Float32Array(size * size);
+  const albedo = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const v = fbm(x * 0.8, y * 0.06, seed);
+      const fine = fbm(x * 2.4, y * 0.25, seed + 17);
+      h[i] = v * 0.8 + fine * 0.2;
+      const b = 0.95 + (v - 0.5) * 0.55 + (fine - 0.5) * 0.15;
+      const o = i * 4;
+      albedo[o] = clampByte(b + 0.04);
+      albedo[o + 1] = clampByte(b - 0.01);
+      albedo[o + 2] = clampByte(b - 0.05);
+      albedo[o + 3] = 255;
+    }
+  }
+  return { albedo, normal: heightToNormalRGBA(h, size, 3.2, 0.5, seed + 19), size };
+}
+
+// ---- rock: fbm mass + crack walks ----
+export function rockMaps(size: number, seed: number): MapSet {
+  const h = new Float32Array(size * size);
+  const crack = new Uint8Array(size * size);
+  for (let c = 0; c < 5; c++) {
+    let x = hash01(seed * 61 + c) * size;
+    let y = hash01(seed * 83 + c) * size;
+    let a = hash01(seed * 97 + c) * Math.PI * 2;
+    for (let s = 0, steps = Math.floor(size * 0.9); s < steps; s++) {
+      x += Math.cos(a);
+      y += Math.sin(a);
+      a += (hash01(seed * 131 + c * 1000 + s) - 0.5) * 0.5;
+      const px = ((Math.floor(x) % size) + size) % size;
+      const py = ((Math.floor(y) % size) + size) % size;
+      crack[py * size + px] = 1;
+    }
+  }
+  const albedo = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const mass = fbm(x * 0.09, y * 0.09, seed) * 0.6 + fbm(x * 0.3, y * 0.3, seed + 5) * 0.3;
+      const isCrack = crack[i] === 1;
+      h[i] = isCrack ? mass * 0.35 : mass;
+      const b = 1.0 + (mass - 0.45) * 0.35 - (isCrack ? 0.28 : 0);
+      const o = i * 4;
+      albedo[o] = clampByte(b);
+      albedo[o + 1] = clampByte(b);
+      albedo[o + 2] = clampByte(b * 0.99);
+      albedo[o + 3] = 255;
+    }
+  }
+  return { albedo, normal: heightToNormalRGBA(h, size, 2.6, 0.5, seed + 23), size };
+}
+
+// ---- ground detail: fine grain + patches + pebble specks (avg ~ 1.0) ----
+export function groundMaps(size: number, seed: number): MapSet {
+  const h = new Float32Array(size * size);
+  const albedo = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const patch = fbm(x * 0.12, y * 0.12, seed);
+      const speck = hash01((x * 92837111) ^ (y * 68927593) ^ Math.imul(seed, 2654435761));
+      const grain = valueNoise(x * 2.1, y * 2.1, seed + 3);
+      let b = 1.0 + (patch - 0.5) * 0.30 + (grain - 0.5) * 0.22;
+      let hv = 0.4 + (patch - 0.5) * 0.3 + (grain - 0.5) * 0.35;
+      if (speck > 0.995) { b += 0.18; hv += 0.35; }
+      h[i] = Math.max(0, Math.min(1, hv));
+      const o = i * 4;
+      albedo[o] = clampByte(b + 0.015);
+      albedo[o + 1] = clampByte(b);
+      albedo[o + 2] = clampByte(b - 0.02);
+      albedo[o + 3] = 255;
+    }
+  }
+  return { albedo, normal: heightToNormalRGBA(h, size, 1.6, 0.6, seed + 29), size };
+}
