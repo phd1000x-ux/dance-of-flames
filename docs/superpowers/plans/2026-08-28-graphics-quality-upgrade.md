@@ -144,7 +144,7 @@ describe("map generators", () => {
       const i = (y * size + x) * 4;
       return (m.albedo[i] + m.albedo[i + 1] + m.albedo[i + 2]) / 3;
     };
-    expect(lum(64, 12)).toBeGreaterThan(lum(64, 1) + 30);
+    expect(lum(80, 12)).toBeGreaterThan(lum(64, 1) + 30);
   });
   test("wood/roof albedo averages tint-friendly (>0.75)", () => {
     for (const m of [woodMaps(128, 4), roofMaps(128, 5)]) {
