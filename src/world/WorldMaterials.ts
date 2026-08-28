@@ -1,9 +1,10 @@
+import { Color3, Constants, RawTexture, Scene, StandardMaterial, Texture } from "@babylonjs/core";
 import { hash01, fbm, valueNoise } from "./Noise";
 
 /**
  * Procedural world material library (no external assets).
  * Layer 1 (pure): map generators → RGBA byte buffers.
- * Layer 2 (scene-scoped, added in a later task): RawTexture cache + texturedMaterial().
+ * Layer 2 (scene-scoped): RawTexture cache + texturedMaterial().
  *
  * ALBEDO CONVENTION: brightness modulates around ~1.0 so consumer
  * diffuseColor tints carry the color (damage scale, heraldry, env colors).
@@ -322,4 +323,61 @@ export function groundMaps(size: number, seed: number): MapSet {
     }
   }
   return { albedo, normal: heightToNormalRGBA(h, size, 1.6, 0.6, seed + 29), size };
+}
+
+// ---- Layer 2: scene-scoped texture cache + texturedMaterial ----
+
+export type WorldTexKind = "stone" | "wood" | "roof" | "cloth" | "leather" | "metal" | "bark" | "rock" | "ground";
+
+const GENERATORS: Record<WorldTexKind, (size: number, seed: number) => MapSet> = {
+  stone: stoneMaps, wood: woodMaps, roof: roofMaps, cloth: clothMaps,
+  leather: leatherMaps, metal: metalMaps, bark: barkMaps, rock: rockMaps, ground: groundMaps,
+};
+const SIZES: Record<WorldTexKind, number> = { stone: 512, ground: 512, wood: 256, roof: 256, cloth: 256, leather: 256, metal: 256, bark: 256, rock: 256 };
+const SEEDS: Record<WorldTexKind, number> = { stone: 11, wood: 23, roof: 37, cloth: 41, leather: 53, metal: 67, bark: 71, rock: 83, ground: 97 };
+
+const mapCache = new WeakMap<Scene, Map<WorldTexKind, MapSet>>();
+const texCache = new WeakMap<Scene, Map<string, RawTexture>>();
+
+function getMaps(scene: Scene, kind: WorldTexKind): MapSet {
+  let m = mapCache.get(scene);
+  if (!m) { m = new Map(); mapCache.set(scene, m); }
+  let maps = m.get(kind);
+  if (!maps) { maps = GENERATORS[kind](SIZES[kind], SEEDS[kind]); m.set(kind, maps); }
+  return maps;
+}
+
+/** Scene-scoped RawTexture with wrapping + trilinear mips. Cache-owned; dies with the scene. */
+export function getWorldTexture(scene: Scene, kind: WorldTexKind, channel: "albedo" | "normal" | "gloss", uScale: number, vScale: number): RawTexture {
+  let cache = texCache.get(scene);
+  if (!cache) { cache = new Map(); texCache.set(scene, cache); }
+  const key = `${kind}:${channel}:${uScale}x${vScale}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const maps = getMaps(scene, kind);
+  const data = channel === "albedo" ? maps.albedo : channel === "normal" ? maps.normal : maps.gloss ?? maps.albedo;
+  const tex = new RawTexture(data, maps.size, maps.size, Constants.TEXTUREFORMAT_RGBA, scene, true, false, Constants.TEXTURE_TRILINEAR_SAMPLINGMODE);
+  tex.name = key;
+  tex.wrapU = Texture.WRAP_ADDRESSMODE;
+  tex.wrapV = Texture.WRAP_ADDRESSMODE;
+  tex.uScale = uScale;
+  tex.vScale = vScale;
+  cache.set(key, tex);
+  return tex;
+}
+
+/** Fresh StandardMaterial wired to cached world textures. Caller owns/disposes it. */
+export function texturedMaterial(
+  scene: Scene, name: string, kind: WorldTexKind,
+  o: { uScale: number; vScale: number; tint?: Color3; specular?: Color3; power?: number; emissive?: Color3; gloss?: boolean }
+): StandardMaterial {
+  const m = new StandardMaterial(name, scene);
+  m.diffuseTexture = getWorldTexture(scene, kind, "albedo", o.uScale, o.vScale);
+  m.bumpTexture = getWorldTexture(scene, kind, "normal", o.uScale, o.vScale);
+  if (o.gloss) m.specularTexture = getWorldTexture(scene, kind, "gloss", o.uScale, o.vScale);
+  m.diffuseColor = o.tint ?? Color3.White();
+  m.specularColor = o.specular ?? new Color3(0.04, 0.04, 0.04);
+  m.specularPower = o.power ?? 32;
+  m.emissiveColor = o.emissive ?? Color3.Black();
+  return m;
 }

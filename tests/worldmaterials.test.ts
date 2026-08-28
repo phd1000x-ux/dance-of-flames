@@ -1,6 +1,7 @@
 // tests/worldmaterials.test.ts
 import { describe, test, expect } from "vitest";
-import { stoneMaps, woodMaps, roofMaps, heightToNormalRGBA, clothMaps, leatherMaps, metalMaps, barkMaps, rockMaps, groundMaps } from "../src/world/WorldMaterials";
+import { NullEngine, Scene, Color3 } from "@babylonjs/core";
+import { stoneMaps, woodMaps, roofMaps, heightToNormalRGBA, clothMaps, leatherMaps, metalMaps, barkMaps, rockMaps, groundMaps, getWorldTexture, texturedMaterial } from "../src/world/WorldMaterials";
 
 describe("map generators", () => {
   test("deterministic for same seed", () => {
@@ -64,5 +65,39 @@ describe("more map generators", () => {
       return m2 / (n.length / 4) - c * c;
     };
     expect(variance(barkMaps(96, 1).normal)).toBeGreaterThan(variance(clothMaps(96, 1).normal));
+  });
+});
+
+describe("scene-scoped texture cache", () => {
+  test("same scene + key → same texture instance", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const a = getWorldTexture(scene, "stone", "albedo", 8, 8);
+    expect(getWorldTexture(scene, "stone", "albedo", 8, 8)).toBe(a);
+    engine.dispose();
+  });
+  test("different scale/channel/kind → different instance", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const a = getWorldTexture(scene, "stone", "albedo", 8, 8);
+    expect(getWorldTexture(scene, "stone", "albedo", 4, 4)).not.toBe(a);
+    expect(getWorldTexture(scene, "stone", "normal", 8, 8)).not.toBe(a);
+    expect(getWorldTexture(scene, "wood", "albedo", 8, 8)).not.toBe(a);
+    engine.dispose();
+  });
+  test("different scene → different instance (scene-scoped invariant)", () => {
+    const e1 = new NullEngine(), e2 = new NullEngine();
+    const s1 = new Scene(e1), s2 = new Scene(e2);
+    expect(getWorldTexture(s1, "stone", "albedo", 8, 8)).not.toBe(getWorldTexture(s2, "stone", "albedo", 8, 8));
+    e1.dispose(); e2.dispose();
+  });
+  test("texturedMaterial sets textures + tint", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const m = texturedMaterial(scene, "t", "wood", { uScale: 2, vScale: 2, tint: new Color3(0.3, 0.2, 0.1) });
+    expect(m.diffuseTexture).toBeDefined();
+    expect(m.bumpTexture).toBeDefined();
+    expect(m.diffuseColor.r).toBeCloseTo(0.3);
+    engine.dispose();
   });
 });
