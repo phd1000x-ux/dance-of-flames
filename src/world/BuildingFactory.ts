@@ -107,7 +107,7 @@ export class BuildingFactory {
           parts.push(cren);
         }
         for (const [a, hy] of [[0, h * 0.45], [2.1, h * 0.62], [4.2, h * 0.79]] as const) {
-          this.addWindow(winParts, Math.cos(a) * (w / 2), -h / 2 + hy, Math.sin(a) * (w / 2), -a, 0.4, 1.1);
+          this.addWindow(winParts, Math.cos(a) * (w / 2), -h / 2 + hy, Math.sin(a) * (w / 2), Math.PI / 2 - a, 0.4, 1.1);
         }
         break;
       }
@@ -185,7 +185,7 @@ export class BuildingFactory {
         troof.position.y = h / 2 + h * 0.15 + 1.6;
         parts.push(troof);
         for (const [a, hy] of [[0.8, h * 0.5], [3.9, h * 0.75]] as const) {
-          this.addWindow(winParts, Math.cos(a) * (w / 2), -h / 2 + hy, Math.sin(a) * (w / 2), -a, 0.4, 1.1);
+          this.addWindow(winParts, Math.cos(a) * (w / 2), -h / 2 + hy, Math.sin(a) * (w / 2), Math.PI / 2 - a, 0.4, 1.1);
         }
         if (variant === "artillery") {
           const plat = MeshBuilder.CreateCylinder("gt-plat", { diameter: w * 1.45, height: 1.0, tessellation: 9 }, this.scene);
