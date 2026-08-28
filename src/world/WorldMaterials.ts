@@ -230,7 +230,7 @@ export function metalMaps(size: number, seed: number): MapSet {
       let b = 1.0 + (brushed - 0.5) * 0.16 + (fbm(x / 40, y / 40, seed + 2) - 0.5) * 0.08;
       let hv = 0.5;
       for (const s of scratches) {
-        const dx = Math.min(Math.abs(x - s.x0), Math.abs(x - s.x0 - size));
+        const dx = Math.min(Math.abs(x - s.x0), Math.abs(x - s.x0 - size), Math.abs(x - s.x0 + size)); // wrap
         if (dx < s.len && Math.abs(y - s.y) < 1.2) { b -= 0.18; hv = 0.3; }
       }
       h[i] = hv;
