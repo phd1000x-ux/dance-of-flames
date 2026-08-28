@@ -38,9 +38,10 @@ export class PostPipeline {
 
   apply(cfg: PostConfig): void {
     const p = this.pipeline;
-    const ip = p.imageProcessing;
     p.fxaaEnabled = cfg.fxaa;
     p.imageProcessingEnabled = cfg.imageProcessing;
+    const ip = p.imageProcessing;
+    if (!ip) return;
     ip.contrast = 1.06;
     ip.exposure = 1.0;
     ip.toneMappingEnabled = cfg.toneMapping;
