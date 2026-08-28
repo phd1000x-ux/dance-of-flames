@@ -11,6 +11,7 @@ import type { BuildingPlacement } from "./WorldBuilder";
 import type { PropLibrary } from "./PropLibrary";
 import type { TerrainHeightSampler } from "./Terrain";
 import { SeededRng } from "../core/SeededRng";
+import { texturedMaterial } from "./WorldMaterials";
 
 export interface CastleAabb {
   x: number;
@@ -46,18 +47,10 @@ export class CastleBuilder {
   private roofMat: StandardMaterial;
 
   constructor(private scene: Scene, private terrain: TerrainHeightSampler, private rng: SeededRng) {
-    this.stoneMat = new StandardMaterial("castleStone", scene);
-    this.stoneMat.diffuseColor = new Color3(0.34, 0.33, 0.31);
-    this.stoneMat.specularColor = new Color3(0.04, 0.04, 0.04);
-    this.darkStoneMat = new StandardMaterial("castleDarkStone", scene);
-    this.darkStoneMat.diffuseColor = new Color3(0.22, 0.22, 0.23);
-    this.darkStoneMat.specularColor = new Color3(0.03, 0.03, 0.03);
-    this.woodMat = new StandardMaterial("castleWood", scene);
-    this.woodMat.diffuseColor = new Color3(0.26, 0.17, 0.1);
-    this.woodMat.specularColor = new Color3(0.03, 0.02, 0.02);
-    this.roofMat = new StandardMaterial("castleRoof", scene);
-    this.roofMat.diffuseColor = new Color3(0.15, 0.13, 0.12);
-    this.roofMat.specularColor = new Color3(0.02, 0.02, 0.02);
+    this.stoneMat = texturedMaterial(scene, "castleStone", "stone", { uScale: 40, vScale: 5, tint: new Color3(0.34, 0.33, 0.31), gloss: true, specular: new Color3(0.04, 0.04, 0.04), power: 40 });
+    this.darkStoneMat = texturedMaterial(scene, "castleDarkStone", "stone", { uScale: 6, vScale: 14, tint: new Color3(0.22, 0.22, 0.23), gloss: true, specular: new Color3(0.03, 0.03, 0.03), power: 40 });
+    this.woodMat = texturedMaterial(scene, "castleWood", "wood", { uScale: 2, vScale: 2, tint: new Color3(0.26, 0.17, 0.1), specular: new Color3(0.03, 0.02, 0.02) });
+    this.roofMat = texturedMaterial(scene, "castleRoof", "roof", { uScale: 8, vScale: 3, tint: new Color3(0.15, 0.13, 0.12), specular: new Color3(0.02, 0.02, 0.02) });
   }
 
   /** build the citadel centered at (cx, cz) */
