@@ -1,4 +1,5 @@
 import { MeshBuilder, Mesh, StandardMaterial, Color3, VertexData, Scene, Texture, DynamicTexture } from "@babylonjs/core";
+import { getWorldTexture } from "./WorldMaterials";
 import { SeededRng } from "../core/SeededRng";
 import { smoothstep } from "../core/MathUtils";
 
@@ -100,6 +101,12 @@ export class Terrain {
     ground.setVerticesData("normal", normals);
 
     const mat = new StandardMaterial("terrainMat", scene);
+    const detail = getWorldTexture(scene, "ground", "albedo", 200, 200);
+    detail.anisotropicFilteringLevel = 8;
+    mat.diffuseTexture = detail;
+    const bump = getWorldTexture(scene, "ground", "normal", 200, 200);
+    bump.anisotropicFilteringLevel = 4;
+    mat.bumpTexture = bump;
     mat.diffuseColor = Color3.White();
     mat.specularColor = Color3.Black();
     ground.material = mat;
