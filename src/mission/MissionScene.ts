@@ -38,6 +38,7 @@ import { AmbientBattle } from "../world/AmbientBattle";
 import { emptyStats, type MissionStats } from "./Scoring";
 import { getRelic } from "../data/items";
 import { clamp } from "../core/MathUtils";
+import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
 export interface MissionSceneDeps {
   engine: AbstractEngine;
@@ -54,6 +55,7 @@ export interface MissionSceneDeps {
   onCoins: (delta: number) => void;
   onMissionEnd: (victory: boolean, stats: MissionStats) => void;
   particleScale: () => number;
+  postFX?: boolean;
 }
 
 export type MissionPhase = "dragon" | "dragonDying" | "ground" | "ended";
@@ -117,6 +119,7 @@ export class MissionScene {
   private deathLandTimer = 0;
   private ended = false;
   private glow: GlowLayer;
+  readonly postPipeline: PostPipeline;
   private shakeListener: ((pos: Vector3, strength: number) => void) | null = null;
   /** Bug B: idempotent guard — dragon death handled exactly once */
   private dragonDeathHandled = false;
@@ -179,6 +182,8 @@ export class MissionScene {
 
     this.glow = new GlowLayer("glow", this.scene, { mainTextureSamples: 1 });
     this.glow.intensity = 0.55;
+
+    this.postPipeline = new PostPipeline(this.scene, postConfigForTier(1, d.postFX !== false));
 
     if (d.mission.environment.rain) {
       effects.createRain(() => this.activeCamera().position);
@@ -1054,6 +1059,7 @@ export class MissionScene {
     this.projectiles.dispose();
     this.world.props.dispose();
     this.glow.dispose();
+    this.postPipeline.dispose();
     this.scene.dispose();
   }
 

@@ -14,6 +14,7 @@ import type { DragonDefinition } from "../data/dragons";
 import type { RiderDefinition } from "../data/riders";
 import { DragonRig } from "../world/DragonRig";
 import { buildSkyAndHorizon } from "../world/Terrain";
+import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
 /**
  * Lightweight menu background scene: showcased dragon on a rock spire,
@@ -32,8 +33,9 @@ export class MenuShowcase {
   private t = 0;
   private dragging = false;
   private lastX = 0;
+  private post: PostPipeline;
 
-  constructor(private engine: AbstractEngine, canvas: HTMLCanvasElement) {
+  constructor(private engine: AbstractEngine, canvas: HTMLCanvasElement, opts: { postFX?: boolean } = {}) {
     this.scene = new Scene(engine);
     this.scene.clearColor = new Color3(0.09, 0.07, 0.06).toColor4(1);
     this.scene.fogMode = Scene.FOGMODE_EXP2;
@@ -89,6 +91,8 @@ export class MenuShowcase {
         this.autoOrbit = 0;
       }
     });
+
+    this.post = new PostPipeline(this.scene, postConfigForTier(0, opts.postFX !== false));
   }
 
   setDragon(def: DragonDefinition, rider?: RiderDefinition): void {
@@ -138,6 +142,7 @@ export class MenuShowcase {
   }
 
   dispose(): void {
+    this.post.dispose();
     this.scene.dispose();
   }
 }
