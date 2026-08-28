@@ -9,6 +9,7 @@ import {
 } from "@babylonjs/core";
 import type { EnemyDefinition } from "../data/enemies";
 import type { RiderDefinition } from "../data/riders";
+import { texturedMaterial } from "./WorldMaterials";
 
 /** Procedural low-poly soldiers + ballistae + ground-mode rider. */
 export class SoldierFactory {
@@ -18,17 +19,14 @@ export class SoldierFactory {
   private metalMat: StandardMaterial;
 
   constructor(private scene: Scene) {
-    this.bodyMat = new StandardMaterial("soldierBody", scene);
-    this.bodyMat.specularColor = new Color3(0.08, 0.08, 0.08);
+    this.bodyMat = texturedMaterial(scene, "soldierBody", "cloth", { uScale: 2, vScale: 2, specular: new Color3(0.08, 0.08, 0.08) });
     this.burningMat = new StandardMaterial("soldierBurning", scene);
     this.burningMat.diffuseColor = new Color3(0.35, 0.12, 0.04);
     this.burningMat.emissiveColor = new Color3(0.85, 0.3, 0.05);
     this.deadMat = new StandardMaterial("soldierDead", scene);
     this.deadMat.diffuseColor = new Color3(0.18, 0.16, 0.14);
     this.deadMat.emissiveColor = Color3.Black();
-    this.metalMat = new StandardMaterial("soldierMetal", scene);
-    this.metalMat.diffuseColor = new Color3(0.55, 0.55, 0.6);
-    this.metalMat.specularColor = new Color3(0.7, 0.7, 0.75);
+    this.metalMat = texturedMaterial(scene, "soldierMetal", "metal", { uScale: 2, vScale: 2, tint: new Color3(0.55, 0.55, 0.6), specular: new Color3(0.7, 0.7, 0.75), power: 64 });
   }
 
   /** One merged soldier mesh (torso/head/legs + type-specific weapon). */
@@ -118,9 +116,7 @@ export class SoldierFactory {
     const root = new TransformNode("ballista", this.scene);
     const base = MeshBuilder.CreateBox("b-base", { width: 2.6, height: 0.6, depth: 2.2 }, this.scene);
     base.position.y = 0.3;
-    const woodMat = new StandardMaterial("ballistaWood", this.scene);
-    woodMat.diffuseColor = Color3.FromHexString(def.color);
-    woodMat.emissiveColor = new Color3(0.08, 0.06, 0.02);
+    const woodMat = texturedMaterial(this.scene, `ballistaWood-${def.id}`, "wood", { uScale: 2, vScale: 2, tint: Color3.FromHexString(def.color), emissive: new Color3(0.08, 0.06, 0.02) });
     base.material = woodMat;
     base.parent = root;
     for (const wx of [-1.2, 1.2]) {
@@ -134,10 +130,7 @@ export class SoldierFactory {
     const turret = new TransformNode("b-turret", this.scene);
     turret.parent = root;
     turret.position.y = 0.75;
-    const railMat = new StandardMaterial("ballistaRail", this.scene);
-    railMat.diffuseColor = new Color3(0.4, 0.38, 0.36);
-    railMat.specularColor = new Color3(0.5, 0.5, 0.5);
-    railMat.emissiveColor = Color3.Black();
+    const railMat = texturedMaterial(this.scene, `ballistaRail-${def.id}`, "metal", { uScale: 2, vScale: 2, tint: new Color3(0.4, 0.38, 0.36), specular: new Color3(0.5, 0.5, 0.5) });
     const rail = MeshBuilder.CreateBox("b-rail", { width: 0.3, height: 0.24, depth: 3.4 }, this.scene);
     rail.position.set(0, 0.3, 0.6);
     rail.material = railMat;
@@ -169,17 +162,9 @@ export class SoldierFactory {
     const c = Color3.FromHexString(def.color);
 
     // distinct material types: leather / metal / cloth / hair / skin (look colors)
-    const leather = new StandardMaterial("gLeather", this.scene);
-    leather.diffuseColor = new Color3(0.24, 0.15, 0.1);
-    leather.specularColor = new Color3(0.09, 0.07, 0.06);
-    const metal = new StandardMaterial("gMetal", this.scene);
-    metal.diffuseColor = new Color3(0.55, 0.56, 0.62);
-    metal.specularColor = new Color3(0.85, 0.86, 0.92);
-    metal.specularPower = 96;
-    const cloth = new StandardMaterial("gCloth", this.scene);
-    cloth.diffuseColor = c;
-    cloth.emissiveColor = c.scale(0.12);
-    cloth.specularColor = new Color3(0.04, 0.04, 0.04);
+    const leather = texturedMaterial(this.scene, "gLeather", "leather", { uScale: 3, vScale: 3, tint: new Color3(0.24, 0.15, 0.1), specular: new Color3(0.09, 0.07, 0.06) });
+    const metal = texturedMaterial(this.scene, "gMetal", "metal", { uScale: 3, vScale: 3, tint: new Color3(0.55, 0.56, 0.62), specular: new Color3(0.85, 0.86, 0.92), power: 96 });
+    const cloth = texturedMaterial(this.scene, "gCloth", "cloth", { uScale: 3, vScale: 3, tint: c, emissive: c.scale(0.12), specular: new Color3(0.04, 0.04, 0.04) });
     const hairMat = new StandardMaterial("gHair", this.scene);
     hairMat.diffuseColor = Color3.FromHexString(look.hairColor);
     hairMat.specularColor = new Color3(0.14, 0.11, 0.09);
@@ -351,9 +336,7 @@ export class SoldierFactory {
     const swordPivot = new TransformNode("swordPivot", this.scene);
     swordPivot.parent = root;
     swordPivot.position.set(0.38, 1.25, 0.1);
-    const bladeMat = new StandardMaterial("bladeMat", this.scene);
-    bladeMat.diffuseColor = new Color3(0.8, 0.8, 0.86);
-    bladeMat.specularColor = new Color3(0.9, 0.9, 1);
+    const bladeMat = texturedMaterial(this.scene, "bladeMat", "metal", { uScale: 3, vScale: 3, tint: new Color3(0.8, 0.8, 0.86), specular: new Color3(0.9, 0.9, 1), power: 96 });
     const blade = MeshBuilder.CreateBox("blade", { width: 0.07, height: 1.1, depth: 0.18 }, this.scene);
     blade.position.set(0, 0.6, 0);
     blade.material = bladeMat;
@@ -367,9 +350,7 @@ export class SoldierFactory {
     shieldMesh.rotation.x = Math.PI / 2;
     shieldMesh.rotation.y = Math.PI / 2;
     shieldMesh.position.set(-0.42, 1.15, 0.12);
-    const shieldMat = new StandardMaterial("shieldMat", this.scene);
-    shieldMat.diffuseColor = c.scale(0.6);
-    shieldMat.emissiveColor = c.scale(0.1);
+    const shieldMat = texturedMaterial(this.scene, "shieldMat", "wood", { uScale: 2, vScale: 2, tint: c.scale(0.6), emissive: c.scale(0.1) });
     shieldMesh.material = shieldMat;
     shieldMesh.parent = root;
 
