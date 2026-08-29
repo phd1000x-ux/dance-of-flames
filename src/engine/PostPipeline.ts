@@ -13,17 +13,23 @@ export interface PostConfig {
   vignette: boolean;
 }
 
-/** Tier → post-processing config. Tier 2/3 (upscaled) keep only cheap FXAA. */
+/**
+ * Tier → post-processing config. Tier 2/3 (upscaled) keep only cheap FXAA.
+ * Tone mapping is off at every tier: ACES lifted midtones into bright fog and
+ * hid distant dark detail (smoke columns, rocks, structures) — visual QA
+ * finding on dragonstone; scenes are lit for the untonemapped look.
+ */
 export function postConfigForTier(tier: QualityTier, enabled: boolean): PostConfig {
   if (!enabled) return { fxaa: false, imageProcessing: false, toneMapping: false, vignette: false };
   const full = tier <= 1;
-  return { fxaa: true, imageProcessing: full, toneMapping: full, vignette: full };
+  return { fxaa: true, imageProcessing: full, toneMapping: false, vignette: full };
 }
 
 /**
  * Per-scene post-processing: FXAA always (engine MSAA already on, but governor
- * tiers 2/3 render upscaled where FXAA recovers edges), mild image processing
- * at good tiers. One pipeline per scene; dispose() with the owner.
+ * tiers 2/3 render upscaled where FXAA recovers edges), vignette only at good
+ * tiers — no tone mapping / contrast boost (see postConfigForTier). One
+ * pipeline per scene; dispose() with the owner.
  */
 export class PostPipeline {
   readonly pipeline: DefaultRenderingPipeline;
@@ -42,7 +48,7 @@ export class PostPipeline {
     p.imageProcessingEnabled = cfg.imageProcessing;
     const ip = p.imageProcessing;
     if (!ip) return;
-    ip.contrast = 1.06;
+    ip.contrast = 1.0; // no boost — contrast lift flattened fog scenes into milk (QA finding)
     ip.exposure = 1.0;
     ip.toneMappingEnabled = cfg.toneMapping;
     ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;

@@ -5,12 +5,12 @@ describe("postConfigForTier", () => {
   test("disabled → everything off", () => {
     expect(postConfigForTier(0, false)).toEqual({ fxaa: false, imageProcessing: false, toneMapping: false, vignette: false });
   });
-  test("tier 0/1 → fxaa + image processing", () => {
+  test("tier 0/1 → fxaa + vignette, no tone mapping (washed-out fog regression)", () => {
     for (const tier of [0, 1] as const) {
       const c = postConfigForTier(tier, true);
       expect(c.fxaa).toBe(true);
       expect(c.imageProcessing).toBe(true);
-      expect(c.toneMapping).toBe(true);
+      expect(c.toneMapping).toBe(false);
       expect(c.vignette).toBe(true);
     }
   });
