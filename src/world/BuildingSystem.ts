@@ -21,8 +21,10 @@ export interface BuildingEntity {
   collapsed: boolean;
   relicId?: string;
   mesh: import("@babylonjs/core").Mesh;
+  meshes: import("@babylonjs/core").Mesh[];
   rubble: import("@babylonjs/core").Mesh;
   material: import("@babylonjs/core").StandardMaterial;
+  materials: import("@babylonjs/core").StandardMaterial[];
   root: import("@babylonjs/core").TransformNode;
   burnAccum: number;
   firePs: ParticleSystem | null;
@@ -60,8 +62,10 @@ export class BuildingSystem {
       const built = factory.create(b.kind, undefined, b.variant);
       built.root.position.set(b.pos.x, b.pos.y + built.size.h / 2 - 0.4, b.pos.z);
       built.root.rotation.y = b.rotY;
-      this.shadows?.addShadowCaster(built.mesh);
-      built.mesh.receiveShadows = true;
+      for (const m of built.meshes) {
+        this.shadows?.addShadowCaster(m);
+        m.receiveShadows = true;
+      }
       const entity: BuildingEntity = {
         id: buildingId++,
         kind: b.kind,
@@ -73,8 +77,10 @@ export class BuildingSystem {
         collapsed: false,
         relicId: b.relicId,
         mesh: built.mesh,
+        meshes: built.meshes,
         rubble: built.rubble,
         material: built.material,
+        materials: built.materials,
         root: built.root,
         burnAccum: 0,
         firePs: null,
@@ -157,7 +163,7 @@ export class BuildingSystem {
     if (b.collapsed) return;
     b.collapsed = true;
     b.visualState = "DESTROYED";
-    b.mesh.isVisible = false;
+    for (const m of b.meshes) m.isVisible = false;
     b.rubble.isVisible = true;
     b.rubble.position.y = -b.size.h / 2 + 0.4;
     const isGate = b.tag === "gatehouse";
@@ -222,8 +228,8 @@ export class BuildingSystem {
     for (const b of this.buildings) {
       b.firePs?.dispose();
       b.smokePs?.dispose();
-      b.root.dispose(false, true);
-      b.material.dispose();
+      b.root.dispose(false, false);
+      for (const mat of b.materials) mat.dispose();
     }
     this.buildings = [];
   }

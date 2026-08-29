@@ -12,6 +12,7 @@ import {
 import type { MissionDefinition } from "../data/missions";
 import { SeededRng } from "../core/SeededRng";
 import { Terrain, buildSkyAndHorizon } from "./Terrain";
+import { texturedMaterial } from "./WorldMaterials";
 import type { BuildingKind } from "./BuildingFactory";
 import { PropLibrary } from "./PropLibrary";
 import { CastleBuilder, type CastleAabb } from "./CastleBuilder";
@@ -145,39 +146,41 @@ export class WorldBuilder {
     const env = def.environment;
 
     if ((env.treeCount ?? 0) > 0) {
-      const trunk = MeshBuilder.CreateCylinder("treeTrunk", { diameterTop: 0.28, diameterBottom: 0.5, height: 3.2, tessellation: 5 }, this.scene);
-      const crown = MeshBuilder.CreateCylinder("treeCrown", { diameterTop: 0, diameterBottom: 3.6, height: 5.4, tessellation: 6 }, this.scene);
-      crown.position.y = 3.8;
-      const template = Mesh.MergeMeshes([trunk, crown], true, true, undefined, false, false)!;
-      const mat = new StandardMaterial("treeMat", this.scene);
       const tc = Color3.FromHexString(env.treeColor ?? "#2a4a2e");
-      mat.diffuseColor = tc;
-      mat.emissiveColor = tc.scale(0.08);
-      template.material = mat;
-      template.isVisible = false;
-      template.isPickable = false;
+      const trunkTpl = MeshBuilder.CreateCylinder("treeTrunk", { diameterTop: 0.28, diameterBottom: 0.5, height: 3.2, tessellation: 5 }, this.scene);
+      trunkTpl.material = texturedMaterial(this.scene, "treeTrunkMat", "bark", { uScale: 2, vScale: 3, tint: new Color3(0.29, 0.21, 0.13) });
+      const crownTpl = MeshBuilder.CreateCylinder("treeCrown", { diameterTop: 0, diameterBottom: 3.6, height: 5.4, tessellation: 6 }, this.scene);
+      crownTpl.material = texturedMaterial(this.scene, "treeCrownMat", "ground", { uScale: 3, vScale: 3, tint: tc, emissive: tc.scale(0.08) });
+      for (const t of [trunkTpl, crownTpl]) {
+        t.isVisible = false;
+        t.isPickable = false;
+      }
       const count = env.treeCount!;
       for (let i = 0; i < count; i++) {
         const a = rng.range(0, Math.PI * 2);
         const r = rng.range(120, 680);
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r;
-        const inst = template.createInstance(`tree${i}`);
-        inst.position.set(x, terrain.heightAt(x, z) - 0.2, z);
-        inst.rotation.y = rng.range(0, Math.PI * 2);
+        const y = terrain.heightAt(x, z) - 0.2;
+        const rotY = rng.range(0, Math.PI * 2);
         const s = rng.range(0.7, 1.6);
-        inst.scaling.setAll(s);
-        inst.isPickable = false;
-        inst.freezeWorldMatrix();
+        const trunkInst = trunkTpl.createInstance(`treeT${i}`);
+        trunkInst.position.set(x, y, z);
+        const crownInst = crownTpl.createInstance(`treeC${i}`);
+        crownInst.position.set(x, y + 3.8 * s, z); // template crown offset scaled (template local y offset is 0 here)
+        for (const inst of [trunkInst, crownInst]) {
+          inst.rotation.y = rotY;
+          inst.scaling.setAll(s);
+          inst.isPickable = false;
+          inst.freezeWorldMatrix();
+        }
       }
     }
 
     if ((env.rockCount ?? 0) > 0) {
       const template = MeshBuilder.CreatePolyhedron("rockTpl", { type: 3, size: 1.4 }, this.scene);
-      const mat = new StandardMaterial("rockMat", this.scene);
       const rc = Color3.FromHexString(env.groundAccent).scale(0.85);
-      mat.diffuseColor = rc;
-      mat.emissiveColor = rc.scale(0.1);
+      const mat = texturedMaterial(this.scene, "rockMat", "rock", { uScale: 2, vScale: 2, tint: rc, emissive: rc.scale(0.1) });
       template.material = mat;
       template.isVisible = false;
       template.isPickable = false;

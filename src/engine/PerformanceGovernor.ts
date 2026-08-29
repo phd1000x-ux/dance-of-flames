@@ -1,4 +1,4 @@
-import type { AbstractEngine, Scene } from "@babylonjs/core";
+import type { AbstractEngine } from "@babylonjs/core";
 import type { GameSettings } from "../save/SaveSystem";
 
 export type QualityTier = 0 | 1 | 2 | 3; // 0 = best, 3 = most reduced
@@ -111,10 +111,4 @@ export class PerformanceGovernor {
       shadowsEnabled: this.shadowsEnabled,
     };
   }
-}
-
-export function configureSceneQuality(scene: Scene, shadows: boolean): void {
-  // reserved for finer scene-level tweaks driven by governor tier
-  void scene;
-  void shadows;
 }

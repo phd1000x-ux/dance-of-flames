@@ -768,8 +768,8 @@ export class EnemyManager {
   }
 
   disposeAll(): void {
-    for (const s of this.soldiers) s.root.dispose(false, true);
-    for (const b of this.ballistae) b.root.dispose(false, true);
+    for (const s of this.soldiers) s.root.dispose(false, false);
+    for (const b of this.ballistae) b.root.dispose(false, false);
     this.soldiers = [];
     this.ballistae = [];
     void this.scene;

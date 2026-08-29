@@ -150,7 +150,7 @@ export class GameApp {
   // ---------------- scenes ----------------
   private openShowcase(): void {
     if (!this.showcase) {
-      this.showcase = new MenuShowcase(this.engine, this.canvas);
+      this.showcase = new MenuShowcase(this.engine, this.canvas, { postFX: !this.opts.testMode });
     }
     this.showcase.setDragon(getDragon(this.save.selectedDragon ?? "syrax"), getRider(this.save.selectedRider ?? "rhaenyra"));
     this.showcase.setMode("menu");
@@ -244,8 +244,10 @@ export class GameApp {
       onCoins: (delta) => this.upgrades.addCoins(delta),
       onMissionEnd: (victory, stats) => this.endMission(victory, stats),
       particleScale: () => this.governor.particleScale,
+      postFX: !this.opts.testMode || this.opts.benchmark,
     });
     this.mission = mission;
+    mission.postPipeline.applyTier(this.governor.tier);
     // checkpoint restore: apply to the deterministic fresh build; on failure
     // fall through as a clean start (never brick the retry)
     let restored = false;
@@ -529,11 +531,16 @@ export class GameApp {
 
   // ---------------- main loop ----------------
   private simAccumulator = 0;
+  private appliedTier: number = -1;
 
   private frame(): void {
     this.frameCount++;
     const frameMs = this.engine.getDeltaTime();
     this.governor.update(frameMs);
+    if (this.governor.tier !== this.appliedTier) {
+      this.appliedTier = this.governor.tier;
+      this.mission?.postPipeline.applyTier(this.governor.tier);
+    }
 
     // input context + smoothed keyboard look axes
     this.input.setContext(this.state.inGameplay && !this.paused ? "gameplay" : "menu");
