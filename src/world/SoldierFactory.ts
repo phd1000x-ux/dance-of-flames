@@ -99,7 +99,8 @@ export class SoldierFactory {
     mesh.parent = root;
     const c = Color3.FromHexString(def.color);
     const mat = this.bodyMat.clone(`soldierMat-${mesh.uniqueId}`);
-    // clone() deep-clones Texture-valued props (new GPU textures per soldier) — re-point at the shared cached textures
+    // material.clone() clones textures too: RawTexture.clone() shares the InternalTexture (refcount) but
+    // drops uScale/vScale tiling — re-point at the cached texture to restore tiling + cache identity
     mat.diffuseTexture = this.bodyMat.diffuseTexture;
     mat.bumpTexture = this.bodyMat.bumpTexture;
     mat.diffuseColor = c;

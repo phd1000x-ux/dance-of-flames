@@ -228,7 +228,7 @@ export class BuildingSystem {
     for (const b of this.buildings) {
       b.firePs?.dispose();
       b.smokePs?.dispose();
-      b.root.dispose(false, true);
+      b.root.dispose(false, false);
       for (const mat of b.materials) mat.dispose();
     }
     this.buildings = [];
