@@ -1,4 +1,5 @@
 import { Color3, Vector3, type Material, PBRMaterial, StandardMaterial } from "@babylonjs/core";
+import { addCastellanRegalia } from "./CastellanRegalia";
 import type { MissionScene } from "../mission/MissionScene";
 import type { Soldier, SoldierState } from "../ai/EnemyManager";
 import type { EnemyDefinition } from "../data/enemies";
@@ -114,6 +115,8 @@ export async function installSoldierVisuals(mission: MissionScene): Promise<void
     const meshes = model.root.getChildMeshes();
     for (const m of meshes) m.receiveShadows = true;
     const materials = [...new Set(meshes.map(m => m.material).filter((m): m is Material => !!m))];
+    // after the material list: the windup/hurt glow must not repaint the crown and cape
+    if (def.role === "commander") addCastellanRegalia(model, scene);
     model.root.setEnabled(false);
     const p: Puppet = { defId: def.id, model, main, off, materials, soldier: null, lastPos: new Vector3(), speed: 0, walkPhase: 0, lastState: null, follow: 0, clips, baseY: model.root.position.y, lastHp: Infinity };
     if (!pools.has(def.id)) pools.set(def.id, []);

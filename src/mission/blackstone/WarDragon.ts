@@ -83,13 +83,16 @@ export class WarDragon {
     this.fireLight.intensity = 0;
     this.fireLight.range = 90;
     const params = typeof location === "undefined" ? null : new URLSearchParams(location.search);
-    if (params && params.get("test") !== "1" && params.get("benchmark") !== "1") {
+    // test mode keeps the procedural rig unless the imported characters were asked for
+    const imported = params && params.get("benchmark") !== "1" && (params.get("test") !== "1" || params.get("characters") === "1");
+    if (imported) {
       const fallbackMeshes = this.rig.root.getChildMeshes();
-      void import("../../world/CharacterAssets").then(async ({ loadCharacterAssets, CharacterModel, prepareDragon, anchorDragon }) => {
+      void Promise.all([import("../../world/CharacterAssets"), import("../../world/WarDragonArmor")]).then(async ([{ loadCharacterAssets, CharacterModel, prepareDragon, anchorDragon }, { armorWarDragon }]) => {
         const containers = await loadCharacterAssets(scene);
         if (scene.isDisposed || this.visualDisposed) return;
         const model = new CharacterModel(containers[0], "vharax-imported", scene);
         prepareDragon(model, VHARAX);
+        armorWarDragon(model, scene, 17 * VHARAX.scale);
         model.root.parent = this.rig.root;
         for (const mesh of fallbackMeshes) mesh.setEnabled(false);
         const head = model.node("fireBreath.") ?? model.node("head.");

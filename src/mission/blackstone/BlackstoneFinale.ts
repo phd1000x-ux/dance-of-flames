@@ -405,6 +405,12 @@ export class BlackstoneFinale {
         this.forceLand();
         this.mission.scriptedDismount(this.mission.dragonCtrl.pos.add(new Vector3(3, 0, 3)));
         break;
+      case "DUEL_GROUND":
+        // the organic path notifies on the HP-floor transition; a skip must too,
+        // or "Duel the Castellan 0/1" lingers through the air duel
+        this.castellan?.markTransitioned();
+        this.mission.tracker.notifyEvent("castellan-transition");
+        break;
       case "TRANSITION":
         this.revealVharax();
         break;

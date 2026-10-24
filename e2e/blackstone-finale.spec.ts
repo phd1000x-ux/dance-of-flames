@@ -150,4 +150,7 @@ test("finale: skip API walks the legal chain", async ({ page }) => {
   const f = await page.evaluate(() => (window as any).__GAME.api.getFinale());
   expect(f.phase).toBe("DUEL_AIR");
   expect(f.vharax).not.toBeNull();
+  // the skipped duel and chase are completed, not left lingering on the HUD
+  const obj = await page.evaluate(() => (window as any).__GAME.api.getObjective());
+  expect(obj.description).toContain("Vharax");
 });
