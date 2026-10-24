@@ -11,18 +11,21 @@ export interface PostConfig {
   imageProcessing: boolean;
   toneMapping: boolean;
   vignette: boolean;
+  /** high-threshold bloom: only fire/emissive highlights glow, fog stays untouched */
+  bloom: boolean;
 }
 
 /**
- * Tier → post-processing config. Tier 2/3 (upscaled) keep only cheap FXAA.
+ * Tier → post-processing config. Tier 2/3 (upscaled) keep only cheap FXAA;
+ * tier 0/1 add vignette + high-threshold bloom.
  * Tone mapping is off at every tier: ACES lifted midtones into bright fog and
  * hid distant dark detail (smoke columns, rocks, structures) — visual QA
  * finding on dragonstone; scenes are lit for the untonemapped look.
  */
 export function postConfigForTier(tier: QualityTier, enabled: boolean): PostConfig {
-  if (!enabled) return { fxaa: false, imageProcessing: false, toneMapping: false, vignette: false };
+  if (!enabled) return { fxaa: false, imageProcessing: false, toneMapping: false, vignette: false, bloom: false };
   const full = tier <= 1;
-  return { fxaa: true, imageProcessing: full, toneMapping: false, vignette: full };
+  return { fxaa: true, imageProcessing: full, toneMapping: false, vignette: full, bloom: full };
 }
 
 /**
@@ -46,6 +49,13 @@ export class PostPipeline {
     const p = this.pipeline;
     p.fxaaEnabled = cfg.fxaa;
     p.imageProcessingEnabled = cfg.imageProcessing;
+    p.bloomEnabled = cfg.bloom;
+    if (cfg.bloom) {
+      p.bloomThreshold = 0.9;
+      p.bloomWeight = 0.3;
+      p.bloomKernel = 48;
+      p.bloomScale = 0.5;
+    }
     const ip = p.imageProcessing;
     if (!ip) return;
     ip.contrast = 1.0; // no boost — contrast lift flattened fog scenes into milk (QA finding)

@@ -105,6 +105,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
       { keys: "A / D / Arrow Left / Right", label: "Previous / Next Option or Panel" },
       { keys: "Enter / Space", label: "Select" },
       { keys: "Esc", label: "Back" },
+      { keys: "M", label: "Background Music On / Off (also during gameplay)", action: "toggleMusic" },
     ],
   },
 ];

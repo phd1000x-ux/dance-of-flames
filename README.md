@@ -1,8 +1,8 @@
 # DANCE OF FLAMES: DRAGONRIDER
 
 A third-person 3D dragon-combat action game for the browser, inspired by the world,
-factions and atmosphere of the Dance of the Dragons civil war (fan project — no
-copyrighted assets; everything is procedurally generated at runtime).
+factions and atmosphere of the Dance of the Dragons civil war (fan project;
+procedural visuals, with free CC BY character models in the opt-in prototype).
 
 Ride a dragon over a war-torn battlefield, breathe fire on armies, raze fortifications,
 loot coins and hidden relics, buy upgrades — and if your dragon falls, keep fighting
@@ -66,6 +66,21 @@ Chrome launch for a final smoke test:
 npm run build && npm run preview
 open -a "Google Chrome" http://localhost:4173
 ```
+
+## Character prototype (D2 dragon + R2 knight)
+
+With the dev server running, open
+<http://localhost:5173/?characters=1&autostart=1>.
+This starts the training mission with the selected free models. The bottom-left
+panel switches between the new and original characters and provides ground/flight
+transitions. Normal keyboard controls apply. Pointer lock is skipped in this mode
+so the panel remains clickable.
+
+Dragon flight uses the source `Flying` clip. The knight uses `idle1` plus temporary
+skeletal poses for mounting, running, blocking and attacking. This is a visual
+spike, not a finished animation system. Other dragons, NPCs and the menu preview
+still use procedural models. See [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md)
+for attribution, licenses and exact source files.
 
 ## Controls
 
@@ -211,8 +226,8 @@ time, active NPC count, quality tier. Results on the reference machine are in
 
 ## Asset Licenses
 
-All assets (3D meshes, textures, particles, UI, sounds) are **generated
-procedurally at runtime** — no external art or audio files. Details:
+Default visuals and all audio are generated procedurally. The opt-in character
+prototype includes two free CC BY 4.0 models and embedded textures. Details:
 [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
 
 ## Known Limitations

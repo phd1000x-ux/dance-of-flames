@@ -13,10 +13,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "benchmark": "node scripts/run-benchmark.mjs"
+    "benchmark": "node scripts/run-benchmark.mjs",
+    "retarget": "node scripts/retarget-mixamo.mjs"
   },
   "dependencies": {
-    "@babylonjs/core": "^8.0.0"
+    "@babylonjs/core": "^8.0.0",
+    "@babylonjs/loaders": "^8.56.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

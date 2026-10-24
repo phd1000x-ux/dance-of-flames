@@ -68,6 +68,7 @@ export interface GameSettings {
   masterVolume: number; // 0..1
   effectsVolume: number; // 0..1
   musicVolume: number; // 0..1
+  musicEnabled: boolean;
   showFps: boolean;
   keyboardLookSpeed: number; // 0.4..2 arrow-key look multiplier
   keyboardTurnSpeed: number; // 0.5..1.5 A/D + arrow turn multiplier
@@ -84,6 +85,7 @@ export function defaultSettings(): GameSettings {
     masterVolume: 0.8,
     effectsVolume: 0.9,
     musicVolume: 0.65,
+    musicEnabled: true,
     showFps: false,
     keyboardLookSpeed: 1,
     keyboardTurnSpeed: 1,

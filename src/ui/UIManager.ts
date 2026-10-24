@@ -24,6 +24,8 @@ export interface UiCallbacks {
   onRestartMission(): void;
   onAbandon(): void;
   onSettingsChange(settings: GameSettings): void;
+  onToggleMusic(): void;
+  onPreviewRotate(phase: "start" | "move" | "end", clientX: number): void;
   onShopBuy(upgradeId: string): void;
   onShopClose(nextMission: boolean): void;
   onResultsContinue(): void;
@@ -40,6 +42,7 @@ export class UIManager {
   private selectedMission = "dragonstone";
   private selectedDifficulty: DifficultyId = "normal";
   private rendererInfo = "…";
+  private musicButton!: HTMLButtonElement;
 
   constructor(
     private root: HTMLElement,
@@ -49,6 +52,17 @@ export class UIManager {
   ) {
     this.buildScreens();
     this.hud = new HudController(root, bus, settings);
+    this.musicButton = document.createElement("button");
+    this.musicButton.id = "music-toggle";
+    this.musicButton.className = "music-toggle game-control";
+    this.musicButton.type = "button";
+    this.musicButton.addEventListener("click", () => {
+      this.click();
+      this.cb.onToggleMusic();
+      this.musicButton.blur();
+    });
+    root.appendChild(this.musicButton);
+    this.refreshMusicButton();
     window.addEventListener("keydown", this.menuKeyHandler);
   }
 
@@ -93,6 +107,10 @@ export class UIManager {
     return this.activeScreenId;
   }
 
+  getCharacterSelection(): { rider: string; dragon: string } {
+    return { rider: this.selectedRider, dragon: this.selectedDragon };
+  }
+
   // ---------------- keyboard menu navigation ----------------
   private activeScreenId: string | null = null;
   private kbGroup = 0;
@@ -102,6 +120,7 @@ export class UIManager {
   private manualReturnTo = "main-menu";
 
   private menuKeyHandler = (e: KeyboardEvent) => {
+    if (e.target === this.musicButton) return;
     if (!this.activeScreenId) return;
     const code = e.code;
     const isUp = code === "KeyW" || code === "ArrowUp";
@@ -303,7 +322,7 @@ export class UIManager {
       <button class="menu-btn" data-act="settings">SETTINGS</button>
       <button class="menu-btn" data-act="credits">CREDITS</button>
       <div class="menu-kb-hint"><span class="key">W / S</span> NAVIGATE &nbsp;&nbsp; <span class="key">ENTER</span> SELECT</div>
-      <div class="menu-footer">A fan-made battle simulator inspired by the world of Westeros.<br>All assets procedural &amp; original.</div>`;
+      <div class="menu-footer">An independent fan-made battle game.<br>Original world &amp; music · free, credited character models.</div>`;
     d.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
       if (!t) return;
@@ -336,8 +355,8 @@ export class UIManager {
           <div class="panel-title">CHOOSE RIDER</div>
           <div class="rider-list" id="rider-list"></div>
         </div>
-        <div class="charselect-center">
-          <div class="drag-hint">DRAG TO ROTATE — dragon shown at true scale</div>
+        <div class="charselect-center" aria-label="Rotate character preview">
+          <div class="drag-hint">DRAG TO ROTATE · view adjusts to dragon size</div>
         </div>
         <div class="panel">
           <div class="panel-title" id="cs-dragon-name">SYRAX</div>
@@ -354,6 +373,25 @@ export class UIManager {
           </div>
         </div>
       </div>`;
+    const preview = d.querySelector<HTMLElement>(".charselect-center")!;
+    let pointer: number | null = null;
+    preview.addEventListener("pointerdown", e => {
+      if (e.button !== 0) return;
+      pointer = e.pointerId;
+      preview.setPointerCapture(pointer);
+      this.cb.onPreviewRotate("start", e.clientX);
+    });
+    preview.addEventListener("pointermove", e => {
+      if (pointer === e.pointerId) this.cb.onPreviewRotate("move", e.clientX);
+    });
+    const releasePreview = (e: PointerEvent) => {
+      if (pointer !== e.pointerId) return;
+      pointer = null;
+      this.cb.onPreviewRotate("end", e.clientX);
+    };
+    preview.addEventListener("pointerup", releasePreview);
+    preview.addEventListener("pointercancel", releasePreview);
+    preview.addEventListener("lostpointercapture", releasePreview);
     d.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
       if (!t) return;
@@ -828,6 +866,7 @@ export class UIManager {
         <div class="setting-row"><label>Invert Y</label><button class="btn ghost toggle-btn" id="set-invert">OFF</button></div>
         <div class="setting-row"><label>Master Volume</label>
           <input type="range" id="set-master" min="0" max="1" step="0.05"> <span class="setting-value" id="set-master-v"></span></div>
+        <div class="setting-row"><label for="set-music-enabled">Background Music</label><button type="button" class="btn ghost toggle-btn" id="set-music-enabled" aria-pressed="true">ON</button></div>
         <div class="setting-row"><label>Music Volume</label>
           <input type="range" id="set-music" min="0" max="1" step="0.05"> <span class="setting-value" id="set-music-v"></span></div>
         <div class="setting-row"><label>Effects Volume</label>
@@ -844,6 +883,11 @@ export class UIManager {
       </div></div>`;
 
     const s = this.settings;
+    for (const row of d.querySelectorAll(".setting-row")) {
+      const label = row.querySelector("label");
+      const control = row.querySelector<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input,select,button");
+      if (label && control?.id) label.htmlFor = control.id;
+    }
     d.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
       if (t?.dataset.act === "back") {
@@ -862,6 +906,8 @@ export class UIManager {
           s.invertY = !s.invertY;
           this.refreshSettings();
           this.cb.onSettingsChange(s);
+        } else if (id === "set-music-enabled") {
+          this.cb.onToggleMusic();
         } else if (id === "set-fps") {
           s.showFps = !s.showFps;
           this.refreshSettings();
@@ -913,6 +959,11 @@ export class UIManager {
     const d = (this as any)._settingsDom as HTMLElement;
     if (!d) return;
     const s = this.settings;
+    this.refreshMusicButton();
+    const enabled = d.querySelector<HTMLButtonElement>("#set-music-enabled")!;
+    enabled.textContent = s.musicEnabled ? "ON" : "OFF";
+    enabled.classList.toggle("on", s.musicEnabled);
+    enabled.setAttribute("aria-pressed", String(s.musicEnabled));
     (d.querySelector("#set-preset") as HTMLSelectElement).value = s.graphicsPreset;
     const shake = d.querySelector("#set-shake") as HTMLInputElement;
     shake.value = String(s.cameraShake);
@@ -947,6 +998,13 @@ export class UIManager {
   }
 
   // ---------------- credits ----------------
+  private refreshMusicButton(): void {
+    if (!this.musicButton) return;
+    this.musicButton.textContent = this.settings.musicEnabled ? "MUSIC ON [M]" : "MUSIC OFF [M]";
+    this.musicButton.setAttribute("aria-pressed", String(this.settings.musicEnabled));
+    this.musicButton.setAttribute("aria-label", this.settings.musicEnabled ? "Turn background music off" : "Turn background music on");
+  }
+
   private buildCredits(): HTMLElement {
     const d = this.el("div", "");
     d.innerHTML = `
@@ -955,8 +1013,12 @@ export class UIManager {
         <p>DANCE OF FLAMES: DRAGONRIDER</p>
         <p>A fan-made 3D browser action game inspired by the world and lore of
         <i>House of the Dragon</i>. Not affiliated with HBO or George R. R. Martin.</p>
-        <p>All 3D models, textures, sounds and music are procedurally generated at runtime.<br>
-        No copyrighted assets are used.</p>
+        <p>Original procedural environments, effects and synthesized music.</p>
+        <p>Character models under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>:<br>
+        <a href="https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29" target="_blank" rel="noopener">Animated Dragon Three Motion Loops</a> — LasquetiSpice.<br>
+        <a href="https://sketchfab.com/3d-models/strong-knight-9d912e0fedb44b619fbd2a083bbf174f" target="_blank" rel="noopener">Strong Knight</a> — DJMaesen.<br>
+        <a href="https://sketchfab.com/3d-models/viking-battle-axe-b7123192adbf40f68043c57dd8ddcd15" target="_blank" rel="noopener">Viking battle axe</a> — xeofox.<br>
+        Free Objaverse distribution; adapted size, materials and animation.</p>
         <p>Built with TypeScript, Babylon.js (WebGPU / WebGL2), Vite &amp; WebAudio.</p>
         <div class="modal-btns"><button class="btn" data-act="back">BACK</button></div>
       </div></div>`;

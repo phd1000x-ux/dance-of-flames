@@ -3,6 +3,7 @@ import type { EventBus } from "../core/EventBus";
 import type { GameEvents } from "../core/Events";
 import type { Terrain } from "../world/Terrain";
 import type { EffectsLibrary } from "../world/EffectsLibrary";
+import { buildShaftMesh, ARROW_SPEC, BOLT_SPEC } from "../world/ProjectileGeometry";
 
 interface Projectile {
   active: boolean;
@@ -41,18 +42,21 @@ export class ProjectileSystem {
     private effects: EffectsLibrary,
     private bus: EventBus<GameEvents>
   ) {
-    this.arrowTpl = MeshBuilder.CreateBox("arrowTpl", { width: 0.05, height: 0.05, depth: 1.1 }, scene);
+    this.arrowTpl = buildShaftMesh("arrowTpl", ARROW_SPEC, scene);
     const arrowMat = new StandardMaterial("arrowMat", scene);
-    arrowMat.diffuseColor = new Color3(0.45, 0.3, 0.15);
-    arrowMat.emissiveColor = new Color3(0.1, 0.06, 0.02);
+    arrowMat.diffuseColor = Color3.White(); // vertex colors carry wood/iron/fletching
+    arrowMat.specularColor = new Color3(0.15, 0.15, 0.15);
+    arrowMat.emissiveColor = new Color3(0.06, 0.04, 0.02);
     this.arrowTpl.material = arrowMat;
     this.arrowTpl.isVisible = false;
     this.arrowTpl.isPickable = false;
 
-    this.boltTpl = MeshBuilder.CreateBox("boltTpl", { width: 0.2, height: 0.2, depth: 2.4 }, scene);
+    this.boltTpl = buildShaftMesh("boltTpl", BOLT_SPEC, scene);
     const boltMat = new StandardMaterial("boltMat", scene);
-    boltMat.diffuseColor = new Color3(0.2, 0.2, 0.22);
-    boltMat.emissiveColor = new Color3(0.25, 0.1, 0.02);
+    boltMat.diffuseColor = Color3.White();
+    boltMat.specularColor = new Color3(0.35, 0.35, 0.38);
+    // faint ember glow keeps incoming bolts readable against dark skies
+    boltMat.emissiveColor = new Color3(0.16, 0.07, 0.02);
     this.boltTpl.material = boltMat;
     this.boltTpl.isVisible = false;
     this.boltTpl.isPickable = false;

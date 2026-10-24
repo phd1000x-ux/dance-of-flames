@@ -7,3 +7,6 @@ playwright-report/
 .playwright-mcp/
 /*.png
 .worktrees/
+.superpowers/
+.codegraph/
+assets-src/mixamo/

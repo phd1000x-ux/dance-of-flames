@@ -3,7 +3,7 @@ import { postConfigForTier } from "../src/engine/PostPipeline";
 
 describe("postConfigForTier", () => {
   test("disabled → everything off", () => {
-    expect(postConfigForTier(0, false)).toEqual({ fxaa: false, imageProcessing: false, toneMapping: false, vignette: false });
+    expect(postConfigForTier(0, false)).toEqual({ fxaa: false, imageProcessing: false, toneMapping: false, vignette: false, bloom: false });
   });
   test("tier 0/1 → fxaa + vignette, no tone mapping (washed-out fog regression)", () => {
     for (const tier of [0, 1] as const) {
@@ -12,6 +12,7 @@ describe("postConfigForTier", () => {
       expect(c.imageProcessing).toBe(true);
       expect(c.toneMapping).toBe(false);
       expect(c.vignette).toBe(true);
+      expect(c.bloom).toBe(true);
     }
   });
   test("tier 2/3 → fxaa only (perf-first)", () => {
@@ -21,6 +22,7 @@ describe("postConfigForTier", () => {
       expect(c.imageProcessing).toBe(false);
       expect(c.toneMapping).toBe(false);
       expect(c.vignette).toBe(false);
+      expect(c.bloom).toBe(false);
     }
   });
 });

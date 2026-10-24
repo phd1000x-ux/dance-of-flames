@@ -64,3 +64,24 @@ describe("SaveSystem", () => {
     expect(final.bestScores["dragonstone"]).toBe(900);
   });
 });
+
+describe("music preference migration", () => {
+  it("adds enabled music to old saves and preserves the independently saved volume", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("dof-save", JSON.stringify({ version: 1, settings: { musicVolume: 0.27 } }));
+    const data = await new SaveSystem(storage).load();
+    expect(data.settings.musicEnabled).toBe(true);
+    expect(data.settings.musicVolume).toBe(0.27);
+  });
+
+  it("persists disabled music without discarding the preferred volume", async () => {
+    const system = new SaveSystem(new MemoryStorage());
+    const data = await system.load();
+    data.settings.musicEnabled = false;
+    data.settings.musicVolume = 0.42;
+    await system.save(data);
+    const loaded = await system.load();
+    expect(loaded.settings.musicEnabled).toBe(false);
+    expect(loaded.settings.musicVolume).toBe(0.42);
+  });
+});

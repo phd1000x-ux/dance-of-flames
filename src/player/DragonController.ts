@@ -1,3 +1,4 @@
+import { collideFlight, type FlightSolid } from "../world/SolidCollision";
 import { Matrix, Quaternion, Vector3 } from "@babylonjs/core";
 import type { InputManager } from "../input/InputManager";
 import type { PlayerState } from "./PlayerState";
@@ -240,6 +241,16 @@ export class DragonController {
     this.lastFlapSin = flapSin;
 
     this.syncRig(dt);
+  }
+
+  /** Keep visual/simulation pivots together when intact architecture stops flight. */
+  collideSolids(previous: Vector3, solids: readonly FlightSolid[]): boolean {
+    const hit = collideFlight(previous, this.pos, this.player.dragonDef.hitRadius * 0.92, solids);
+    if (hit) {
+      this.speed = Math.min(this.speed, 8);
+      this.rig.root.position.copyFrom(this.pos);
+    }
+    return hit;
   }
 
   private lastFlapSin = 0;

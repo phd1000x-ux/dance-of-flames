@@ -39,6 +39,7 @@ let buildingId = 1;
 /** State-based destructible buildings: INTACT → DAMAGED → BURNING → COLLAPSED. */
 export class BuildingSystem {
   buildings: BuildingEntity[] = [];
+  private originalColors = new WeakMap<import("@babylonjs/core").StandardMaterial, Color3>();
   onDestroyed: ((b: BuildingEntity) => void) | null = null;
   onRelicReveal: ((b: BuildingEntity) => void) | null = null;
   onShakeRequest: ((pos: Vector3, strength: number) => void) | null = null;
@@ -129,8 +130,15 @@ export class BuildingSystem {
     if (state === b.visualState) return;
     b.visualState = state;
     const v = DAMAGE_VISUALS[state];
-    b.material.diffuseColor = b.baseDiffuse.scale(v.diffuseScale);
-    b.material.emissiveColor = new Color3(v.ember[0], v.ember[1], v.ember[2]);
+    // Each building owns its walls, roof and timber materials. Preserve their individual
+    // colors while charring them together; the cached window material is never mutated.
+    for (const material of b.materials) {
+      if (material === b.rubble.material) continue;
+      let base = this.originalColors.get(material);
+      if (!base) { base = material.diffuseColor.clone(); this.originalColors.set(material, base); }
+      material.diffuseColor = base.scale(v.diffuseScale);
+      material.emissiveColor = new Color3(...v.ember);
+    }
     if (v.fireRate > 0 && !b.firePs) this.attachFire(b);
     if (v.smokeRate > 0 && !b.smokePs) this.attachSmoke(b);
     if (b.firePs) b.firePs.emitRate = v.fireRate;
@@ -144,6 +152,7 @@ export class BuildingSystem {
 
   /** smoke-only damage visual (SCORCHED) — fire attach reuses this */
   private attachSmoke(b: BuildingEntity): void {
+    if (b.smokePs) return;
     b.smokePs = this.effects.createSmokeColumn(`bsmoke${b.id}`);
     (b.smokePs.emitter as Vector3).set(b.pos.x, b.pos.y + b.size.h * 0.5, b.pos.z);
     b.smokePs.start();

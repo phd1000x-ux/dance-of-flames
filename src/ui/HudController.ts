@@ -112,7 +112,7 @@ export class HudController {
         <div class="bar-row"><div class="bar-label"><span>BOOST</span><span></span></div>
           <div class="bar"><div class="fill boost" id="boost-fill" style="width:100%"></div></div>
         </div>
-        <div class="bar-row"><div class="bar-label"><span>FLASKS [E]</span><span id="heal-charges">0</span></div>
+        <div class="bar-row"><div class="bar-label"><span>FLASKS [G]</span><span id="heal-charges">0</span></div>
         </div>
       </div>`;
     this.hudDragon.appendChild(bl);

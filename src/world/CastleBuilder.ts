@@ -12,12 +12,15 @@ import type { PropLibrary } from "./PropLibrary";
 import type { TerrainHeightSampler } from "./Terrain";
 import { SeededRng } from "../core/SeededRng";
 import { texturedMaterial } from "./WorldMaterials";
+import { gabledRoof } from "./SceneryGeometry";
 
 export interface CastleAabb {
   x: number;
   z: number;
   hx: number;
   hz: number;
+  minY: number;
+  maxY: number;
 }
 
 export interface CastleBuildResult {
@@ -132,8 +135,7 @@ export class CastleBuilder {
       this.wallSegment(cx + s.x0, cz + s.z0, cx + s.x1, cz + s.z1, IW_H, 3.5, base + 1.2, aabbs, this.darkStoneMat);
     }
     for (const [tx, tz] of [[-IH, -IH], [IH, -IH], [-IH, IH], [IH, IH]] as [number, number][]) {
-      this.staticTower(cx + tx, cz + tz, 9, 20, base + 1.2, this.darkStoneMat);
-      aabbs.push({ x: cx + tx, z: cz + tz, hx: 6, hz: 6 });
+      aabbs.push(this.staticTower(cx + tx, cz + tz, 9, 20, base + 1.2, this.darkStoneMat));
     }
 
     // ============ CENTRAL KEEP (46m, destructible fortress) ============
@@ -144,16 +146,13 @@ export class CastleBuilder {
       rotY: 0,
       relicId: "dragonheartEssence",
     });
-    // keep crown: static turrets on the fort roof corners (visual mass)
-    for (const [kx, kz] of [[-7, -7], [7, -7], [-7, 7], [7, 7]] as [number, number][]) {
-      this.staticTower(cx + kx, cz + kz, 4.4, 12, base + 42, this.darkStoneMat);
-    }
+    // The keep factory owns its full crown and turrets so collapse removes every
+    // elevated piece. Static roof towers here used to remain suspended in the air.
 
     // BLACKSTONE SPIRE — north landmark behind the keep (finale framing).
     // Split: static base tower + separate breakable crown the finale animates
     // (must NOT go through staticTower — that merges + freezes its meshes).
-    this.staticTower(cx, cz - 85, 7, 40, base + 2, this.darkStoneMat);
-    aabbs.push({ x: cx, z: cz - 85, hx: 7, hz: 7 });
+    aabbs.push(this.staticTower(cx, cz - 85, 7, 40, base + 2, this.darkStoneMat));
     const SPIRE_BASE_H = 40;
     const SPIRE_CROWN_H = 18;
     const spireCrownMesh = MeshBuilder.CreateCylinder(
@@ -222,24 +221,36 @@ export class CastleBuilder {
 
     const parts: Mesh[] = [];
     const body = MeshBuilder.CreateBox("wseg", { width: thick, height: height, depth: len }, this.scene);
-    body.position.y = height / 2 - 1;
+    body.position.y = height / 2 - 0.5;
     parts.push(body);
     // wall-walk parapet
     const parapet = MeshBuilder.CreateBox("wpar", { width: thick * 0.55, height: 1.4, depth: len }, this.scene);
-    parapet.position.set(0, height / 2 + 0.4, 0);
+    parapet.position.set(0, height + 0.2, 0);
     parts.push(parapet);
     // merlons (instancing would be nicer; merged here per segment — one mesh total)
     const merlonCount = Math.floor(len / 4);
     for (let i = 0; i < merlonCount; i++) {
       const m = MeshBuilder.CreateBox("wm", { width: thick * 0.6, height: 1.6, depth: 1.6 }, this.scene);
-      m.position.set(0, height / 2 + 1.6, -len / 2 + 2.2 + i * 4);
+      m.position.set(0, height + 1.5, -len / 2 + 2.2 + i * 4);
       parts.push(m);
+    }
+    // Stepped footing, wall-head cornice, and battered buttresses stay within wall collision width.
+    for (const y of [0.6, height - 1.1]) {
+      const course = MeshBuilder.CreateBox("wall-course", { width: thick * 1.04, height: 0.5, depth: len }, this.scene);
+      course.position.y = y; parts.push(course);
+    }
+    for (let z = -len / 2 + 7; z < len / 2 - 3; z += 15) {
+      for (const side of [-1, 1]) {
+        const buttress = MeshBuilder.CreateCylinder("wall-buttress", { diameterBottom: thick * 0.58, diameterTop: thick * 0.28, height: height * 0.8, tessellation: 4 }, this.scene);
+        buttress.position.set(side * thick * 0.32, height * 0.4, z);
+        buttress.rotation.y = Math.PI / 4; parts.push(buttress);
+      }
     }
     const seg = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
     seg.material = mat;
     const holder = new TransformNode("wsegHolder", this.scene);
     holder.position.set(cxw, baseY, czw);
-    holder.rotation.y = yaw + Math.PI / 2;
+    holder.rotation.y = yaw;
     seg.parent = holder;
     seg.isPickable = false;
     seg.receiveShadows = true;
@@ -248,15 +259,15 @@ export class CastleBuilder {
     // AABB (axis-aligned approximation; walls are axis-aligned in this layout)
     const hx = Math.abs(dx) > Math.abs(dz) ? len / 2 : thick / 2;
     const hz = Math.abs(dx) > Math.abs(dz) ? thick / 2 : len / 2;
-    aabbs.push({ x: cxw, z: czw, hx, hz });
+    aabbs.push({ x: cxw, z: czw, hx, hz, minY: baseY - 0.5, maxY: baseY + height + 2.3 });
   }
 
-  private staticTower(x: number, z: number, radius: number, height: number, baseY: number, mat: StandardMaterial): void {
+  private staticTower(x: number, z: number, radius: number, height: number, baseY: number, mat: StandardMaterial): CastleAabb {
     const parts: Mesh[] = [];
-    const body = MeshBuilder.CreateCylinder("stow", { diameter: radius * 2, height, tessellation: 9 }, this.scene);
+    const body = MeshBuilder.CreateCylinder("stow", { diameter: radius * 2, height, tessellation: 16 }, this.scene);
     body.position.y = height / 2;
     parts.push(body);
-    const top = MeshBuilder.CreateCylinder("stowt", { diameter: radius * 2.3, height: 1.6, tessellation: 9 }, this.scene);
+    const top = MeshBuilder.CreateCylinder("stowt", { diameter: radius * 2.3, height: 1.6, tessellation: 16 }, this.scene);
     top.position.y = height + 0.6;
     parts.push(top);
     for (let i = 0; i < 7; i++) {
@@ -264,6 +275,10 @@ export class CastleBuilder {
       const m = MeshBuilder.CreateBox("stowm", { width: 1, height: 1.4, depth: 1 }, this.scene);
       m.position.set(Math.cos(a) * radius * 1.05, height + 1.8, Math.sin(a) * radius * 1.05);
       parts.push(m);
+    }
+    for (const y of [0.8, height * 0.42, height - 0.8]) {
+      const course = MeshBuilder.CreateCylinder("tower-course", { diameter: radius * 2.12, height: 0.42, tessellation: 16 }, this.scene);
+      course.position.y = y; parts.push(course);
     }
     const roof = MeshBuilder.CreateCylinder("stowr", { diameterTop: 0, diameterBottom: radius * 2.2, height: radius * 1.6, tessellation: 8 }, this.scene);
     roof.position.y = height + radius * 0.9 + 1.6;
@@ -277,6 +292,9 @@ export class CastleBuilder {
     t.isPickable = false;
     t.freezeWorldMatrix();
     roof.freezeWorldMatrix();
+    const bounds = holder.getHierarchyBoundingVectors(true);
+    return { x, z, hx: (bounds.max.x - bounds.min.x) / 2, hz: (bounds.max.z - bounds.min.z) / 2,
+      minY: bounds.min.y, maxY: bounds.max.y };
   }
 
   private buildGateApproach(x: number, z: number, props: PropLibrary): void {
@@ -297,10 +315,9 @@ export class CastleBuilder {
     const hall = MeshBuilder.CreateBox("gh", { width: 22, height: 12, depth: 34 }, this.scene);
     hall.position.y = 6;
     parts.push(hall);
-    const roof = MeshBuilder.CreateCylinder("ghr", { diameterTop: 0, diameterBottom: 24, height: 8, tessellation: 4 }, this.scene);
-    roof.rotation.y = Math.PI / 4;
-    roof.position.y = 15.5;
-    parts.push(roof);
+    const roof = gabledRoof("ghr", 24, 36, 8, this.scene);
+    roof.position.y = 12;
+    roof.material = this.roofMat;
     const tower = MeshBuilder.CreateCylinder("ght", { diameterTop: 2, diameterBottom: 5, height: 24, tessellation: 6 }, this.scene);
     tower.position.set(-8, 12, 14);
     parts.push(tower);
@@ -309,6 +326,9 @@ export class CastleBuilder {
     const holder = new TransformNode("ghHolder", this.scene);
     holder.position.set(x, baseY, z);
     hallMesh.parent = holder;
+    roof.parent = holder;
+    roof.isPickable = false;
+    roof.freezeWorldMatrix();
     hallMesh.isPickable = false;
     hallMesh.freezeWorldMatrix();
     props.place("brazier", x + 13, z);

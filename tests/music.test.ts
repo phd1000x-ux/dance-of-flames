@@ -102,3 +102,26 @@ describe("chase/boss states", () => {
     expect(stateConfig("boss").loop).toBe(true);
   });
 });
+
+describe("score harmony", () => {
+  it("uses the documented D-minor tonal center and descending D5/C5 answer", () => {
+    const menu = composeBar("menu", 0, 42);
+    expect(menu.notes.filter(n => n.voice === "cello").map(n => n.midi)).toContain(38); // D2
+    const answer = composeBar("menu", 2, 42).notes.filter(n => n.voice === "violin");
+    expect(answer.slice(0, 2).map(n => n.midi)).toEqual([74, 72]);
+  });
+
+  it("war ostinato follows each major/minor chord rather than transposing a minor scale over it", () => {
+    const triads = [[2, 5, 9], [10, 2, 5], [5, 9, 0], [9, 1, 4]];
+    for (let bar = 0; bar < 4; bar++) {
+      const notes = composeBar("combat_high", bar, 42).notes.filter(n => n.voice === "cello");
+      for (const note of notes) expect(triads[bar]).toContain(note.midi % 12);
+    }
+  });
+
+  it("victory reserves its entire five-beat resolution before a following cue", () => {
+    const bar = composeBar("victory", 0, 42);
+    expect(bar.beats).toBe(5);
+    expect(Math.max(...bar.notes.map(n => n.start + n.dur))).toBeLessThanOrEqual(bar.beats);
+  });
+});

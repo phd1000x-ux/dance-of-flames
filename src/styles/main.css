@@ -245,16 +245,22 @@ html, body {
 .charselect-center {
   display: flex;
   flex-direction: column;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
 }
+.charselect-center:active { cursor: grabbing; }
 .charselect-center .drag-hint {
+  pointer-events: none;
   text-align: center;
   font-size: 12px;
-  color: rgba(232, 220, 192, 0.5);
+  color: rgba(232, 220, 192, 0.85);
+  text-shadow: 0 1px 3px rgba(6, 4, 4, 0.9);
   letter-spacing: 2px;
   margin-top: auto;
   padding-bottom: 8px;
 }
+
 .stat-rows { display: flex; flex-direction: column; gap: 9px; }
 .stat-row { display: flex; align-items: center; gap: 10px; font-size: 13px; letter-spacing: 1px; }
 .stat-row .stat-label { width: 74px; color: var(--parchment-dark); text-align: right; }
@@ -1006,3 +1012,57 @@ html, body {
 .boss-bar .bb-track { height: 8px; background: rgba(10, 8, 8, 0.75); border: 1px solid #6a5148; }
 .boss-bar .bb-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #7a1a12, #c8451e); transition: width 0.2s ease-out; }
 .finale-subtitle { position: absolute; bottom: 18%; left: 50%; transform: translateX(-50%); font-size: 22px; letter-spacing: 2px; color: #f0e6d8; text-shadow: 0 2px 6px #000; pointer-events: none; z-index: 40; font-style: italic; }
+
+/* Character-led start screen and persistent audio control. */
+.charselect-layout > .panel { min-height: 0; overflow-y: auto; }
+.main-menu {
+  min-height: 100%;
+  align-items: flex-start;
+  padding: 70px 5vw 100px;
+  background: linear-gradient(90deg, rgba(8,10,12,.97), rgba(8,10,12,.85) 27%, rgba(8,10,12,.06) 57%, transparent);
+}
+.main-menu .game-title { max-width: 420px; font-size: clamp(28px,3.8vw,50px); letter-spacing: .14em; text-align: left; line-height: 1.2; }
+.main-menu .game-subtitle { font-size: 16px; letter-spacing: .5em; margin-bottom: 30px; }
+.main-menu .menu-btn { min-width: 280px; text-align: left; padding: 11px 18px; font-size: 19px; letter-spacing: 3px; }
+.main-menu .menu-footer { left: 5vw; max-width: 390px; text-align: left; line-height: 1.6; letter-spacing: 1px; }
+.main-menu .menu-kb-hint { left: 5vw; bottom: 78px; transform: none; letter-spacing: 1px; }
+.music-toggle {
+  position: fixed; top: 16px; left: 18px; z-index: 80; pointer-events: auto;
+  color: var(--parchment); background: rgba(14,18,22,.86); border: 1px solid var(--panel-border);
+  border-radius: 4px; padding: 8px 12px; font: 12px var(--font-body); letter-spacing: 1px; cursor: pointer;
+}
+.music-toggle:hover, .music-toggle:focus-visible { border-color: var(--gold-bright); }
+.setting-row label { flex: 1; }
+.settings-panel .setting-row { gap: 12px; }
+.modal-center .settings-panel { width: min(600px,94vw); }
+.credits-panel a { color: var(--gold-bright); }
+@media (max-width: 720px) { .mission-layout { grid-template-columns: 1fr; overflow-y: auto; } }
+@media (max-width: 1050px) {
+  .charselect-layout { grid-template-columns: 235px minmax(160px,1fr) 270px; gap: 10px; }
+  .charselect-layout .panel { padding: 12px; }
+  .charselect-layout .panel-title { font-size: 19px; letter-spacing: 3px; }
+  .roster-name { font-size: 13px; }
+}
+@media (max-height: 740px) {
+  .main-menu { padding-top: 60px; gap: 4px; }
+  .main-menu .game-subtitle { margin-bottom: 16px; }
+  .main-menu .menu-btn { padding-block: 7px; }
+  .charselect-layout { height: 92vh; }
+  .charselect-layout > .panel { overflow-y: auto; }
+}
+@media (max-width: 720px) {
+  .main-menu { padding: 70px 22px 120px; background: linear-gradient(90deg,rgba(8,10,12,.96),rgba(8,10,12,.7) 60%,rgba(8,10,12,.2)); }
+  .main-menu .game-title { max-width: 340px; }
+  .main-menu .menu-kb-hint,.main-menu .menu-footer { left: 22px; max-width: calc(100vw - 44px); }
+  .charselect-layout { grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: 33vh auto; height: 92vh; gap: 10px; overflow-y: auto; }
+  .charselect-center { grid-column: 1 / -1; grid-row: 1; }
+  .charselect-layout > .panel { min-width: 0; grid-row: 2; }
+  .charselect-layout .panel-title { font-size: 16px; letter-spacing: 2px; }
+  .roster-sigil { display: none; }
+  .charselect-actions { flex-wrap: wrap; }
+  .charselect-actions .btn { min-width: 80px; padding-inline: 8px; }
+  .setting-row { flex-wrap: wrap; }
+  .modal-center .panel { max-width: 94vw; }
+  .hud-bottom-left { left: 12px; bottom: 20px; transform: scale(.85); transform-origin: bottom left; }
+  .hud-bottom-center { width: 35vw; }
+}

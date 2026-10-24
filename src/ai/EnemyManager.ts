@@ -131,7 +131,7 @@ export class EnemyManager {
   private factory: SoldierFactory;
   onSoldierDeath: ((s: Soldier, byFire: boolean) => void) | null = null;
   onBallistaDeath: ((b: BallistaEntity, byFire: boolean) => void) | null = null;
-  onMeleeHitRider: ((damage: number, fromX: number, fromZ: number) => void) | null = null;
+  onMeleeHitRider: ((damage: number, fromX: number, fromZ: number, kind?: "melee" | "shieldBreaker") => void) | null = null;
   /** stereo pan provider for positional sfx (wired by MissionScene) — null → centered */
   panFromWorld: ((pos: { x: number; z: number }) => number) | null = null;
 
