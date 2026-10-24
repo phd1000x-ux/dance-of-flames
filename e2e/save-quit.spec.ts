@@ -32,3 +32,27 @@ test("pause → SAVE & MAIN MENU keeps the selection and banks picked-up coins",
   expect(after.dragon).toBe("syrax");
   expect(after.mission).toBeNull();
 });
+
+test("character select → SAVE & MAIN MENU stores the pairing and enables CONTINUE", async ({ page }) => {
+  await page.goto("/?test=1");
+  await page.waitForFunction(() => document.querySelector("#screen-main-menu")?.classList.contains("visible"), undefined, { timeout: 90000 });
+  await page.locator('#screen-main-menu [data-act="new"]').click();
+  await page.waitForFunction(() => document.querySelector("#screen-character-select")?.classList.contains("visible"));
+  await page.locator("#rider-list .roster-item").nth(1).click();
+  await page.locator("#dragon-list .roster-item").nth(1).click();
+  const picked = await page.evaluate(() => (window as any).__UI.getSelection());
+  // the bar stays on screen without scrolling the panel
+  const btn = page.locator('#screen-character-select [data-act="savequit"]');
+  const box = await btn.boundingBox();
+  expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await btn.click();
+
+  await page.waitForFunction(() => document.querySelector("#screen-main-menu")?.classList.contains("visible"));
+  const after = await page.evaluate(() => ({
+    rider: (window as any).__APP.save.selectedRider,
+    dragon: (window as any).__APP.save.selectedDragon,
+    continueEnabled: !(document.querySelector('#screen-main-menu [data-act="continue"]') as HTMLButtonElement).disabled,
+  }));
+  expect(after).toEqual({ rider: picked.rider, dragon: picked.dragon, continueEnabled: true });
+  expect(await visible(page, "character-select")).toBe(false);
+});

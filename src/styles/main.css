@@ -292,6 +292,17 @@ html, body {
 .charselect-epithet { font-size: 12px; color: var(--ember); letter-spacing: 2px; margin-bottom: 12px; }
 .charselect-actions { display: flex; gap: 10px; margin-top: 16px; }
 .charselect-actions .btn { flex: 1; }
+.charselect-actions { flex-wrap: wrap; }
+.charselect-actions .btn.wide { flex-basis: 100%; }
+.charselect-actions.sticky .btn { min-width: 0; padding-inline: 8px; }
+.charselect-actions.sticky .btn.ghost { background-color: rgb(12,11,10); }
+.charselect-actions.sticky .btn.wide { font-size: 14px; padding-block: 7px; }
+/* keep the actions on screen while the stats/description scroll underneath */
+.charselect-actions.sticky {
+  position: sticky; bottom: -20px; z-index: 1;
+  margin: 16px -20px -20px; padding: 12px 20px 20px;
+  background: linear-gradient(180deg, rgba(12,11,10,0), rgb(12,11,10) 12px);
+}
 .section-label {
   font-size: 11px;
   letter-spacing: 3px;
@@ -1040,6 +1051,7 @@ html, body {
 @media (max-width: 1050px) {
   .charselect-layout { grid-template-columns: 235px minmax(160px,1fr) 270px; gap: 10px; }
   .charselect-layout .panel { padding: 12px; }
+  .charselect-actions.sticky { margin: 12px -12px -12px; padding: 10px 12px 12px; bottom: -12px; }
   .charselect-layout .panel-title { font-size: 19px; letter-spacing: 3px; }
   .roster-name { font-size: 13px; }
 }
