@@ -177,20 +177,10 @@ test("siege: no regression — §90 phased castle completion", async ({ page }) 
     g.api.collapseBuildingsWithTag("wallTower", 4);
     g.api.collapseBuildingWithTag("gatehouse");
     g.api.killByType("soldier", 12);
+    for (let i = 0; i < 90; i++) g.mission.tracker.update(1); // courtyard hold (bs-final)
     g.api.killByType("commander", 1);
   });
-  // short-circuit resolves bs-castellan/pursue/vharax → bs-final survives becomes current
-  await page.waitForFunction(
-    () => (document.querySelector("#objective-text")?.textContent ?? "").toLowerCase().includes("counterattack"),
-    null,
-    { timeout: 30000 }
-  );
-  // fast-forward the 75 sim-second survive objective through the tracker
-  // (never wall-clock: at 2 FPS 75 sim s would exceed 180 wall s)
-  await page.evaluate(() => {
-    const m = (window as any).__GAME.mission;
-    for (let i = 0; i < 90; i++) m.tracker.update(1);
-  });
+  // short-circuit resolves bs-castellan/pursue/vharax — the last objectives → VICTORY
   await page.waitForFunction(() => (window as any).__GAME.state === "VICTORY", null, { timeout: 15000 });
   await expect(page.locator("#results-title")).toHaveText("VICTORY");
 });
@@ -205,6 +195,7 @@ test("siege: out-of-order gatehouse destruction counts retroactively (soft-lock 
     g.api.killBallistae(6);
     g.api.collapseBuildingsWithTag("wallTower", 4);
     g.api.killByType("soldier", 12);
+    for (let i = 0; i < 90; i++) g.mission.tracker.update(1); // courtyard hold (bs-final)
   });
   // the chain must still walk past the already-destroyed gate into the castellan beat
   await page.waitForFunction(() => {
@@ -232,6 +223,7 @@ test("siege: finale music override clears on next mission (§10 regression)", as
     g.api.collapseBuildingsWithTag("wallTower", 4);
     g.api.collapseBuildingWithTag("gatehouse");
     g.api.killByType("soldier", 12);
+    for (let i = 0; i < 90; i++) g.mission.tracker.update(1); // courtyard hold (bs-final)
   });
   await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "AWAIT_LANDING", null, { timeout: 30000 });
   // land → ground duel: the organic DUEL_GROUND entry emits finale-music "boss",

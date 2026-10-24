@@ -4,8 +4,8 @@ import { test, expect, type Page } from "@playwright/test";
  * Blackstone finale slice 3 — staged crash chain, in-memory checkpoints, assault escalation.
  *
  *   1. full crash chain: DUEL_AIR → floor-clamped api damage → RETURN/FINAL_STAGGER →
- *      FINAL_CRASH (slow-mo sample + crown detach) → RESOLVED → long war horn +
- *      band-escalated short horns on the final assault → fast-forwarded bs-final → VICTORY
+ *      FINAL_CRASH (slow-mo sample + crown detach) → RESOLVED → VICTORY (the courtyard
+ *      hold — long war horn + band-escalated short horns — now runs before the duel)
  *   2. checkpoint restore: reach DUEL_AIR (checkpoint captured at entry), kill the
  *      dragon (finale resolves silently, mission continues on foot), kill the rider →
  *      DEFEAT with RETRY (CHECKPOINT) → mission rebuilt at DUEL_AIR (phase, collapsed
@@ -45,9 +45,36 @@ async function clearSiege(page: Page) {
   });
 }
 
-/** siege → land → ground duel → transition → remount; resolves in DRAGON_GAMEPLAY (finale in CHASE) */
-async function reachChase(page: Page) {
+/** fast-forward the bs-final survive window (courtyard hold, before the duel) via the pure tracker */
+async function holdCourtyard(page: Page) {
+  await page.evaluate(() => {
+    const g = (window as any).__GAME;
+    for (let i = 0; i < 90; i++) g.mission.tracker.update(1);
+  });
+}
+
+/** siege → hold → land → ground duel → transition → remount; resolves in DRAGON_GAMEPLAY (finale in CHASE) */
+async function reachChase(page: Page, checkAssault = false) {
   await clearSiege(page);
+  if (checkAssault) {
+    // final assault: long war horn at start, band 0, then escalate (progress 35/75 →
+    // band 1) for a short horn stab — proves the T4 escalation wiring end to end
+    await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.warHorns >= 1, null, { timeout: 30000 });
+    const assault0 = await page.evaluate(() => (window as any).__GAME.api.assaultInfo());
+    expect(assault0.active).toBe(true);
+    expect(assault0.band).toBe(0);
+    await page.evaluate(() => {
+      const g = (window as any).__GAME;
+      for (let i = 0; i < 35; i++) g.mission.tracker.update(1);
+    });
+    await simWait(page, 3, 30000); // band poll fires once per sim second
+    const assault1 = await page.evaluate(() => (window as any).__GAME.api.assaultInfo());
+    const warHorns = await page.evaluate(() => (window as any).__GAME.api.getFinale()?.warHorns);
+    expect(assault1.active).toBe(true);
+    expect(assault1.band).toBeGreaterThanOrEqual(1);
+    expect(warHorns).toBeGreaterThanOrEqual(2);
+  }
+  await holdCourtyard(page);
   await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "AWAIT_LANDING", null, { timeout: 30000 });
   await page.evaluate(() => (window as any).__GAME.api.forceLand());
   await page.waitForFunction(() => (window as any).__GAME.mission.phase === "ground", null, { timeout: 20000 });
@@ -78,12 +105,8 @@ async function crashToResolved(page: Page) {
   await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "RESOLVED", null, { timeout: 150000 });
 }
 
-/** fast-forward the bs-final survive window via the pure tracker (§91 precedent) → VICTORY */
-async function finishFinalObjective(page: Page) {
-  await page.evaluate(() => {
-    const g = (window as any).__GAME;
-    for (let i = 0; i < 90; i++) g.mission.tracker.update(1);
-  });
+/** the spire crash resolves the last objective — VICTORY with no further wave */
+async function expectVictory(page: Page) {
   await page.waitForFunction(() => (window as any).__GAME.state === "VICTORY", null, { timeout: 30000 });
   await expect(page.locator("#results-title")).toHaveText("VICTORY");
 }
@@ -91,7 +114,7 @@ async function finishFinalObjective(page: Page) {
 test("finale3: full crash chain", async ({ page }) => {
   test.setTimeout(540000); // staged chain is wall-clock budget-bounded (~110 s) under SwiftShader
   await bootBlackstone(page);
-  await reachChase(page);
+  await reachChase(page, true);
 
   // skip the organic chase loop — the crash chain is ahead of it, not inside it
   const ok = await page.evaluate(() => (window as any).__GAME.api.setFinalePhase("DUEL_AIR"));
@@ -118,25 +141,7 @@ test("finale3: full crash chain", async ({ page }) => {
   expect(fin.crashDetached).toBe(true);
   expect(fin.crownY).toBeLessThan((yHome as number) - 30);
 
-  // final assault: long war horn at start, band 0, then escalate (progress 35/75 →
-  // band 1) for a short horn stab — proves the T4 escalation wiring end to end
-  await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.warHorns >= 1, null, { timeout: 30000 });
-  const assault0 = await page.evaluate(() => (window as any).__GAME.api.assaultInfo());
-  expect(assault0.active).toBe(true);
-  expect(assault0.band).toBe(0);
-
-  await page.evaluate(() => {
-    const g = (window as any).__GAME;
-    for (let i = 0; i < 35; i++) g.mission.tracker.update(1);
-  });
-  await simWait(page, 3, 30000); // band poll fires once per sim second
-  const assault1 = await page.evaluate(() => (window as any).__GAME.api.assaultInfo());
-  const warHorns = await page.evaluate(() => (window as any).__GAME.api.getFinale()?.warHorns);
-  expect(assault1.active).toBe(true);
-  expect(assault1.band).toBeGreaterThanOrEqual(1);
-  expect(warHorns).toBeGreaterThanOrEqual(2);
-
-  await finishFinalObjective(page);
+  await expectVictory(page);
 });
 
 test("finale3: checkpoint restore", async ({ page }) => {
@@ -201,7 +206,7 @@ test("finale3: checkpoint restore", async ({ page }) => {
   expect(restored.wallTowers).toBe(4);
   expect(restored.checkpointHeld).toBe(true);
 
-  // finish from the restored duel: crash chain → fast-forwarded assault → VICTORY
+  // finish from the restored duel: crash chain → VICTORY
   await crashToResolved(page);
-  await finishFinalObjective(page);
+  await expectVictory(page);
 });
