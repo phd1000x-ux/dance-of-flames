@@ -969,7 +969,7 @@ export class MissionScene {
       }
     };
     for (const s of this.enemies.soldiers) {
-      if (s.state === "dead") continue;
+      if (s.state === "dead" || s.aboard) continue;
       const prio = s.def.role === "commander" ? 0.45 : s.def.role === "elite" ? 0.4 : s.def.role === "archer" ? 0.15 : 0;
       consider(s.pos, prio, s.def.name);
       if (bestKind === s.def.name && bestSoldier === null && Vector3.DistanceSquared(s.pos, bestPos ?? origin) < 1) {
@@ -1028,7 +1028,7 @@ export class MissionScene {
     let bestScore = Infinity;
     const origin = this.dragonCtrl.pos;
     for (const s of this.enemies.soldiers) {
-      if (s.state === "dead") continue;
+      if (s.state === "dead" || s.aboard) continue;
       const v = s.pos.subtract(origin);
       const dist = v.length();
       if (dist > 160 || dist < 4) continue;
@@ -1089,7 +1089,7 @@ export class MissionScene {
     return {
       player: { x: this.playerPosition().x, z: this.playerPosition().z, yaw: this.phase === "ground" ? this.riderCtrl?.yaw ?? 0 : this.dragonCtrl.yaw },
       enemies: this.enemies.soldiers
-        .filter((s) => s.state !== "dead")
+        .filter((s) => s.state !== "dead" && !s.aboard)
         .map((s) => ({ x: s.pos.x, z: s.pos.z, role: s.def.role })),
       ballistae: this.enemies.ballistae.filter((b) => !b.dead).map((b) => ({ x: b.pos.x, z: b.pos.z })),
       buildings: this.buildings.buildings.map((b) => ({ x: b.pos.x, z: b.pos.z, collapsed: b.collapsed })),
@@ -1114,7 +1114,7 @@ export class MissionScene {
     let best: Soldier | null = null;
     let bestD = Infinity;
     for (const s of this.enemies.soldiers) {
-      if (s.state === "dead") continue;
+      if (s.state === "dead" || s.aboard) continue;
       const d = Vector3.Distance(s.pos, this.playerPosition());
       if (d < bestD) {
         bestD = d;

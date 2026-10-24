@@ -741,7 +741,7 @@ export class GameApp {
       lowHp: p.dragonHp / Math.max(1, p.maxDragonHp) < 0.3,
       boosting: m.dragonCtrl.state === "BOOST",
       healCharges: p.healCharges,
-      enemies: m.enemies.soldiers.filter((s) => s.state !== "dead").map((s) => ({ x: s.pos.x, z: s.pos.z, role: s.def.role })),
+      enemies: m.enemies.soldiers.filter((s) => s.state !== "dead" && !s.aboard).map((s) => ({ x: s.pos.x, z: s.pos.z, role: s.def.role })),
       ballistae: m.enemies.ballistae.filter((b) => !b.dead).map((b) => ({ x: b.pos.x, z: b.pos.z })),
       buildings: m.buildings.buildings.map((b) => ({ x: b.pos.x, z: b.pos.z, collapsed: b.collapsed })),
       loot: m.loot.entities.map((l) => ({ x: l.pos.x, z: l.pos.z })),
