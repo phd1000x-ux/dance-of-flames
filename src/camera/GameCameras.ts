@@ -137,11 +137,16 @@ interface SceneLike {
  * Classic third-person shoulder camera for ground combat.
  * Mouse OR Arrow Keys rotate; Z recenters behind the rider; soft lock-on bias.
  */
+/** keyboard look speed on foot: ~110°/s turn, ~70°/s pitch */
+export const KEY_YAW_RATE = 1.9;
+export const KEY_PITCH_RATE = 1.2;
+
 export class GroundCamera {
   readonly camera: UniversalCamera;
   yaw = 0;
   pitch = 0.18;
   private recenterTimer = 0;
+  private shake = 0;
 
   constructor(scene: Scene, private terrain: Terrain) {
     this.camera = new UniversalCamera("groundCam", new Vector3(0, 5, -8), scene);
@@ -163,8 +168,9 @@ export class GroundCamera {
     const sens = settings.mouseSensitivity;
     const invert = settings.invertY ? -1 : 1;
     // mouse + smoothed arrow-key look
-    this.yaw += mouse.dx * 2.6 * sens + input.lookYaw * 2.2;
-    this.pitch = clamp(this.pitch + mouse.dy * 2.0 * sens * invert - input.lookPitch * 1.7, -0.55, 1.0);
+    // arrow keys are a rate (rad/s), so they must scale by dt — mouse deltas are already per-frame
+    this.yaw += mouse.dx * 2.6 * sens + input.lookYaw * KEY_YAW_RATE * dt;
+    this.pitch = clamp(this.pitch + mouse.dy * 2.0 * sens * invert - input.lookPitch * KEY_PITCH_RATE * dt, -0.55, 1.0);
 
     // Z recenter: smoothly return behind the rider
     if (this.recenterTimer > 0) {
@@ -198,8 +204,21 @@ export class GroundCamera {
 
     this.camera.position.copyFrom(camPos);
     const look = targetPos.add(new Vector3(0, 2.1, 0)).add(dirH.scale(2));
+    // shake: the shoulder cam sits ~6m away, so jitter the aim point (reads as
+    // a jolt) with a much smaller positional component than the flight camera
+    this.shake = Math.max(0, this.shake - dt * 3.2);
+    const sh = this.shake * settings.cameraShake;
+    if (sh > 0.01) {
+      look.x += (Math.random() - 0.5) * sh * 0.5;
+      look.y += (Math.random() - 0.5) * sh * 0.5;
+      this.camera.position.y += (Math.random() - 0.5) * sh * 0.12;
+    }
     this.camera.setTarget(look);
     this.camera.upVector.copyFrom(Vector3.Up());
+  }
+
+  addShake(amount: number): void {
+    this.shake = Math.min(1.2, this.shake + amount);
   }
 
   startRecenter(): void {

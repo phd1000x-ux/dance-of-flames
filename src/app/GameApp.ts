@@ -278,6 +278,12 @@ export class GameApp {
       } catch (error) {
         console.warn("[characters] using procedural fallback", error);
       }
+      try {
+        const { installSoldierVisuals } = await import("../world/SoldierVisuals");
+        await installSoldierVisuals(mission);
+      } catch (error) {
+        console.warn("[soldiers] using procedural fallback", error);
+      }
     }
     mission.postPipeline.applyTier(this.governor.tier);
     // checkpoint restore: apply to the deterministic fresh build; on failure

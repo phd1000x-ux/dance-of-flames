@@ -12,6 +12,7 @@ import {
 import type { MissionDefinition } from "../data/missions";
 import { SeededRng } from "../core/SeededRng";
 import { Terrain, buildSkyAndHorizon } from "./Terrain";
+import { buildSkyDome } from "./SkyDome";
 import { texturedMaterial } from "./WorldMaterials";
 import { branchingTree, weatheredRock } from "./SceneryGeometry";
 import type { BuildingKind } from "./BuildingFactory";
@@ -93,7 +94,8 @@ export class WorldBuilder {
       accentColor: env.groundAccent,
     });
 
-    buildSkyAndHorizon(this.scene, def.seed, { silhouette: env.silhouette, fogColor: env.fogColor, skyBottom: env.skyBottom });
+    buildSkyDome(this.scene, env);
+    buildSkyAndHorizon(this.scene, def.seed, { silhouette: env.silhouette, fogColor: env.fogColor, skyBottom: env.skyBottom }, terrain.sampler);
 
     // lighting
     const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), this.scene);

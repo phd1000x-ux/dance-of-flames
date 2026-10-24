@@ -28,6 +28,19 @@
         "idle1"
       ],
       "changes": "Original GLB bytes preserved; runtime size, axis, material and animation adjustments in CharacterPrototype.ts"
+    },
+    {
+      "file": "axe.glb",
+      "author": "xeofox (https://sketchfab.com/xeofox)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/viking-battle-axe-b7123192adbf40f68043c57dd8ddcd15",
+      "title": "Viking battle axe",
+      "download": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-124/b7123192adbf40f68043c57dd8ddcd15.glb",
+      "retrieved": "2026-10-25",
+      "sha256": "be9f809087bc869900c5101dfd06b0965b60d8629d6719bcbd988c67570bd9f1",
+      "bytes": 2348316,
+      "animationClips": [],
+      "changes": "Original GLB bytes preserved; runtime haft-axis normalization, scale and grip placement in CharacterAssets.ts (HeldWeapon.useImported)"
     }
   ]
 }

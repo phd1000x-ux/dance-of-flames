@@ -127,6 +127,10 @@ export class MissionScene {
   private deathStartedAt = 0;
   /** cinematic slow-motion window (seconds of real time remaining) */
   slowmoT = 0;
+  /** remaining real seconds of impact hit-stop (see hitStop) */
+  hitStopT = 0;
+  /** scaled sim dt of the latest update — visual layers animate on this so hit-stop/slow-mo apply */
+  lastSimDt = 0;
   /** checkpoint-restore replay guard — suppresses minting side effects (loot/super/stats/relic sfx) */
   restoring = false;
   /** checkpoint-restore walk guard — skipTo past DUEL_GROUND must not ground an airborne restore */
@@ -344,11 +348,24 @@ export class MissionScene {
         this.player.addSuper(5);
       }
       this.tracker.notifyKill(p.type);
+      if (this.restoring) return;
+      if (this.phase === "ground") {
+        this.hitStop(0.11);
+        this.groundCam.addShake(0.45);
+      } else if (p.byFire) {
+        this.dragonCam.addShake(p.type === "ballista" ? 0.35 : 0.08);
+      }
     });
     d.bus.on("player-damaged", (p) => {
       this.stats.damageTaken += p.amount;
       this.recentDamageT = 3.5;
+      if (this.phase === "ground") this.groundCam.addShake(Math.min(0.9, 0.25 + p.amount / 60));
     });
+  }
+
+  /** Freeze the sim almost completely for `seconds` of real time (longest request wins). */
+  hitStop(seconds: number): void {
+    this.hitStopT = Math.max(this.hitStopT, seconds);
   }
 
   private emitObjective(): void {
@@ -421,7 +438,13 @@ export class MissionScene {
       this.slowmoT -= dt;
       simDt = dt * 0.35;
     }
+    // impact hit-stop: a few frames of near-freeze sell melee/kill weight
+    if (this.hitStopT > 0) {
+      this.hitStopT -= dt;
+      simDt *= 0.06;
+    }
     dt = simDt;
+    this.lastSimDt = dt;
     this.time += dt;
     this.stats.timeSeconds = this.time;
 
@@ -530,6 +553,8 @@ export class MissionScene {
           if (res.hit) {
             d.audio.swordHitArmor();
             d.bus.emit("hit-enemy", { killed: false });
+            this.hitStop(heavy ? 0.085 : 0.045);
+            this.groundCam.addShake(heavy ? 0.32 : 0.14);
           } else if (res.blocked) {
             d.audio.swordHitShield();
           }

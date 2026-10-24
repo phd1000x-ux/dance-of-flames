@@ -3,7 +3,7 @@ import { getWorldTexture } from "./WorldMaterials";
 import { SeededRng } from "../core/SeededRng";
 import { smoothstep } from "../core/MathUtils";
 import { fbm } from "./Noise";
-import { branchingTree, gabledRoof, weatheredRock } from "./SceneryGeometry";
+import { branchingTree, weatheredRock } from "./SceneryGeometry";
 
 /** Analytic terrain height — shared by rendering, gameplay collision, and placement. */
 export class TerrainHeightSampler {
@@ -15,7 +15,7 @@ export class TerrainHeightSampler {
     private freq = 1 / 150,
     private flatRadius = 240,
     private flatBlend = 380,
-    private water = 0
+    _waterLevel = 0
   ) {
     const rng = new SeededRng(seed);
     this.perm = new Float32Array(512);
@@ -57,9 +57,35 @@ export class TerrainHeightSampler {
     // flatten battlefield center so buildings/melee have sane footing
     const d = Math.sqrt(x * x + z * z);
     const flat = smoothstep(this.flatRadius, this.flatRadius + this.flatBlend, d);
-    return total * (0.1 + 0.9 * flat) + this.water * 0.0;
+    return total * (0.1 + 0.9 * flat) + this.mountains(x, z, d);
+  }
+
+  /**
+   * Ridged mountain ring past the playable area: rises from MOUNTAIN_START and
+   * peaks near the flight soft bound (DragonController boundsRadius 760), so the
+   * edge of the map reads as a range instead of a flat plane meeting fog.
+   * Zero inside MOUNTAIN_START — battlefield placement is unaffected.
+   */
+  private mountains(x: number, z: number, d: number): number {
+    const ring = smoothstep(MOUNTAIN_START, MOUNTAIN_FULL, d);
+    if (ring <= 0) return 0;
+    let ridge = 0;
+    let amp = 1;
+    let f = 1 / 95;
+    for (let o = 0; o < 3; o++) {
+      const n = this.noise2(x * f + 41.7 + o * 7.3, z * f - 13.9 - o * 5.1);
+      ridge += (1 - Math.abs(2 * n - 1)) ** 2 * amp;
+      amp *= 0.5;
+      f *= 2.1;
+    }
+    return ring * (MOUNTAIN_BASE + ridge * MOUNTAIN_AMP);
   }
 }
+
+export const MOUNTAIN_START = 590;
+export const MOUNTAIN_FULL = 800;
+const MOUNTAIN_BASE = 35;
+const MOUNTAIN_AMP = 120;
 
 export interface TerrainOptions {
   size?: number;
@@ -77,7 +103,7 @@ export class Terrain {
     this.size = opts.size ?? 1700;
     this.sampler = new TerrainHeightSampler(seed, 22, 1 / 150, 240, 380, waterLevel ?? 0);
 
-    const subdivisions = opts.subdivisions ?? 110;
+    const subdivisions = opts.subdivisions ?? 150;
     const ground = MeshBuilder.CreateGround("terrain", { width: this.size, height: this.size, subdivisions }, scene);
     ground.isPickable = false;
 
@@ -142,13 +168,17 @@ export class Terrain {
 export function buildSkyAndHorizon(
   scene: Scene,
   seed: number,
-  cfg: { skyBottom?: string; silhouette?: string; fogColor: string }
+  cfg: { skyBottom?: string; silhouette?: string; fogColor: string },
+  ground?: TerrainHeightSampler
 ): void {
   const rng = new SeededRng(seed + 999);
 
   // distant silhouette ring
   const kind = cfg.silhouette ?? "cliffs";
-  const count = kind === "city" ? 26 : 30;
+  // The terrain's mountain ring now forms the natural horizon; giant rock and
+  // building stand-ins perched on its ridges read as floating fog blobs, so
+  // only forest/ruins silhouettes (which belong on mountainsides) remain.
+  const count = kind === "cliffs" || kind === "city" ? 0 : 30;
   const mat = new StandardMaterial("silhouetteMat", scene);
   const fog = Color3.FromHexString(cfg.fogColor);
   mat.diffuseColor = fog.scale(0.55);
@@ -168,31 +198,19 @@ export function buildSkyAndHorizon(
     const x = Math.cos(angle) * dist;
     const z = Math.sin(angle) * dist;
     let m: Mesh | import("@babylonjs/core").InstancedMesh;
-    if (kind === "city") {
-      const w = rng.range(20, 46), h = rng.range(30, 90), d = rng.range(20, 40);
-      const body = MeshBuilder.CreateBox(`sil${i}`, { width: w, height: h, depth: d }, scene);
-      body.position.y = h / 2;
-      const roof = gabledRoof(`sil-roof-${i}`, w * 1.1, d * 1.1, w * 0.7, scene);
-      roof.position.y = h;
-      m = Mesh.MergeMeshes([body, roof], true, true)!;
-      m.position.y = -10;
-    } else if (kind === "ruins") {
+    if (kind === "ruins") {
       m = weatheredRock(`sil${i}`, seed + i * 11, scene);
       m.scaling.set(rng.range(9, 16), rng.range(35, 65), rng.range(10, 19));
       m.position.y = 20;
-    } else if (kind === "forest") {
+    } else {
       m = forestTemplates[i % 2].createInstance(`horizon-forest-${i}`);
       const scale = rng.range(5.5, 9);
       m.scaling.set(scale * 1.3, scale, scale * 1.3);
       m.position.y = -10;
-    } else {
-      // Overlapping asymmetric rock masses form a broken ridge instead of a ring of cones.
-      m = weatheredRock(`sil${i}`, seed + i * 31, scene);
-      m.scaling.set(rng.range(55, 95), rng.range(75, 145), rng.range(40, 80));
-      m.rotation.set(rng.range(-0.14, 0.14), angle, rng.range(-0.18, 0.18));
-      m.position.y = 10;
     }
     m.position.x = x; m.position.z = z;
+    // sit on the mountain ring rather than floating/buried at a fixed height
+    if (ground) m.position.y += ground.height(x, z);
     m.material = mat;
     m.isPickable = false;
     // Freeze only after all transforms: the former horizon was frozen at y=0.
@@ -207,11 +225,12 @@ export function buildSkyAndHorizon(
     const cm = new StandardMaterial(`cloudMat${layer}`, scene);
     cm.diffuseTexture = cloudTex;
     cm.opacityTexture = cloudTex;
-    cm.emissiveColor = new Color3(1, 1, 1);
-    cm.diffuseColor = new Color3(1, 1, 1);
+    // tinted toward the fog so the layer reads as overcast, not a white sheet over the sky dome
+    cm.emissiveColor = Color3.Lerp(fog, Color3.White(), 0.45);
+    cm.diffuseColor = Color3.Black();
     cm.specularColor = Color3.Black();
     cm.disableLighting = true;
-    cm.alpha = layer === 0 ? 0.5 : 0.32;
+    cm.alpha = layer === 0 ? 0.42 : 0.26;
     cm.backFaceCulling = false;
     cloud.material = cm;
     cloud.isPickable = false;

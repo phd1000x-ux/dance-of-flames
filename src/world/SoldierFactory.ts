@@ -11,6 +11,7 @@ import {
 import type { EnemyDefinition } from "../data/enemies";
 import type { RiderDefinition } from "../data/riders";
 import { texturedMaterial } from "./WorldMaterials";
+import { buildShaftMesh, BOLT_SPEC } from "./ProjectileGeometry";
 
 /** Procedural low-poly soldiers + ballistae + ground-mode rider. */
 export class SoldierFactory {
@@ -176,13 +177,54 @@ export class SoldierFactory {
     rail.position.set(0, 0.3, 0.6);
     rail.material = railMat;
     rail.parent = turret;
-    const bowArm = MeshBuilder.CreateBox("b-arm", { width: 2.8, height: 0.18, depth: 0.18 }, this.scene);
-    bowArm.position.set(0, 0.3, 2.1);
-    bowArm.material = railMat;
-    bowArm.parent = turret;
-    const bolt = MeshBuilder.CreateBox("b-bolt", { width: 0.16, height: 0.16, depth: 2.4 }, this.scene);
-    bolt.position.set(0, 0.36, 1.2);
-    bolt.material = railMat;
+    // groove rails either side of the bolt channel
+    for (const gx of [-0.13, 0.13]) {
+      const lip = MeshBuilder.CreateBox("b-lip", { width: 0.05, height: 0.08, depth: 3.3 }, this.scene);
+      lip.position.set(gx, 0.45, 0.6);
+      lip.material = railMat;
+      lip.parent = turret;
+    }
+    // torsion frame at the front: two upright spring housings + cross beams
+    for (const fx of [-0.42, 0.42]) {
+      const spring = MeshBuilder.CreateCylinder("b-spring", { diameter: 0.26, height: 0.75, tessellation: 10 }, this.scene);
+      spring.position.set(fx, 0.38, 1.95);
+      spring.material = woodMat;
+      spring.parent = turret;
+    }
+    for (const fy of [0.02, 0.74]) {
+      const beam = MeshBuilder.CreateBox("b-beam", { width: 1.15, height: 0.12, depth: 0.22 }, this.scene);
+      beam.position.set(0, fy, 1.95);
+      beam.material = railMat;
+      beam.parent = turret;
+    }
+    // swept-back bow arms (two segments each side) and the string
+    const tips: number[] = [];
+    for (const side of [-1, 1]) {
+      const inner = MeshBuilder.CreateBox("b-arm", { width: 0.75, height: 0.13, depth: 0.13 }, this.scene);
+      inner.position.set(side * 0.82, 0.38, 1.88);
+      inner.rotation.y = side * 0.32;
+      inner.material = woodMat;
+      inner.parent = turret;
+      const outer = MeshBuilder.CreateBox("b-arm", { width: 0.62, height: 0.1, depth: 0.1 }, this.scene);
+      outer.position.set(side * 1.43, 0.38, 1.6);
+      outer.rotation.y = side * 0.62;
+      outer.material = woodMat;
+      outer.parent = turret;
+      tips.push(side * 1.7);
+    }
+    const string = MeshBuilder.CreateBox("b-string", { width: 3.3, height: 0.025, depth: 0.025 }, this.scene);
+    string.position.set(0, 0.42, 1.22);
+    string.scaling.x = (tips[1] - tips[0]) / 3.3;
+    const stringMat = new StandardMaterial(`ballistaString-${def.id}`, this.scene);
+    stringMat.diffuseColor = new Color3(0.75, 0.7, 0.58);
+    string.material = stringMat;
+    string.parent = turret;
+    // the loaded bolt uses the same mesh as the fired projectile
+    const bolt = buildShaftMesh("b-bolt", BOLT_SPEC, this.scene);
+    const boltMat = new StandardMaterial(`ballistaBolt-${def.id}`, this.scene);
+    boltMat.diffuseColor = Color3.White();
+    bolt.material = boltMat;
+    bolt.position.set(0, 0.52, 1.3);
     bolt.parent = turret;
     return { root, turret, railGlow: railMat };
   }

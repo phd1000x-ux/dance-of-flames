@@ -17,6 +17,21 @@ export interface GroundEnemyLike {
   staggered: number;
 }
 
+/** melee soft-aim reach and cone (cos ≈ 80° either side of facing) */
+const SOFT_AIM_RANGE = 4.2;
+const SOFT_AIM_COS = 0.17;
+/** forward step speed during the strike window (~0.6m light, ~1.1m heavy) */
+const LUNGE_SPEED = 5.5;
+/** swing length and contact time (s); the imported knight's keyframes are timed to these */
+export const ATTACK_DURATION = { light: 0.5, heavy: 0.85 } as const;
+export const ATTACK_HIT_AT = { light: 0.26, heavy: 0.5 } as const;
+/** facing turn rate while committing a swing toward the soft-aim target */
+const ATTACK_TURN_RATE = 20;
+
+export function attackDuration(state: string): number {
+  return state === "heavy" ? ATTACK_DURATION.heavy : ATTACK_DURATION.light;
+}
+
 /**
  * Arcade ground combat for the rider after the dragon falls:
  * 3-hit light combo, heavy attack, block/parry, dodge roll, sprint, soft lock-on.
@@ -46,6 +61,8 @@ export class RiderController {
 
   lockTarget: GroundEnemyLike | null = null;
   lockCooldown = 0;
+  /** soft-aim heading the current swing turns toward (null = keep facing) */
+  private attackYaw: number | null = null;
 
   walkPhase = 0;
 
@@ -139,11 +156,11 @@ export class RiderController {
     if (!this.busy) {
       if (input.pressed("lightAttack")) {
         this.queuedHeavy = false; // light takes priority over a stale heavy intent
-        this.startAttack("light1");
+        this.startAttack("light1", enemies);
       } else if (this.queuedHeavy && this.player.riderStamina >= 14) {
         this.queuedHeavy = false;
         this.player.riderStamina -= 14;
-        this.startAttack("heavy");
+        this.startAttack("heavy", enemies);
       }
     } else if (input.pressed("lightAttack")) {
       this.queuedInput = true;
@@ -152,8 +169,8 @@ export class RiderController {
     // ---- attack state machine ----
     if (this.attackState !== "none") {
       this.attackTimer -= dt;
-      const hitAt = this.attackState === "heavy" ? 0.32 : 0.16;
-      const duration = this.attackState === "heavy" ? 0.62 : 0.34;
+      const hitAt = this.attackState === "heavy" ? ATTACK_HIT_AT.heavy : ATTACK_HIT_AT.light;
+      const duration = attackDuration(this.attackState);
       if (!this.attackHitDone && this.attackTimer <= duration - hitAt) {
         this.attackHitDone = true;
         this.doHit(this.attackState === "heavy");
@@ -161,7 +178,7 @@ export class RiderController {
       if (this.attackTimer <= 0) {
         if (this.queuedInput && this.attackState !== "heavy" && this.comboWindow > 0) {
           const next = this.attackState === "light1" ? "light2" : this.attackState === "light2" ? "light3" : "light1";
-          this.startAttack(next);
+          this.startAttack(next, enemies);
         } else {
           this.attackState = "none";
         }
@@ -171,6 +188,12 @@ export class RiderController {
 
     // ---- movement ----
     let speed = 0;
+    if (this.attackState !== "none" && this.dodgeTimer <= 0) {
+      // short committed step into the strike (wind-up → contact) sells weight
+      const duration = attackDuration(this.attackState);
+      const t = 1 - this.attackTimer / duration;
+      if (t > 0.25 && t < 0.55) this.pos.addInPlace(new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).scale(LUNGE_SPEED * dt));
+    }
     if (this.dodgeTimer > 0) {
       this.dodgeTimer -= dt;
       speed = 11;
@@ -191,8 +214,13 @@ export class RiderController {
 
     // facing: lock target > movement dir > camera fwd
     let faceYaw = this.yaw;
+    let turnRate = this.lockTarget ? 14 : 9;
     if (this.lockTarget) {
       faceYaw = Math.atan2(this.lockTarget.pos.x - this.pos.x, this.lockTarget.pos.z - this.pos.z);
+    } else if (this.attackState !== "none" && this.attackYaw !== null) {
+      // turn into the swing during the wind-up instead of popping to the new heading
+      faceYaw = this.attackYaw;
+      turnRate = ATTACK_TURN_RATE;
     } else if (moving && !this.busy) {
       faceYaw = Math.atan2(moveDir.x, moveDir.z);
     } else if (!this.busy) {
@@ -201,7 +229,7 @@ export class RiderController {
     let dyaw = faceYaw - this.yaw;
     while (dyaw > Math.PI) dyaw -= Math.PI * 2;
     while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-    this.yaw += dyaw * Math.min(1, dt * (this.lockTarget ? 14 : 9));
+    this.yaw += dyaw * Math.min(1, dt * turnRate);
 
     // terrain & bounds
     this.pos.y = this.terrain.heightAt(this.pos.x, this.pos.z);
@@ -214,12 +242,32 @@ export class RiderController {
     this.sync(dt);
   }
 
-  private startAttack(state: "light1" | "light2" | "light3" | "heavy"): void {
+  private startAttack(state: "light1" | "light2" | "light3" | "heavy", enemies: GroundEnemyLike[]): void {
+    // soft aim: commit the swing toward the closest enemy in a forward cone
+    const aim = this.lockTarget ?? this.softAimTarget(enemies);
+    this.attackYaw = aim ? Math.atan2(aim.pos.x - this.pos.x, aim.pos.z - this.pos.z) : null;
     this.attackState = state;
-    this.attackTimer = state === "heavy" ? 0.62 : 0.34;
+    this.attackTimer = attackDuration(state);
     this.attackHitDone = false;
     this.comboWindow = 0.75;
     this.bus.emit("sfx", { name: "swordSwing" });
+  }
+
+  private softAimTarget(enemies: GroundEnemyLike[]): GroundEnemyLike | null {
+    const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    let best: GroundEnemyLike | null = null;
+    let bestD = SOFT_AIM_RANGE;
+    for (const e of enemies) {
+      if (!e.alive || e.hp <= 0) continue;
+      const to = e.pos.subtract(this.pos);
+      to.y = 0;
+      const d = to.length();
+      if (d < 1e-3 || d > bestD) continue;
+      if (Vector3.Dot(fwd, to.scale(1 / d)) < SOFT_AIM_COS) continue;
+      best = e;
+      bestD = d;
+    }
+    return best;
   }
 
   private doHit(heavy: boolean): void {
@@ -275,13 +323,13 @@ export class RiderController {
     this.figure.root.position.copyFrom(this.pos);
     this.figure.root.rotation.y = this.yaw;
     // walk bob
-    this.figure.root.position.y += Math.abs(Math.sin(this.walkPhase)) * 0.08;
+    this.figure.root.position.y += (1 - Math.cos(this.walkPhase * 2)) * 0.04;
 
     // sword animation by attack phase
     let swordRotX = -0.2;
     let swordRotZ = 0.15;
     if (this.attackState !== "none") {
-      const t = 1 - this.attackTimer / (this.attackState === "heavy" ? 0.62 : 0.34);
+      const t = 1 - this.attackTimer / attackDuration(this.attackState);
       const swing = Math.sin(clamp(t * 1.8, 0, 1) * Math.PI);
       if (this.attackState === "light2") {
         swordRotX = -1.6 * swing - 0.2;

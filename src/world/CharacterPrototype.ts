@@ -1,6 +1,9 @@
-import { Color3, Matrix, MeshBuilder, StandardMaterial, TransformNode, Vector3 } from "@babylonjs/core";
+import { Matrix, TransformNode, Vector3 } from "@babylonjs/core";
 import type { MissionScene } from "../mission/MissionScene";
-import { CharacterModel, loadCharacterAssets, prepareDragon, prepareKnight, anchorDragon } from "./CharacterAssets";
+import { CharacterModel, HeldWeapon, loadAxeAsset, loadCharacterAssets, prepareDragon, prepareKnight, anchorDragon } from "./CharacterAssets";
+import { KnightAnimator } from "./KnightAnimator";
+import { KnightClipPlayer, loadKnightClips, type KnightClipData } from "./KnightClips";
+import { attackDuration } from "../player/RiderController";
 
 export async function installCharacterVisuals(mission: MissionScene, options: { debugPanel?: boolean } = {}): Promise<void> {
   const scene = mission.scene;
@@ -24,10 +27,17 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
   }
 
   let enabled = true;
-  let walkPhase = 0;
+  let animator: KnightAnimator | null = null;
+  let clipPlayer: KnightClipPlayer | null = null;
+  let clipData: KnightClipData | null = null;
+  let lastRiderHp = Infinity;
+  // Mixamo mocap clips drive the knight once loaded; the procedural animator covers the gap/fallback
+  void loadKnightClips(scene).then(d => { clipData = d; lastFigure = null; })
+    .catch(err => console.warn("[character] mocap clips unavailable, procedural fallback", err));
   let lastFigure: TransformNode | null = null;
   let originalGroundMeshes: ReturnType<TransformNode["getChildMeshes"]> = [];
-  let sword: TransformNode | null = null;
+  let axe: HeldWeapon | null = null;
+  const axeAsset = loadAxeAsset(scene).catch(err => { console.warn("[character] axe fallback", err); return null; });
   let simulatedTime = 0;
   let lastGroundPosition: Vector3 | null = null;
   const flightClip = dragon.clips[0];
@@ -68,23 +78,17 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
       // Put the visual below the existing roll/death pivot, preserving all combat logic.
       ground.root.parent = ctrl.figure.body;
       ground.root.position.copyFrom(groundStandOffset);
-      if (sword) sword.dispose();
-      const wrist = ground.node("R_wrist_");
-      if (wrist) {
-        sword = new TransformNode("prototype-sword", scene);
-        sword.parent = wrist;
-        const units = 1 / ground.root.scaling.x;
-        sword.scaling.setAll(units);
-        sword.rotation.x = Math.PI / 2;
-        const metal = new StandardMaterial("prototype-sword-metal", scene);
-        metal.diffuseColor = new Color3(0.56, 0.6, 0.66);
-        metal.specularColor = new Color3(0.9, 0.9, 0.95);
-        sword.onDisposeObservable.addOnce(() => metal.dispose(false, false));
-        const blade = MeshBuilder.CreateBox("prototype-blade", { width: 0.055, height: 0.9, depth: 0.025 }, scene);
-        blade.parent = sword; blade.position.y = 0.47; blade.material = metal;
-        const guard = MeshBuilder.CreateBox("prototype-guard", { width: 0.23, height: 0.04, depth: 0.06 }, scene);
-        guard.parent = sword; guard.material = metal;
-      }
+      axe?.dispose();
+      const held = new HeldWeapon(ground, "axe", "prototype-axe", scene);
+      axe = held;
+      void axeAsset.then(c => {
+        if (!c || held !== axe) return;
+        held.useImported(c, "prototype-axe");
+        for (const m of held.node.getChildMeshes()) mission.world.shadows?.addShadowCaster(m);
+      });
+      animator = new KnightAnimator(ground, held);
+      clipPlayer = clipData ? new KnightClipPlayer(ground, clipData, held) : null;
+      if (clipPlayer) held.fistGrip();
       setEnabled(enabled);
     }
     if (!enabled) return;
@@ -115,30 +119,41 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
     if (!ctrl || !inGround) return;
     ground.sample(dt);
     // RiderController's public speed is not populated; derive motion from simulation positions.
-    const speed = dt > 0 && lastGroundPosition ? Vector3.Distance(ctrl.pos, lastGroundPosition) / dt : 0;
+    const lastStep = lastGroundPosition ? ctrl.pos.subtract(lastGroundPosition) : null;
+    if (lastStep) lastStep.y = 0;
+    const speed = dt > 0 && lastStep ? lastStep.length() / dt : 0;
     lastGroundPosition = ctrl.pos.clone();
-    const moving = speed > 0.2 && ctrl.dodgeTimer <= 0;
-    walkPhase += dt * (moving ? 5 + speed * 1.1 : 0);
-    const stride = moving ? Math.min(0.72, speed * 0.11) : 0;
-    const swing = Math.sin(walkPhase) * stride;
-    ground.pose("L_leg_", swing); ground.pose("R_leg_", -swing);
-    ground.pose("L_knee_", Math.max(0, -Math.sin(walkPhase)) * stride * 1.4);
-    ground.pose("R_knee_", Math.max(0, Math.sin(walkPhase)) * stride * 1.4);
-    ground.pose("L_arm_", -swing * 0.55); ground.pose("R_arm_", swing * 0.35);
-    ground.pose("spine_", moving ? 0.08 : 0, Math.sin(walkPhase) * stride * 0.14);
-    if (ctrl.attackState !== "none") {
-      const duration = ctrl.attackState === "heavy" ? 0.62 : 0.34;
-      const t = Math.max(0, Math.min(1, 1 - ctrl.attackTimer / duration));
-      const windup = t < 0.28 ? t / 0.28 : Math.max(0, (1 - t) / 0.72);
-      const strike = Math.sin(Math.max(0, (t - 0.22) / 0.78) * Math.PI);
-      const side = ctrl.attackState === "light2" ? -1 : 1;
-      ground.pose("chest_", -0.12 * strike, side * (0.5 * windup - 0.8 * strike));
-      ground.pose("R_arm_", -1.6 * windup + 1.1 * strike, 0, -0.35 * side);
-      ground.pose("R_elbow_", -0.65 * windup);
-    } else if (ctrl.blocking) {
-      ground.pose("L_arm_", -1.05, 0.3); ground.pose("L_elbow_", -0.8);
-      ground.pose("R_arm_", -0.9); ground.pose("R_elbow_", -0.5);
+    // The imported knight carries no shield; the procedural figure's shield is
+    // re-enabled by RiderController every step, so keep it hidden here.
+    ctrl.figure.shieldMesh.setEnabled(false);
+    const fwd = new Vector3(Math.sin(ctrl.yaw), 0, Math.cos(ctrl.yaw));
+    const step = lastStep;
+    const frame = {
+      dt, speed, yaw: ctrl.yaw,
+      direction: step && Vector3.Dot(step, fwd) < -0.2 * step.length() ? -1 : 1,
+      attack: ctrl.attackState,
+      attackT: ctrl.attackState === "none" ? 0 : Math.max(0, Math.min(1, 1 - ctrl.attackTimer / attackDuration(ctrl.attackState))),
+      blocking: ctrl.blocking,
+      dodging: ctrl.dodgeTimer > 0,
+    };
+    const hp = mission.player.riderHp;
+    const hurt = hp < lastRiderHp - 0.5;
+    lastRiderHp = hp;
+    let offsetY: number;
+    if (clipPlayer) {
+      // the mocap roll and death replace the controller's whole-body flip/fall
+      ctrl.figure.body.rotation.x = 0;
+      ctrl.figure.body.position.y = 0;
+      clipPlayer.update({ ...frame, alive: ctrl.alive, hurt });
+      const parentScale = ground.root.parent instanceof TransformNode ? ground.root.parent.absoluteScaling.y || 1 : 1;
+      offsetY = clipPlayer.rootOffsetY / parentScale;
+    } else {
+      animator?.update(frame);
+      offsetY = animator?.rootOffsetY ?? 0;
     }
+    // RiderController bobs the figure root; the knight's own hip motion replaces it
+    const controllerBob = ctrl.figure.root.position.y - ctrl.pos.y;
+    ground.root.position.y = groundStandOffset.y + offsetY - controllerBob;
   }
 
   // Remount disposes the controller figure: detach the reusable imported visual first.
@@ -153,7 +168,8 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
 
   setEnabled(true);
   const originalUpdate = mission.update.bind(mission);
-  mission.update = dt => { originalUpdate(dt); update(dt); };
+  // Animate on the scaled sim step so hit-stop and death slow-mo freeze the imported figures too.
+  mission.update = dt => { originalUpdate(dt); update(mission.lastSimDt); };
   update(0);
 
   scene.onDisposeObservable.addOnce(() => {
@@ -163,7 +179,7 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
   const panel = document.createElement("aside");
   panel.id = "character-prototype-panel";
   panel.style.cssText = "position:fixed;left:16px;bottom:16px;z-index:1000;max-width:min(430px,calc(100vw - 32px));padding:12px 16px;background:#14171bea;color:#e9e5da;border:1px solid #837451;border-radius:6px;font:13px/1.6 system-ui";
-  panel.innerHTML = `<strong>캐릭터 시제품 · D2 + R2</strong><div>드래곤: 원본 비행 / 기수: 원본 대기 + 임시 관절 동작</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button type="button" data-action="ground">지상에서 확인</button><button type="button" data-action="flight">비행으로 복귀</button><button type="button" data-action="compare">기존 캐릭터 비교</button></div><div>비행 WASD · Space/C · F / 지상 WASD · J/K · L · Space</div><details><summary>무료 에셋 및 제작자</summary><a href="https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29" target="_blank" rel="noopener" style="color:#e3c78e">Dragon — LasquetiSpice</a><br><a href="https://sketchfab.com/3d-models/strong-knight-9d912e0fedb44b619fbd2a083bbf174f" target="_blank" rel="noopener" style="color:#e3c78e">Strong Knight — DJMaesen</a><br>CC BY 4.0 · Objaverse 공개 배포본 · 크기/방향/관절 동작 수정</details><div role="status" id="prototype-status">외형과 움직임 확인용. 최종 애니메이션은 아닙니다.</div>`;
+  panel.innerHTML = `<strong>캐릭터 시제품 · D2 + R2</strong><div>드래곤: 원본 비행 / 기수: 원본 대기 + 임시 관절 동작</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button type="button" data-action="ground">지상에서 확인</button><button type="button" data-action="flight">비행으로 복귀</button><button type="button" data-action="compare">기존 캐릭터 비교</button></div><div>비행 WASD · Space/C · F / 지상 WASD · J/K · L · Space</div><details><summary>무료 에셋 및 제작자</summary><a href="https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29" target="_blank" rel="noopener" style="color:#e3c78e">Dragon — LasquetiSpice</a><br><a href="https://sketchfab.com/3d-models/strong-knight-9d912e0fedb44b619fbd2a083bbf174f" target="_blank" rel="noopener" style="color:#e3c78e">Strong Knight — DJMaesen</a><br><a href="https://sketchfab.com/3d-models/viking-battle-axe-b7123192adbf40f68043c57dd8ddcd15" target="_blank" rel="noopener" style="color:#e3c78e">Viking battle axe — xeofox</a><br>CC BY 4.0 · Objaverse 공개 배포본 · 크기/방향/관절 동작 수정</details><div role="status" id="prototype-status">외형과 움직임 확인용. 최종 애니메이션은 아닙니다.</div>`;
   for (const button of panel.querySelectorAll("button")) {
     button.style.cssText = "padding:7px 10px;cursor:pointer;background:#343a40;color:#fff;border:1px solid #777;border-radius:4px;font:inherit";
     button.addEventListener("click", () => {
@@ -198,6 +214,8 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
     dragon, mounted, ground, mission, setEnabled,
     get enabled() { return enabled; },
     get simulatedTime() { return simulatedTime; },
+    /** true once the Mixamo mocap clips drive the ground knight */
+    get mocap() { return clipPlayer !== null; },
     clips: { dragon: flightClip?.name, knight: ground.clips[0]?.name },
   };
   scene.onDisposeObservable.addOnce(() => {
@@ -206,6 +224,50 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
 
     delete (window as any).__CHARACTER_PROTOTYPE;
   });
+}
+
+export interface SwingPose {
+  /** R_arm about the knight's right axis: + raises the arm forward, − rotates it back */
+  armX: number;
+  /** R_arm about the forward axis: − lifts it out to the side/overhead, + sweeps across the body */
+  armZ: number;
+  /** torso yaw: + turns right */
+  twist: number;
+  /** torso pitch: + leans into the strike */
+  lean: number;
+}
+
+type SwingKey = [t: number, armX: number, armZ: number, twist: number, lean: number];
+const REST: SwingKey[] = [[0, 0, 0, 0, 0]];
+const rest = (t: number): SwingKey => [t, 0, 0, 0, 0];
+/**
+ * Keyframes per attack: wind-up → strike → follow-through hold → recover.
+ * The strike passes through its widest point near t≈0.47-0.52, matching
+ * RiderController's hit frame (0.16/0.34 light, 0.32/0.62 heavy).
+ */
+const SWINGS: Record<string, SwingKey[]> = {
+  // forehand diagonal: high right → low left
+  light1: [rest(0), [0.3, -0.7, -1.5, 0.45, -0.05], [0.55, 1.45, 0.55, -0.55, 0.2], [0.75, 1.3, 0.6, -0.45, 0.15], rest(1)],
+  // backhand: across the body → out to the right
+  light2: [rest(0), [0.3, 0.9, 0.95, -0.55, 0], [0.55, 0.85, -1.3, 0.6, 0.1], [0.75, 0.7, -1.1, 0.45, 0.05], rest(1)],
+  // overhead chop
+  light3: [rest(0), [0.3, -0.4, -2.0, 0.1, -0.15], [0.55, 1.6, 0.25, -0.1, 0.3], [0.75, 1.45, 0.2, -0.05, 0.25], rest(1)],
+  heavy: [rest(0), [0.38, -0.6, -2.2, 0.35, -0.25], [0.6, 1.75, 0.35, -0.3, 0.42], [0.8, 1.6, 0.3, -0.2, 0.35], rest(1)],
+  // spear: draw back low, then drive straight forward
+  thrust: [rest(0), [0.3, -0.5, 0.25, 0.35, -0.1], [0.52, 1.5, 0.15, -0.2, 0.35], [0.72, 1.4, 0.15, -0.15, 0.3], rest(1)],
+};
+
+export function swingPose(attack: string, t: number): SwingPose {
+  const keys = SWINGS[attack] ?? REST;
+  let i = 0;
+  while (i < keys.length - 2 && t > keys[i + 1][0]) i++;
+  const a = keys[i];
+  const b = keys[Math.min(i + 1, keys.length - 1)];
+  const span = b[0] - a[0];
+  const u = span > 0 ? Math.max(0, Math.min(1, (t - a[0]) / span)) : 0;
+  const s = u * u * (3 - 2 * u);
+  const mix = (k: number) => a[k] + (b[k] - a[k]) * s;
+  return { armX: mix(1), armZ: mix(2), twist: mix(3), lean: mix(4) };
 }
 
 /** Backwards-compatible opt-in comparison tools. */

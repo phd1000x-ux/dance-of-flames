@@ -12,15 +12,23 @@ models listed below. All audio remains generated at runtime.
 |---|---|---|---|
 | `public/character-prototype/dragon.glb` | Animated Dragon Three Motion Loops, LasquetiSpice | https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `public/character-prototype/knight.glb` | Strong Knight, DJMaesen | https://sketchfab.com/3d-models/strong-knight-9d912e0fedb44b619fbd2a083bbf174f | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| `public/character-prototype/axe.glb` | Viking battle axe, xeofox | https://sketchfab.com/3d-models/viking-battle-axe-b7123192adbf40f68043c57dd8ddcd15 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
-Retrieved 2026-10-24 from [Ai2's public Objaverse distribution](https://huggingface.co/datasets/allenai/objaverse).
-Both GLBs embed matching title, author, source and CC-BY-4.0 metadata.
+Retrieved 2026-10-24 (axe 2026-10-25) from [Ai2's public Objaverse distribution](https://huggingface.co/datasets/allenai/objaverse).
+The GLBs embed matching title, author, source and CC-BY-4.0 metadata.
 `public/character-prototype/sources.json` records exact download URLs and SHA256 hashes.
 The original binary files are preserved. Runtime adaptations: normalized size and
 orientation, removal of unused UV streams for WebGPU compatibility, material
 lighting adjustments, and added skeletal poses for mounting/movement/combat.
-The original clips are `Flying` (dragon) and `idle1` (knight); knight running and
-attacks are temporary code-authored poses, not downloaded motion capture.
+The original clips are `Flying` (dragon) and `idle1` (knight); knight walking, running,
+guard and axe attacks are code-authored procedural animation (`src/world/KnightAnimator.ts`), not downloaded motion capture.
+`public/character-prototype/knight-anims.json` holds animation data derived from
+[Mixamo](https://www.mixamo.com) (Adobe) motions — idle, walk, run, slashes, power
+slash, block, dive roll, impact, death — retargeted onto the Strong Knight skeleton by
+`scripts/retarget-mixamo.mjs` (`npm run retarget <dir-of-glb>`). Mixamo animations
+may be used royalty-free inside games; the raw Mixamo FBX downloads are NOT
+redistributed (kept in git-ignored `assets-src/mixamo/`). The code-authored poses in
+`src/world/KnightAnimator.ts` remain as the fallback if the clip file fails to load.
 The prototype displays attribution and source links in its on-screen panel.
 These model files retain CC BY 4.0 and are not relicensed under the code license.
 
