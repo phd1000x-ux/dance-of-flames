@@ -1,0 +1,33 @@
+{
+  "retrieved": "2026-10-24",
+  "assets": [
+    {
+      "file": "dragon.glb",
+      "author": "LasquetiSpice (https://sketchfab.com/LasquetiSpice)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29",
+      "title": "Animated Dragon Three Motion Loops",
+      "download": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-083/eca98cf6cd084c1596cecf716e110c29.glb",
+      "sha256": "3c0de20bd73179603b7a089f370420ed8f429c15bf8ec67afb378d1121ed2e40",
+      "bytes": 8377076,
+      "animationClips": [
+        "Flying"
+      ],
+      "changes": "Original GLB bytes preserved; runtime size, axis, material and animation adjustments in CharacterPrototype.ts"
+    },
+    {
+      "file": "knight.glb",
+      "author": "DJMaesen (https://sketchfab.com/bumstrum)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/strong-knight-9d912e0fedb44b619fbd2a083bbf174f",
+      "title": "Strong Knight",
+      "download": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-140/9d912e0fedb44b619fbd2a083bbf174f.glb",
+      "sha256": "08663be7aab6fca5b4bebfef6f51bbdb9b1219f7746b1f60d6df878a22cefddf",
+      "bytes": 9383748,
+      "animationClips": [
+        "idle1"
+      ],
+      "changes": "Original GLB bytes preserved; runtime size, axis, material and animation adjustments in CharacterPrototype.ts"
+    }
+  ]
+}

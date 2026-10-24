@@ -13,6 +13,7 @@ import {
 } from "@babylonjs/core";
 import { SeededRng } from "../core/SeededRng";
 import type { TerrainHeightSampler } from "./Terrain";
+import { gabledRoof } from "./SceneryGeometry";
 
 /**
  * Reusable instanced prop library for battlefield density:
@@ -91,7 +92,12 @@ export class PropLibrary {
     const charred = new StandardMaterial("pCharred", this.scene);
     charred.diffuseColor = new Color3(0.08, 0.07, 0.06);
     charred.emissiveColor = new Color3(0.15, 0.04, 0.0);
-    this.mats = { wood, cloth: clothMat, stone, metal, thatch, ember, charred };
+    const foliage = new StandardMaterial("pFoliage", this.scene);
+    foliage.diffuseColor = new Color3(0.22, 0.29, 0.18);
+    const surface = new StandardMaterial("pSurface", this.scene);
+    surface.diffuseColor = Color3.White();
+    surface.specularColor = new Color3(0.06, 0.06, 0.06);
+    this.mats = { wood, cloth: clothMat, stone, metal, thatch, ember, charred, foliage, surface };
     const dt = new DynamicTexture("propGlow", { width: 64, height: 64 }, this.scene, false);
     const c = dt.getContext() as unknown as CanvasRenderingContext2D;
     const g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -109,13 +115,22 @@ export class PropLibrary {
     if (cached) return cached;
     const S = this.scene;
     const m = (mesh: Mesh, mat: string) => {
-      mesh.material = this.mats[mat];
+      // Bake per-part pigment before merging: MergeMeshes otherwise keeps only the
+      // first material and turns iron, cloth and embers into the same brown wood.
+      const color = this.mats[mat].diffuseColor;
+      const colors = new Float32Array(mesh.getTotalVertices() * 4);
+      for (let i = 0; i < colors.length; i += 4) {
+        colors[i] = color.r; colors[i + 1] = color.g; colors[i + 2] = color.b; colors[i + 3] = 1;
+      }
+      mesh.setVerticesData("color", colors);
+      mesh.material = this.mats.surface;
+      mesh.useVertexColors = true;
       return mesh;
     };
     let mesh: Mesh;
     switch (id) {
       case "tent": {
-        const body = MeshBuilder.CreateCylinder("t", { diameterTop: 0, diameterBottom: 2.6, height: 2.2, tessellation: 4 }, S);
+        const body = gabledRoof("campaign-tent", 3, 3.6, 2.3, S);
         mesh = Mesh.MergeMeshes([m(body, "cloth")]!, true, true, undefined, false, false)!;
         break;
       }
@@ -175,8 +190,14 @@ export class PropLibrary {
         break;
       }
       case "barrel": {
-        mesh = MeshBuilder.CreateCylinder("b", { diameterTop: 0.55, diameterBottom: 0.6, height: 0.95, tessellation: 9 }, S);
-        m(mesh, "wood");
+        const stave = MeshBuilder.CreateCylinder("barrel-staves", { diameterTop: 0.57, diameterBottom: 0.63, height: 0.95, tessellation: 12 }, S);
+        stave.position.y = 0.48;
+        const parts = [m(stave, "wood")];
+        for (const y of [0.15, 0.72]) {
+          const hoop = MeshBuilder.CreateTorus("barrel-hoop", { diameter: 0.61, thickness: 0.055, tessellation: 12 }, S);
+          hoop.position.y = y; parts.push(m(hoop, "metal"));
+        }
+        mesh = Mesh.MergeMeshes(parts, true, true)!;
         break;
       }
       case "crate": {
@@ -208,10 +229,14 @@ export class PropLibrary {
         break;
       }
       case "well": {
-        const ring = MeshBuilder.CreateCylinder("wr", { diameter: 1.5, height: 0.9, tessellation: 9 }, S);
-        m(ring, "stone");
-        const roof = MeshBuilder.CreateCylinder("wrf", { diameterTop: 0, diameterBottom: 1.9, height: 0.8, tessellation: 4 }, S);
-        roof.position.y = 1.9;
+        const stones: Mesh[] = [];
+        for (const y of [0.16, 0.43, 0.70]) {
+          const course = MeshBuilder.CreateTorus("well-open-course", { diameter: 1.22, thickness: 0.29, tessellation: 16 }, S);
+          course.position.y = y; stones.push(m(course, "stone"));
+        }
+        const ring = Mesh.MergeMeshes(stones, true, true)!;
+        const roof = gabledRoof("well-roof", 2.1, 1.8, 0.8, S);
+        roof.position.y = 2.0;
         m(roof, "thatch");
         const p1 = MeshBuilder.CreateBox("wp1", { width: 0.12, height: 1.8, depth: 0.12 }, S);
         p1.position.set(-0.7, 1.3, 0);
@@ -308,7 +333,7 @@ export class PropLibrary {
         b.position.set(0.4, 0.3, 0.2);
         const c = MeshBuilder.CreateSphere("ba3", { diameter: 0.6, segments: 4 }, S);
         c.position.set(-0.35, 0.3, -0.15);
-        for (const x of [a, b, c]) m(x, "cloth");
+        for (const x of [a, b, c]) m(x, "foliage");
         mesh = Mesh.MergeMeshes([a, b, c], true, true, undefined, false, false)!;
         break;
       }
@@ -321,21 +346,29 @@ export class PropLibrary {
       }
       case "siegeTower": {
         const parts: Mesh[] = [];
-        const frame = MeshBuilder.CreateBox("stf", { width: 3, height: 7.5, depth: 2.4 }, S);
-        frame.position.y = 3.75;
-        parts.push(m(frame, "wood"));
-        const top = MeshBuilder.CreateBox("stt", { width: 3.4, height: 0.9, depth: 2.8 }, S);
-        top.position.y = 7.9;
-        parts.push(m(top, "wood"));
-        for (let i = 0; i < 3; i++) {
-          const slit = MeshBuilder.CreateBox("sts", { width: 2.2, height: 0.7, depth: 0.15 }, S);
-          slit.position.set(0, 1.8 + i * 2.1, 1.25);
-          parts.push(m(slit, "charred"));
+        const beam = (name: string, x: number, y: number, z: number, width: number, height: number, depth: number, angle = 0) => {
+          const p = MeshBuilder.CreateBox(name, { width, height, depth }, S);
+          p.position.set(x, y, z); p.rotation.z = angle; parts.push(m(p, "wood"));
+        };
+        // Open load-bearing frame, three decks and diagonal bracing replace a solid cuboid.
+        for (const x of [-1.35, 1.35]) for (const z of [-1.05, 1.05]) beam("siege-upright", x, 4.2, z, 0.23, 7.8, 0.23);
+        for (const y of [1.3, 3.6, 6.1, 7.8]) {
+          beam("siege-deck", 0, y, 0, 3.2, 0.22, 2.8);
+          for (const z of [-1.15, 1.15]) beam("siege-cross-brace", 0, y + 0.95, z, 0.17, 3.4, 0.18, z > 0 ? 0.85 : -0.85);
         }
-        const ram = MeshBuilder.CreateCylinder("str", { diameter: 0.4, height: 4.5, tessellation: 6 }, S);
-        ram.rotation.x = Math.PI / 2;
-        ram.position.set(0, 1.2, 2.2);
-        parts.push(m(ram, "metal"));
+        // Protective front planking with open arrow gaps and a deployed bridge.
+        for (let i = 0; i < 9; i++) beam("siege-front-plank", -1.4 + i * 0.35, 4.6, 1.26, 0.29, 6.8, 0.12);
+        beam("siege-drawbridge", 0, 7.65, 2.5, 2.4, 0.18, 2.8);
+        for (const x of [-1.65, 1.65]) for (const z of [-0.9, 0.9]) {
+          const wheel = MeshBuilder.CreateTorus("siege-wheel", { diameter: 1.2, thickness: 0.2, tessellation: 12 }, S);
+          wheel.rotation.z = Math.PI / 2; wheel.position.set(x, 0.66, z); parts.push(m(wheel, "charred"));
+          const hub = MeshBuilder.CreateCylinder("siege-hub", { diameter: 0.23, height: 0.4, tessellation: 8 }, S);
+          hub.rotation.z = Math.PI / 2; hub.position.copyFrom(wheel.position); parts.push(m(hub, "metal"));
+          for (const angle of [0, Math.PI / 3, Math.PI * 2 / 3]) {
+            const spoke = MeshBuilder.CreateBox("siege-spoke", { width: 0.09, height: 1.08, depth: 0.1 }, S);
+            spoke.position.copyFrom(wheel.position); spoke.rotation.x = angle; parts.push(m(spoke, "wood"));
+          }
+        }
         mesh = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
         break;
       }
@@ -369,6 +402,8 @@ export class PropLibrary {
         break;
       }
     }
+    mesh.material = this.mats.surface;
+    mesh.useVertexColors = true;
     mesh.isVisible = false;
     mesh.isPickable = false;
     this.templates.set(id, mesh);

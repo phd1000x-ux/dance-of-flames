@@ -61,6 +61,7 @@ export class CastellanBoss {
     } else if (s.hp < this.duel.floor) {
       s.hp = this.duel.floor;
     }
+    this.duel.syncHp(s.hp);
     const dist = Vector3.Distance(s.pos, playerPos);
     // face the player
     const want = Math.atan2(playerPos.x - s.pos.x, playerPos.z - s.pos.z);
@@ -116,7 +117,7 @@ export class CastellanBoss {
       this.swingIndex++;
       if (dist < s.def.range + 1.4) {
         const from = Vector3.Normalize(this.playerPos.subtract(s.pos));
-        this.enemies.onMeleeHitRider?.(dmg, from.x, from.z);
+        this.enemies.onMeleeHitRider?.(dmg, from.x, from.z, unblockable ? "shieldBreaker" : "melee");
         this.bus.emit("sfx", { name: "swordSwing" });
       }
       if (this.pattern === "combo" && this.swingIndex < 3) {

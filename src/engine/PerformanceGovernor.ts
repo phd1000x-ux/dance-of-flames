@@ -81,12 +81,13 @@ export class PerformanceGovernor {
     if (this.frameTimes.length < 90 || now - this.lastChange < this.cooldownMs) return;
 
     const sorted = [...this.frameTimes].sort((a, b) => a - b);
-    const p5 = sorted[Math.floor(sorted.length * 0.05)];
+    // The slowest 5% of frame times correspond to the lowest 5% of FPS.
+    const slowFrame = sorted[Math.floor(sorted.length * 0.95)];
     const median = sorted[Math.floor(sorted.length * 0.5)];
 
     // downgrade if 5th percentile is bad (sustained stutter), median bad, or both
-    const wantDown = (p5 > 40 && median > 20) || median > 33;
-    const wantUp = p5 < 22 && median < 15;
+    const wantDown = (slowFrame > 40 && median > 20) || median > 33;
+    const wantUp = slowFrame < 22 && median < 15;
 
     if (wantDown && this.tier < 3) {
       this.setTier((this.tier + 1) as QualityTier);

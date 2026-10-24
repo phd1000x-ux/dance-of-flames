@@ -7,3 +7,5 @@ playwright-report/
 .playwright-mcp/
 /*.png
 .worktrees/
+.superpowers/
+.codegraph/

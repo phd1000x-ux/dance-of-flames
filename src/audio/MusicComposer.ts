@@ -23,7 +23,7 @@ export type MusicStateId =
   | "boss";
 
 export interface NoteEvent {
-  voice: "cello" | "violin" | "drum" | "pad";
+  voice: "cello" | "violin" | "drum" | "pad" | "harp";
   midi: number; // MIDI note number
   start: number; // beats from bar start
   dur: number; // beats
@@ -39,22 +39,22 @@ export interface BarPlan {
 /** D natural minor pitch classes relative to D */
 const PC = { D: 0, E: 2, F: 3, G: 5, A: 7, Bb: 8, C: 10, Cs: 11 };
 
-const midi = (octave: number, semis: number) => 12 * (octave + 1) + semis; // midi(2,0)=D2=38
+const midi = (octave: number, semis: number) => 12 * (octave + 1) + 2 + semis; // midi(2,0)=D2=38
 
-/** original harmonic vocabulary (i – VI – III – VII / i – iv – VI – V) */
+/** original harmonic vocabulary (i – VI – III – V / i – iv – VI – V) */
 const PROGRESSIONS: number[][][] = [
   // [chord semitone stacks from root D]
   [
     [PC.D, PC.F, PC.A],
-    [PC.Bb - 12 + 12, PC.D, PC.F], // Bb
+    [PC.Bb, PC.D + 12, PC.F + 12], // Bb
     [PC.F, PC.A, PC.C],
-    [PC.A, PC.Cs, PC.E],
+    [PC.A, PC.Cs, PC.E + 12],
   ],
   [
     [PC.D, PC.F, PC.A],
-    [PC.G, PC.Bb, PC.D],
-    [PC.Bb, PC.D, PC.F],
-    [PC.A, PC.Cs, PC.E],
+    [PC.G, PC.Bb, PC.D + 12],
+    [PC.Bb, PC.D + 12, PC.F + 12],
+    [PC.A, PC.Cs, PC.E + 12],
   ],
 ];
 
@@ -68,20 +68,14 @@ const MOTIF_FLAME: [number, number][] = [
 /** inversion answer: D5 C5 A4 F4 */
 const MOTIF_ANSWER: [number, number][] = [
   [midi(5, PC.D), 1],
-  [midi(5, PC.C), 0.5],
+  [midi(5, PC.C) - 12, 0.5],
   [midi(4, PC.A), 0.5],
   [midi(4, PC.F), 2],
 ];
-/** war ostinato (cello): D D A D D C D D Bb... original rhythm-cell */
+/** Chord-degree ostinato: root/root/fifth/octave, then a rising third answer. */
 const OSTINATO: [number, number][] = [
-  [midi(2, PC.D), 0.5],
-  [midi(2, PC.D), 0.5],
-  [midi(2, PC.A), 0.5],
-  [midi(3, PC.D), 0.5],
-  [midi(2, PC.D), 0.5],
-  [midi(2, PC.D), 0.5],
-  [midi(3, PC.C), 0.5],
-  [midi(3, PC.Bb), 0.5],
+  [0, 0.5], [0, 0.5], [2, 0.5], [3, 0.5],
+  [0, 0.5], [0, 0.5], [4, 0.5], [1, 0.5],
 ];
 
 const STATE_CONFIG: Record<
@@ -112,8 +106,9 @@ export function composeBar(state: MusicStateId, barIndex: number, seed: number):
   const rng = new SeededRng(seed * 7919 + barIndex * 131 + state.length * 17);
   const cfg = STATE_CONFIG[state];
   const notes: NoteEvent[] = [];
-  const chord = PROGRESSIONS[barIndex % 2][barIndex % 4];
+  const chord = PROGRESSIONS[Math.floor(barIndex / 8) % 2][barIndex % 4];
   const root = midi(2, chord[0]);
+  const ostinatoPitches = [...chord, chord[0] + 12, chord[1] + 12];
 
   switch (state) {
     case "menu": {
@@ -135,7 +130,7 @@ export function composeBar(state: MusicStateId, barIndex: number, seed: number):
       notes.push({ voice: "cello", midi: root, start: 0, dur: 4, vel: 0.34 });
       if (barIndex % 2 === 0) {
         notes.push({ voice: "violin", midi: midi(4, chord[2]), start: 0.5, dur: 3, vel: 0.14 });
-      } else if (rng.chance(0.7)) {
+      } else {
         const m = rng.pick([MOTIF_FLAME, MOTIF_ANSWER]);
         let t = 1;
         for (const [note, d] of m.slice(0, 2)) {
@@ -149,7 +144,7 @@ export function composeBar(state: MusicStateId, barIndex: number, seed: number):
       // cello ostinato + frame drum on 1 & 3 + violin long tones
       let t = 0;
       for (const [m, d] of OSTINATO) {
-        notes.push({ voice: "cello", midi: m, start: t, dur: d * 0.92, vel: 0.4 });
+        notes.push({ voice: "cello", midi: midi(2, ostinatoPitches[m]), start: t, dur: d * 0.92, vel: 0.4 });
         t += d;
       }
       notes.push({ voice: "drum", midi: 36, start: 0, dur: 0.3, vel: 0.5 });
@@ -161,7 +156,7 @@ export function composeBar(state: MusicStateId, barIndex: number, seed: number):
       // denser: ostinato + violin 16th figure + drums on every beat
       let t = 0;
       for (const [m, d] of OSTINATO) {
-        notes.push({ voice: "cello", midi: m, start: t, dur: d * 0.85, vel: 0.48 });
+        notes.push({ voice: "cello", midi: midi(2, ostinatoPitches[m]), start: t, dur: d * 0.85, vel: 0.48 });
         t += d;
       }
       for (let i = 0; i < 8; i++) {
@@ -176,7 +171,7 @@ export function composeBar(state: MusicStateId, barIndex: number, seed: number):
       // assault cue: ostinato + low pad swell + phase melody (later bars) + martial drums
       let t = 0;
       for (const [m, d] of OSTINATO) {
-        notes.push({ voice: "cello", midi: m - 0, start: t, dur: d * 0.9, vel: 0.5 });
+        notes.push({ voice: "cello", midi: midi(2, ostinatoPitches[m]), start: t, dur: d * 0.9, vel: 0.5 });
         t += d;
       }
       notes.push({ voice: "pad", midi: root, start: 0, dur: 4, vel: 0.16 });
@@ -263,7 +258,7 @@ export function composeBar(state: MusicStateId, barIndex: number, seed: number):
       // aggressive interplay: cello ostinato vs violin stabs a fifth above
       let t = 0;
       for (const [m, d] of OSTINATO) {
-        notes.push({ voice: "cello", midi: m - 5, start: t, dur: d * 0.9, vel: 0.5 });
+        notes.push({ voice: "cello", midi: midi(2, ostinatoPitches[m]), start: t, dur: d * 0.9, vel: 0.5 });
         t += d;
       }
       for (let i = 0; i < 8; i++) {
@@ -274,5 +269,20 @@ export function composeBar(state: MusicStateId, barIndex: number, seed: number):
       break;
     }
   }
-  return { bpm: cfg.bpm, beats: 4, notes };
+  // An eight-bar phrase breathes: an intimate opening, fuller answering phrase,
+  // then a softer cadence. Harp punctuations sit around the bowed-string theme.
+  if (cfg.loop) {
+    const phraseGain = [0.82, 0.9, 0.96, 0.87, 0.95, 1, 0.94, 0.76][barIndex % 8];
+    if (state === "menu" || state === "explore") {
+      notes.push({ voice: "cello", midi: root, start: 0, dur: 3.85, vel: 0.2 });
+      notes.push({ voice: "harp", midi: midi(4, chord[1]), start: 0.03, dur: 1.8, vel: 0.24 });
+      notes.push({ voice: "pad", midi: midi(3, chord[2]), start: 0, dur: 4, vel: 0.1 });
+    } else if (barIndex % 4 === 3) {
+      notes.push({ voice: "harp", midi: midi(4, chord[2]), start: 3.5, dur: 0.5, vel: 0.28 });
+    }
+    for (const n of notes) n.vel *= phraseGain * (0.97 + rng.next() * 0.06);
+  }
+  // One-shot duration includes the full final note (victory resolves on beat 5).
+  const beats = cfg.loop ? 4 : Math.max(4, ...notes.map(n => n.start + n.dur));
+  return { bpm: cfg.bpm, beats, notes };
 }

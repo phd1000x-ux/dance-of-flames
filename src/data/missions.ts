@@ -111,7 +111,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Burn 8 enemy soldiers",
         targetType: "soldier",
         count: 8,
-        hint: "Hold LMB to breathe fire",
+        hint: "Hold F to breathe fire (or left mouse)",
         groundAlternative: groundKillSoldiers(8),
       },
       {

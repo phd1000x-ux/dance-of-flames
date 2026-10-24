@@ -1,3 +1,4 @@
+import type { CastleAabb } from "../world/CastleBuilder";
 import {
   Scene,
   Vector3,
@@ -243,13 +244,12 @@ export class MissionScene {
       if (this.restoring) return;
       this.loot.rollDeathLoot(s.pos, this.deps.difficulty.healDropRate);
     };
-    this.enemies.onMeleeHitRider = (damage, fromX, fromZ) => {
+    this.enemies.onMeleeHitRider = (damage, fromX, fromZ, kind = "melee") => {
       if (!this.riderCtrl) return;
-      const from = new Vector3(fromX, 0, fromZ).normalize();
-      const res = this.riderCtrl.takeHit(damage, from, "melee");
+      const from = new Vector3(-fromX, 0, -fromZ).normalize();
+      const res = this.riderCtrl.takeHit(damage, from, kind);
       if (res.applied > 0) {
-        this.stats.damageTaken += res.applied;
-        this.deps.bus.emit("player-damaged", { amount: res.applied, dirX: fromX, dirZ: fromZ, source: "melee" });
+        this.deps.bus.emit("player-damaged", { amount: res.applied, dirX: fromX, dirZ: fromZ, source: kind });
       }
       if (res.parried && this.riderCtrl.lockTarget) {
         // parry staggers nearby enemies (simplify: stagger target)
@@ -404,7 +404,7 @@ export class MissionScene {
   /** zones for ambience (populated by WorldBuilder for this mission) */
   castleZone: { center: Vector3; radiusSq: number } | null = null;
   villageZones: { center: Vector3; radiusSq: number }[] = [];
-  castleAabbs: { x: number; z: number; hx: number; hz: number }[] = [];
+  castleAabbs: CastleAabb[] = [];
 
   update(dt: number): void {
     if (this.ended) return;
@@ -433,7 +433,15 @@ export class MissionScene {
     this.projectiles.riderPos = this.riderCtrl ? this.riderCtrl.pos : null;
     this.projectiles.invulnerable = this.dragonCtrl.invulnerable > 0 || (this.riderCtrl?.invulnerable ?? 0) > 0;
     this.projectiles.onPlayerHit = (damage, sx, sz, kind) => {
-      if (this.phase === "ground") return; // rider arrows handled via melee path
+      if (this.phase === "ground") {
+        if (!this.riderCtrl?.alive) return;
+        // Projectile velocity points into the rider; takeHit expects rider → attacker.
+        const res = this.riderCtrl.takeHit(damage, new Vector3(-sx, 0, -sz).normalize(), kind);
+        if (res.applied > 0) {
+          d.bus.emit("player-damaged", { amount: res.applied, dirX: sx, dirZ: sz, source: kind });
+        }
+        return;
+      }
       const stagger = kind === "bolt" ? 0.7 : 0.12;
       const died = this.player.damageDragon(damage);
       d.bus.emit("player-damaged", { amount: damage, dirX: sx, dirZ: sz, source: kind });
@@ -469,7 +477,16 @@ export class MissionScene {
       this.updateDragonLock(d);
       // aim direction with soft assist / lock magnetism
       this.fire.aimDir = this.getFireAimDir();
+      const previousFlightPosition = this.dragonCtrl.pos.clone();
       this.dragonCtrl.update(dt, d.input, d.input.isDown("fire") && this.player.fireEnergy.canFire());
+      this.dragonCtrl.collideSolids(previousFlightPosition, [
+        ...this.castleAabbs,
+        ...this.buildings.buildings.filter(b => !b.collapsed).map(b => ({
+          x: b.pos.x, z: b.pos.z, hx: b.size.w / 2, hz: b.size.d / 2,
+          minY: b.pos.y - b.size.h / 2 - 0.4, maxY: b.pos.y + b.size.h / 2 - 0.4,
+          yaw: b.root.rotation.y,
+        })),
+      ]);
       // Z recenter (level flight)
       if (d.input.pressed("recenterCamera")) this.dragonCtrl.startRecenter();
       // consumables (G)
@@ -638,6 +655,10 @@ export class MissionScene {
 
   private spawnRider(): void {
     this.phase = "ground";
+    // the flight tutorial is dragon-only: an unfinished step must not linger
+    // as a stale "[W] — Accelerate" hint through ground combat.
+    this.tutorialStep = -1;
+    this.tutorialProgress = 0;
     this.player.mode = "ground";
     this.rig.setRiderVisible(false);
     // crash effects

@@ -205,12 +205,19 @@ export class DragonRig {
     for (let i = 0; i < 5; i++) {
       const segPivot = new TransformNode(`tailSeg${i}`, scene);
       segPivot.parent = tailParent;
-      segPivot.position.set(0, 0, -1.05 * s);
+      // 0.27s of capsule overlap (was 0.1s): the wag (±0.16 rad per joint) must
+      // not open visible gaps between tail segments.
+      segPivot.position.set(0, 0, -0.88 * s);
       const seg = MeshBuilder.CreateCapsule(`tailM${i}`, { height: 1.15 * s, radius: (0.5 - i * 0.08) * s, tessellation: 8, subdivisions: 1 }, scene);
       seg.rotation.x = Math.PI / 2;
       seg.position.z = -0.5 * s;
-      seg.material = M.body;
-      seg.parent = segPivot;
+      // joint filler sphere centered on the pivot: hidden inside the previous
+      // segment's cylinder at rest, it keeps the chain continuous at any wag angle.
+      const jointR = (0.5 - Math.max(0, i - 1) * 0.08) * s * 0.95;
+      const joint = MeshBuilder.CreateSphere(`tailJoint${i}`, { diameter: jointR * 2, segments: 6 }, scene);
+      const segMesh = Mesh.MergeMeshes([seg, joint], true, true, undefined, false, false)!;
+      segMesh.material = M.body;
+      segMesh.parent = segPivot;
       this.tailSegs.push(segPivot);
       tailParent = segPivot;
     }

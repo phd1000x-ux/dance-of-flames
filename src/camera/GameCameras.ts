@@ -12,6 +12,8 @@ import type { GameSettings } from "../save/SaveSystem";
  */
 export class DragonCamera {
   readonly camera: UniversalCamera;
+  /** Optional framing for imported models with a larger animated silhouette. */
+  visualFraming: { distance: number; height: number; lookAhead: number; minDistance: number } | null = null;
   private shake = 0;
   private fov = 68;
   private camPos = new Vector3(0, 130, -20);
@@ -38,12 +40,16 @@ export class DragonCamera {
     const scale = ctrl.player.dragonDef.scale;
     const boosting = ctrl.state === "BOOST";
     const diving = ctrl.state === "DIVE";
-    const dist = (10.5 + scale * 2.2) * (boosting ? 1.18 : diving ? 1.1 : 1);
-    const height = 3.6 + scale * 1.6;
+    const framing = this.visualFraming;
+    const dist = (framing?.distance ?? (10.5 + scale * 2.2)) * (boosting ? 1.18 : diving ? 1.1 : 1);
+    const height = framing?.height ?? (3.6 + scale * 1.6);
+    const chaseUp = framing
+      ? Vector3.TransformNormal(Vector3.Up(), Matrix.RotationYawPitchRoll(ctrl.yaw, ctrl.pitch, 0))
+      : Vector3.Up();
 
     // desired position behind & above (world-space blend, not full dragon up)
     const behind = ctrl.pos.subtract(ctrl.forward.scale(dist));
-    behind.y += height;
+    behind.addInPlace(chaseUp.scale(height));
 
     // smooth follow
     const followRate = boosting ? 4.5 : 6.0;
@@ -64,10 +70,20 @@ export class DragonCamera {
       finalPos.z += (Math.random() - 0.5) * sh;
     }
 
+    // Smoothing across a steep turn can cut through the larger model even if
+    // both endpoints are clear. Enforce clearance after smoothing and shake.
+    if (framing) {
+      const offset = finalPos.subtract(ctrl.pos);
+      if (offset.lengthSquared() < framing.minDistance ** 2) {
+        const direction = offset.lengthSquared() > 0.001 ? offset.normalize() : behind.subtract(ctrl.pos).normalize();
+        finalPos.copyFrom(ctrl.pos.add(direction.scale(framing.minDistance)));
+      }
+    }
+
     this.camera.position.copyFrom(finalPos);
 
     // look at point ahead of the dragon; target lock gently biases the view
-    const target = ctrl.pos.add(ctrl.forward.scale(14 * scale)).add(new Vector3(0, 1.2, 0));
+    const target = ctrl.pos.add(ctrl.forward.scale(framing?.lookAhead ?? (14 * scale))).add(chaseUp.scale(1.2));
     if (biasTarget) {
       const offset = biasTarget.subtract(target);
       const len = offset.length();
@@ -78,7 +94,7 @@ export class DragonCamera {
     }
 
     // partial roll via up-vector
-    const worldUp = new Vector3(0, 1, 0);
+    const worldUp = chaseUp;
     const roll = ctrl.roll * this.rollInfluence;
     const rot = Matrix.RotationAxis(ctrl.forward, roll);
     const up = Vector3.TransformNormal(worldUp, rot);
@@ -94,6 +110,17 @@ export class DragonCamera {
   }
 
   reset(ctrl: DragonController): void {
+    if (this.visualFraming) {
+      // Remount updates pitch before the controller has refreshed its forward vector.
+      const basis = Matrix.RotationYawPitchRoll(ctrl.yaw, ctrl.pitch, 0);
+      const forward = Vector3.TransformNormal(Vector3.Forward(), basis);
+      const up = Vector3.TransformNormal(Vector3.Up(), basis);
+      this.camPos.copyFrom(ctrl.pos.subtract(forward.scale(this.visualFraming.distance)).add(up.scale(this.visualFraming.height)));
+      this.camera.position.copyFrom(this.camPos);
+      this.camera.upVector.copyFrom(up);
+      this.camera.setTarget(ctrl.pos.add(forward.scale(this.visualFraming.lookAhead)));
+      return;
+    }
     const behind = ctrl.pos.subtract(ctrl.forward.scale(12));
     this.camPos.copyFrom(behind);
     this.camPos.y += 4;

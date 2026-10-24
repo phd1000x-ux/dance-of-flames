@@ -6,6 +6,7 @@ import {
   StandardMaterial,
   TransformNode,
   Vector3,
+  VertexBuffer,
 } from "@babylonjs/core";
 import type { EnemyDefinition } from "../data/enemies";
 import type { RiderDefinition } from "../data/riders";
@@ -41,9 +42,34 @@ export class SoldierFactory {
     const head = MeshBuilder.CreateSphere("s-head", { diameter: 0.34 * s, segments: 4 }, this.scene);
     head.position.y = 1.68 * s;
     parts.push(head);
-    const helmet = MeshBuilder.CreateCylinder("s-helmet", { diameterTop: 0.02, diameterBottom: 0.3 * s, height: 0.22 * s, tessellation: 6 }, this.scene);
-    helmet.position.y = 1.84 * s;
+    // A real helmet silhouette and a recessed visor read clearly from the ground camera.
+    const helmet = MeshBuilder.CreateSphere("s-helmet", { diameterX: 0.4 * s, diameterY: 0.37 * s, diameterZ: 0.39 * s, segments: 8 }, this.scene);
+    helmet.position.y = 1.72 * s;
     parts.push(helmet);
+    const visor = MeshBuilder.CreateBox("s-visor", { width: 0.26 * s, height: 0.055 * s, depth: 0.035 * s }, this.scene);
+    visor.position.set(0, 1.72 * s, 0.19 * s);
+    parts.push(visor);
+    const breastplate = MeshBuilder.CreateSphere("s-breastplate", { diameterX: 0.58 * s, diameterY: 0.65 * s, diameterZ: 0.39 * s, segments: 8 }, this.scene);
+    breastplate.position.set(0, 1.25 * s, 0.035 * s);
+    parts.push(breastplate);
+    const belt = MeshBuilder.CreateBox("s-belt", { width: 0.51 * s, height: 0.09 * s, depth: 0.4 * s }, this.scene);
+    belt.position.y = 0.94 * s;
+    parts.push(belt);
+    for (const side of [-1, 1]) {
+      const shoulder = MeshBuilder.CreateSphere("s-pauldron", { diameterX: 0.25 * s, diameterY: 0.19 * s, diameterZ: 0.32 * s, segments: 6 }, this.scene);
+      shoulder.position.set(side * 0.31 * s, 1.43 * s, 0);
+      parts.push(shoulder);
+      const arm = MeshBuilder.CreateCapsule("s-arm", { height: 0.56 * s, radius: 0.075 * s, tessellation: 6, subdivisions: 1 }, this.scene);
+      arm.position.set(side * 0.34 * s, 1.14 * s, 0.08 * s);
+      arm.rotation.x = -0.2; arm.rotation.z = side * 0.1;
+      parts.push(arm);
+      const glove = MeshBuilder.CreateSphere("s-glove", { diameter: 0.16 * s, segments: 6 }, this.scene);
+      glove.position.set(side * 0.36 * s, 0.91 * s, 0.15 * s);
+      parts.push(glove);
+      const boot = MeshBuilder.CreateBox("s-boot", { width: 0.19 * s, height: 0.19 * s, depth: 0.31 * s }, this.scene);
+      boot.position.set(side * 0.12 * s, 0.1 * s, 0.055 * s);
+      parts.push(boot);
+    }
     for (const lx of [-0.12, 0.12]) {
       const leg = MeshBuilder.CreateBox("s-leg", { width: 0.13 * s, height: 0.62 * s, depth: 0.15 * s }, this.scene);
       leg.position.set(lx * s, 0.32 * s, 0);
@@ -95,16 +121,27 @@ export class SoldierFactory {
         break;
     }
 
+    // Vertex colors preserve armor/cloth/weapon separation in one draw call per soldier.
+    const uniform = Color3.FromHexString(def.color);
+    for (const part of parts) {
+      const metal = /helmet|breastplate|pauldron|plate|sword|shield/.test(part.name);
+      const dark = /visor|boot|glove|belt|bow/.test(part.name);
+      const color = metal ? new Color3(0.56, 0.6, 0.66) : dark ? new Color3(0.12, 0.1, 0.09) : uniform;
+      const colors = new Float32Array(part.getTotalVertices() * 4);
+      for (let i = 0; i < colors.length; i += 4) {
+        colors[i] = color.r; colors[i + 1] = color.g; colors[i + 2] = color.b; colors[i + 3] = 1;
+      }
+      part.setVerticesData(VertexBuffer.ColorKind, colors);
+    }
     const mesh = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
     mesh.parent = root;
-    const c = Color3.FromHexString(def.color);
     const mat = this.bodyMat.clone(`soldierMat-${mesh.uniqueId}`);
     // material.clone() clones textures too: RawTexture.clone() shares the InternalTexture (refcount) but
     // drops uScale/vScale tiling — re-point at the cached texture to restore tiling + cache identity
     mat.diffuseTexture = this.bodyMat.diffuseTexture;
     mat.bumpTexture = this.bodyMat.bumpTexture;
-    mat.diffuseColor = c;
-    mat.emissiveColor = c.scale(0.15);
+    mat.diffuseColor = Color3.White();
+    mat.emissiveColor = new Color3(0.05, 0.05, 0.05);
     mesh.material = mat;
     mesh.isPickable = false;
     return { root, mesh };
@@ -290,11 +327,13 @@ export class SoldierFactory {
       circlet.position.set(0, 0.11, 0);
       attach(circlet, gold, headPivot);
     }
-    // cloak
-    const cloak = MeshBuilder.CreateBox("g-cloak", { width: 0.6, height: female ? 1.05 : 1.0, depth: 0.06 }, this.scene);
-    cloak.position.set(0, 1.15, -0.24);
-    cloak.rotation.x = 0.12;
-    attach(cloak, cloth, torsoPivot);
+    // cloak: A-line drape (tapered cylinder) in a deepened rider color — a flat
+    // bright slab read as a whiteboard from the ground camera's rear view.
+    const cloakMat = texturedMaterial(this.scene, "gCloak", "cloth", { uScale: 2, vScale: 2, tint: c.scale(0.55), specular: new Color3(0.03, 0.03, 0.03) });
+    const cloak = MeshBuilder.CreateCylinder("g-cloak", { diameterTop: 0.34, diameterBottom: 0.8, height: female ? 1.05 : 1.0, tessellation: 7 }, this.scene);
+    cloak.position.set(0, 1.12, -0.22);
+    cloak.rotation.x = 0.1;
+    attach(cloak, cloakMat, torsoPivot);
 
     // arms
     for (const ax of [-0.33, 0.33]) {

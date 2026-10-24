@@ -48,6 +48,12 @@ export class CastellanDuel {
     this.transitioned = false;
   }
 
+  /** Observe puppet HP without resetting the one-shot transition latch. */
+  syncHp(hp: number): void {
+    this._hp = Math.max(this.floor, Math.min(this.maxHp, hp));
+    if (hp <= this.floor) this.markTransitioned();
+  }
+
   shouldReinforce(): boolean {
     return !this.reinforceFired && this._hp <= this.maxHp * this.reinforcePct && !this.transitioned;
   }

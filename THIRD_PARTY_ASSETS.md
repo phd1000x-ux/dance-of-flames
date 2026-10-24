@@ -2,8 +2,29 @@
 
 ## Policy
 
-This project ships **zero external art, audio, model, or texture files**.
-Every visual and audible element is generated procedurally at runtime:
+The default game uses procedural visuals and synthesized audio. The opt-in
+`?characters=1` character prototype additionally ships the two free CC BY 4.0
+models listed below. All audio remains generated at runtime.
+
+## Free character prototype assets
+
+| Local file | Work and creator | Original source | License |
+|---|---|---|---|
+| `public/character-prototype/dragon.glb` | Animated Dragon Three Motion Loops, LasquetiSpice | https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| `public/character-prototype/knight.glb` | Strong Knight, DJMaesen | https://sketchfab.com/3d-models/strong-knight-9d912e0fedb44b619fbd2a083bbf174f | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+
+Retrieved 2026-10-24 from [Ai2's public Objaverse distribution](https://huggingface.co/datasets/allenai/objaverse).
+Both GLBs embed matching title, author, source and CC-BY-4.0 metadata.
+`public/character-prototype/sources.json` records exact download URLs and SHA256 hashes.
+The original binary files are preserved. Runtime adaptations: normalized size and
+orientation, removal of unused UV streams for WebGPU compatibility, material
+lighting adjustments, and added skeletal poses for mounting/movement/combat.
+The original clips are `Flying` (dragon) and `idle1` (knight); knight running and
+attacks are temporary code-authored poses, not downloaded motion capture.
+The prototype displays attribution and source links in its on-screen panel.
+These model files retain CC BY 4.0 and are not relicensed under the code license.
+
+## Procedural assets
 
 | Asset class | Source |
 |---|---|
@@ -31,8 +52,8 @@ Every visual and audible element is generated procedurally at runtime:
 No HBO video, screenshots, soundtrack recordings, voice recordings, face scans,
 logos, ripped game models, or copyrighted UI graphics are used. Rider and dragon
 **names** (e.g. Daemon Targaryen, Caraxes) are drawn from *House of the Dragon*
-canon as text data only — every visual and audible representation is an original,
-stylized procedural creation, not a reproduction of any HBO/GRRM asset. This is a
+canon as text data only. Procedural assets and the CC-licensed prototype models
+are not reproductions of HBO/GRRM assets. This is a
 noncommercial fan project, distributed under the PolyForm Noncommercial License
 (see `LICENSE`).
 
@@ -41,6 +62,7 @@ noncommercial fan project, distributed under the PolyForm Noncommercial License
 | Library | License | Use |
 |---|---|---|
 | [@babylonjs/core](https://www.babylonjs.com/) 8.x | Apache License 2.0 | 3D engine (WebGPU/WebGL2, scene graph, particles, shadows) |
+| @babylonjs/loaders 8.56.2 | Apache License 2.0 | glTF/GLB import for the opt-in character prototype |
 | vite 6.x | MIT | Dev server & bundler |
 | typescript 5.x | Apache 2.0 | Language |
 | vitest 2.x | MIT | Unit tests |

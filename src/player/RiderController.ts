@@ -116,6 +116,10 @@ export class RiderController {
         this.lockTarget = best;
       }
     }
+    if (this.lockTarget) {
+      // Mission snapshots are rebuilt each step; position identity points to the same soldier.
+      this.lockTarget = enemies.find(e => e.pos === this.lockTarget!.pos && e.alive && e.hp > 0) ?? null;
+    }
     if (this.lockTarget && (!this.lockTarget.alive || Vector3.Distance(this.lockTarget.pos, this.pos) > 22)) {
       this.lockTarget = null;
     }
@@ -231,13 +235,13 @@ export class RiderController {
   onHitCallback: ((fwd: Vector3, range: number, arcCos: number, damage: number, heavy: boolean) => void) | null = null;
   onParry: (() => void) | null = null;
 
-  /** incoming melee/ranged damage; returns actual damage applied */
+  /** fromDir points from the rider toward the attacker; returns actual damage applied. */
   takeHit(amount: number, fromDir: Vector3, sourceType: string): { applied: number; parried: boolean; dodged: boolean } {
-    if (this.invulnerable > 0 || this.dodgeTimer > 0) return { applied: 0, parried: false, dodged: true };
+    if (!this.alive || this.invulnerable > 0 || this.dodgeTimer > 0) return { applied: 0, parried: false, dodged: true };
     // facing check for block
     const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const facing = Vector3.Dot(fwd, fromDir) < -0.25;
-      if (this.blocking && facing) {
+    const facing = Vector3.Dot(fwd, fromDir) > 0.25;
+      if (this.blocking && facing && sourceType !== "shieldBreaker") {
         if (this.blockTime < 0.22) {
           // PARRY: negate + flash
           this.parryFlash = 0.3;

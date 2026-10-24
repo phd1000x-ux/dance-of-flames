@@ -31,6 +31,8 @@ export class InputManager {
   onKeyDown: ((code: string, event: KeyboardEvent) => void) | null = null;
 
   private keyDownHandler = (e: KeyboardEvent) => {
+    if (this.context === "gameplay" && e.target instanceof HTMLElement &&
+      e.target.closest("button,input,select,textarea,a,[contenteditable='true']") && e.code !== "Escape") return;
     // always suppress Tab/F3 focus-stealing; suppress scroll keys only during gameplay
     if (this.context === "gameplay") {
       if (GAMEPLAY_PREVENT_KEYS.has(e.code)) e.preventDefault();
@@ -45,12 +47,14 @@ export class InputManager {
     this.state.keyUp(e.code);
   };
   private mouseDownHandler = (e: MouseEvent) => {
+    if (e.target instanceof HTMLElement && e.target.closest("button,input,select,textarea,a,.game-control")) return;
     this.state.keyDown(`Mouse${e.button}`);
   };
   private mouseUpHandler = (e: MouseEvent) => {
     this.state.keyUp(`Mouse${e.button}`);
   };
   private mouseMoveHandler = (e: MouseEvent) => {
+    if (e.target instanceof HTMLElement && e.target.closest("button,input,select,textarea,a,.game-control")) return;
     if (this.pointerLocked || this.testMode || e.buttons !== 0 || this.freeMouse) {
       this.mouseDX += e.movementX ?? 0;
       this.mouseDY += e.movementY ?? 0;

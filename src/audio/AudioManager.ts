@@ -23,13 +23,13 @@ export class AudioManager {
   private windWhistleGain: GainNode | null = null;
 
   // fire loop layers
-  private fireNodes: { rumble: GainNode; body: GainNode; hiss: GainNode; any: AudioNode } | null = null;
+  private fireNodes: { rumble: GainNode; body: GainNode; hiss: GainNode; sources: AudioBufferSourceNode[] } | null = null;
   private fireCrackleTimer: ReturnType<typeof setInterval> | null = null;
 
   // ambient zone layers
   private zoneGains: Record<string, GainNode> = {};
   private zoneScheduler: ReturnType<typeof setInterval> | null = null;
-  private currentZone = "field";
+  private currentZone = "";
   private battleBed: GainNode | null = null;
 
   constructor(private settings: GameSettings) {}
@@ -52,7 +52,7 @@ export class AudioManager {
       this.ambient.gain.value = this.settings.effectsVolume * 0.8;
       this.ambient.connect(this.master);
       this.musicBus = this.ctx.createGain();
-      this.musicBus.gain.value = this.settings.musicVolume ?? 0.7;
+      this.musicBus.gain.value = this.settings.musicEnabled === false ? 0 : this.settings.musicVolume ?? 0.7;
       this.musicBus.connect(this.master);
       this.noiseBuffer = this.makeNoise(2.5);
       this.startWindLoop();
@@ -63,6 +63,8 @@ export class AudioManager {
     }
   }
 
+  get audioContext(): AudioContext | null { return this.ctx; }
+
   /** MusicSystem connects its output here */
   get musicInput(): AudioNode | null {
     return this.musicBus;
@@ -72,7 +74,11 @@ export class AudioManager {
     if (this.master) this.master.gain.value = this.settings.masterVolume;
     if (this.sfx) this.sfx.gain.value = this.settings.effectsVolume;
     if (this.ambient) this.ambient.gain.value = this.settings.effectsVolume * 0.8;
-    if (this.musicBus) this.musicBus.gain.value = this.settings.musicVolume ?? 0.7;
+    if (this.musicBus && this.ctx) {
+      const t = this.ctx.currentTime;
+      this.musicBus.gain.cancelScheduledValues(t); // clear an impact's delayed restore
+      this.musicBus.gain.setTargetAtTime(this.settings.musicEnabled === false ? 0 : this.settings.musicVolume, t, 0.012);
+    }
   }
 
   private makeNoise(seconds: number): AudioBuffer {
@@ -193,7 +199,7 @@ export class AudioManager {
   impactDuck(scale = 0.35, seconds = 1.6): void {
     if (!this.ctx || !this.musicBus || !this.ambient) return;
     const t = this.ctx.currentTime;
-    const m = this.settings.musicVolume ?? 0.7;
+    const m = this.settings.musicEnabled === false ? 0 : this.settings.musicVolume ?? 0.7;
     this.musicBus.gain.cancelScheduledValues(t);
     this.musicBus.gain.setTargetAtTime(m * scale, t, 0.08);
     this.musicBus.gain.setTargetAtTime(m, t + seconds, 0.5);
@@ -403,7 +409,7 @@ export class AudioManager {
       rumbleSrc.start();
       bodySrc.start();
       hissSrc.start();
-      this.fireNodes = { rumble: rumbleG, body: bodyG, hiss: hissG, any: rumbleSrc };
+      this.fireNodes = { rumble: rumbleG, body: bodyG, hiss: hissG, sources: [rumbleSrc, bodySrc, hissSrc] };
 
       // ember crackle scheduler
       this.fireCrackleTimer = setInterval(() => {
@@ -425,7 +431,7 @@ export class AudioManager {
       nodes.hiss.gain.setTargetAtTime(0, t, 0.09);
       setTimeout(() => {
         try {
-          (nodes.any as AudioBufferSourceNode).stop();
+          for (const source of nodes.sources) { source.stop(); source.disconnect(); }
         } catch {
           /* already stopped */
         }
@@ -496,7 +502,7 @@ export class AudioManager {
 
     // zone-flavored one-shot scheduler
     this.zoneScheduler = setInterval(() => {
-      if (!this.fireNodes) return; // don't stack during dragon fire
+      if (this.fireNodes) return; // don't stack during dragon fire
       const z = this.currentZone;
       const r = Math.random();
       if (z === "castle") {

@@ -24,6 +24,7 @@ export type GameAction =
   | "objectives"
   | "pause"
   | "debug"
+  | "toggleMusic"
   | "lightAttack"
   | "heavyAttack"
   | "block"
@@ -54,6 +55,7 @@ export const DEFAULT_BINDINGS: Record<GameAction, string[]> = {
   objectives: ["Tab"],
   pause: ["Escape"],
   debug: ["F3"],
+  toggleMusic: ["KeyM"],
   lightAttack: ["KeyJ", "Mouse0"],
   heavyAttack: ["KeyK"],
   block: ["KeyL", "Mouse2"],

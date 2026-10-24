@@ -53,6 +53,7 @@ export class GameApp {
   private debugEl: HTMLElement | null = null;
   private lastHudUpdate = 0;
   private frameCount = 0;
+  private musicStarted = false;
   // benchmark
   private benchFrameTimes: number[] = [];
   private benchSeconds = 30;
@@ -150,10 +151,31 @@ export class GameApp {
   // ---------------- scenes ----------------
   private openShowcase(): void {
     if (!this.showcase) {
-      this.showcase = new MenuShowcase(this.engine, this.canvas, { postFX: !this.opts.testMode });
+      this.showcase = new MenuShowcase(this.engine, this.canvas, {
+        postFX: !this.opts.testMode,
+        characters: !this.opts.testMode || new URLSearchParams(location.search).get("characters") === "1",
+      });
     }
     this.showcase.setDragon(getDragon(this.save.selectedDragon ?? "syrax"), getRider(this.save.selectedRider ?? "rhaenyra"));
     this.showcase.setMode("menu");
+  }
+
+  showCharacterSelect(): void {
+    this.state.transition(GameState.CHARACTER_SELECT);
+    this.ui.populateCharacterSelect(this.save);
+    this.ui.showScreen("character-select");
+    if (!this.showcase) this.openShowcase();
+    const selection = this.ui.getCharacterSelection();
+    this.showcase?.setMode("select");
+    this.showcase?.setDragon(getDragon(selection.dragon), getRider(selection.rider));
+  }
+
+  private toggleMusic(): void {
+    this.settings.musicEnabled = !this.settings.musicEnabled;
+    this.music.setEnabled(this.settings.musicEnabled);
+    this.audio.applySettings();
+    this.ui.refreshSettings();
+    this.persistSave();
   }
 
   private wireBus(): void {
@@ -247,6 +269,16 @@ export class GameApp {
       postFX: !this.opts.testMode || this.opts.benchmark,
     });
     this.mission = mission;
+    const characterDebug = new URLSearchParams(location.search).get("characters") === "1";
+    if (!this.opts.testMode || this.opts.benchmark || characterDebug) {
+      status.textContent = "Loading Characters…";
+      try {
+        const { installCharacterVisuals } = await import("../world/CharacterPrototype");
+        await installCharacterVisuals(mission, { debugPanel: characterDebug });
+      } catch (error) {
+        console.warn("[characters] using procedural fallback", error);
+      }
+    }
     mission.postPipeline.applyTier(this.governor.tier);
     // checkpoint restore: apply to the deterministic fresh build; on failure
     // fall through as a clean start (never brick the retry)
@@ -279,10 +311,13 @@ export class GameApp {
 
     this.paused = false;
     this.state.transition(GameState.DRAGON_GAMEPLAY);
+    // Apply the context before the screen becomes interactive: otherwise the
+    // next render frame resets a key pressed immediately after loading.
+    this.input.setContext("gameplay");
     this.ui.showScreen(null);
     this.ui.hud.setPortrait(dragon.name.charAt(0));
     this.audio.unlock();
-    if (!this.opts.testMode && !this.opts.benchmark) {
+    if (!this.opts.testMode && !this.opts.benchmark && new URLSearchParams(location.search).get("characters") !== "1") {
       this.input.requestPointerLock();
     }
   }
@@ -345,21 +380,16 @@ export class GameApp {
   private makeUiCallbacks() {
     return {
       onContinue: () => {
+        this.state.transition(GameState.MISSION_SELECT);
+        this.ui.populateCharacterSelect(this.save);
         this.populateMissionSelect();
         this.ui.showScreen("mission-select");
       },
       onNewCampaign: () => {
-        this.state.transition(GameState.CHARACTER_SELECT);
-        this.ui.populateCharacterSelect(this.save);
-        this.ui.showScreen("character-select");
-        this.showcase?.setMode("select");
-        this.showcase?.setDragon(getDragon(this.selectedDragonForShowcase()));
+        this.showCharacterSelect();
       },
       onBattle: () => {
-        this.state.transition(GameState.CHARACTER_SELECT);
-        this.ui.populateCharacterSelect(this.save);
-        this.ui.showScreen("character-select");
-        this.showcase?.setMode("select");
+        this.showCharacterSelect();
       },
       onSettings: () => {
         this.ui.refreshSettings();
@@ -401,8 +431,15 @@ export class GameApp {
         this.input.sensitivity = s.mouseSensitivity;
         this.input.invertY = s.invertY;
         this.audio.applySettings();
+        this.music.setEnabled(s.musicEnabled);
         this.governor.applyPreset(s.graphicsPreset);
         this.persistSave();
+      },
+      onToggleMusic: () => this.toggleMusic(),
+      onPreviewRotate: (phase: "start" | "move" | "end", clientX: number) => {
+        if (phase === "start") this.showcase?.beginRotation(clientX);
+        else if (phase === "move") this.showcase?.rotateTo(clientX);
+        else this.showcase?.endRotation();
       },
       onShopBuy: (upgradeId: string) => {
         const res = this.upgrades.purchase(upgradeId);
@@ -518,14 +555,16 @@ export class GameApp {
     this.simAccumulator = 0; // no catch-up backlog across the pause
     if (p) {
       this.state.transition(GameState.PAUSED);
+      this.input.setContext("menu");
       this.input.exitPointerLock();
       this.ui.showScreen("pause");
       this.audio.setFireLoop(false);
     } else {
       const back = this.mission?.phase === "ground" ? GameState.GROUND_GAMEPLAY : GameState.DRAGON_GAMEPLAY;
       this.state.transition(back);
+      this.input.setContext("gameplay");
       this.ui.showScreen(null);
-      if (!this.opts.testMode) this.input.requestPointerLock();
+      if (!this.opts.testMode && new URLSearchParams(location.search).get("characters") !== "1") this.input.requestPointerLock();
     }
   }
 
@@ -552,13 +591,15 @@ export class GameApp {
       this.debugVisible = !this.debugVisible;
       this.debugEl?.classList.toggle("visible", this.debugVisible);
     }
+    if (this.input.pressed("toggleMusic")) this.toggleMusic();
 
     // audio unlock on first interaction
     if (this.frameCount === 30) this.audio.unlock();
     // start the score once audio exists
-    if (this.frameCount === 30 && this.audio.musicInput) {
-      const ctx = (this.audio as any).ctx as AudioContext;
-      this.music.start(ctx, this.audio.musicInput);
+    if (!this.musicStarted && this.audio.musicInput && this.audio.audioContext) {
+      this.music.setEnabled(this.settings.musicEnabled);
+      this.music.start(this.audio.audioContext, this.audio.musicInput);
+      this.musicStarted = true;
     }
 
     if (this.mission && this.state.inGameplay && !this.paused) {
@@ -724,8 +765,11 @@ export class GameApp {
     if (!m) return;
     this.benchToggleT += 0.016;
     this.input.injectKeyDown("KeyW");
-    if (Math.sin(this.benchToggleT * 0.4) > 0) this.input.injectKeyDown("KeyA");
-    else this.input.injectKeyDown("KeyD");
+    if (Math.sin(this.benchToggleT * 0.4) > 0) {
+      this.input.injectKeyDown("KeyA"); this.input.injectKeyUp("KeyD");
+    } else {
+      this.input.injectKeyDown("KeyD"); this.input.injectKeyUp("KeyA");
+    }
     if (this.benchToggleT % 2 < 1.4) this.input.injectMouse(0, true);
     else this.input.injectMouse(0, false);
     if (this.benchToggleT % 3 < 0.2) this.input.injectKeyDown("ShiftLeft");
@@ -739,7 +783,7 @@ export class GameApp {
       const times = this.benchFrameTimes;
       const sorted = [...times].sort((a, b) => a - b);
       const avg = times.reduce((a, b) => a + b, 0) / times.length;
-      const p5 = sorted[Math.floor(sorted.length * 0.05)];
+      const p5 = sorted[Math.floor(sorted.length * 0.95)];
       const max = sorted[sorted.length - 1];
       const report = {
         renderer: this.rendererName,

@@ -35,10 +35,7 @@ async function boot(): Promise<void> {
           app.showcase?.setMode("menu");
           break;
         case GameState.MISSION_SELECT:
-          st.transition(GameState.CHARACTER_SELECT);
-          app.ui.populateCharacterSelect(app.save);
-          app.ui.showScreen("character-select");
-          app.showcase?.setMode("select");
+          app.showCharacterSelect();
           break;
         default:
           break;
@@ -54,12 +51,7 @@ async function boot(): Promise<void> {
     onUiClick: () => app.audio.unlock(),
     onUiSound: () => app.audio.uiMove(),
     getSelection: () => {
-      const selRider = document.querySelector("#rider-list .roster-item.selected") as HTMLElement | null;
-      const selDragon = document.querySelector("#dragon-list .roster-item.selected") as HTMLElement | null;
-      return {
-        rider: selRider?.dataset.rider ?? app.save.selectedRider ?? "rhaenyra",
-        dragon: selDragon?.dataset.dragon ?? app.save.selectedDragon ?? "syrax",
-      };
+      return app.ui.getCharacterSelection();
     },
   };
 

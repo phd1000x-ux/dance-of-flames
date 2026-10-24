@@ -2,6 +2,8 @@ import { MeshBuilder, Mesh, StandardMaterial, Color3, VertexData, Scene, Texture
 import { getWorldTexture } from "./WorldMaterials";
 import { SeededRng } from "../core/SeededRng";
 import { smoothstep } from "../core/MathUtils";
+import { fbm } from "./Noise";
+import { branchingTree, gabledRoof, weatheredRock } from "./SceneryGeometry";
 
 /** Analytic terrain height — shared by rendering, gameplay collision, and placement. */
 export class TerrainHeightSampler {
@@ -83,15 +85,18 @@ export class Terrain {
     const colors: number[] = [];
     const base = Color3.FromHexString(opts.groundColor);
     const accent = Color3.FromHexString(opts.accentColor);
-    const rng = new SeededRng(seed * 7 + 13);
+
 
     for (let i = 0; i < positions.length; i += 3) {
       const x = positions[i];
       const z = positions[i + 2];
       const h = this.sampler.height(x, z);
       positions[i + 1] = h;
-      // vertex color blend by height + noise
-      const t = smoothstep(-6, 24, h) * 0.7 + rng.next() * 0.3;
+      // Continuous soil patches and exposed rock follow the terrain; independent
+      // random vertex colors formerly produced an artificial triangle patchwork.
+      const patch = fbm(x / 65, z / 65, seed + 13);
+      const slope = Math.hypot(this.sampler.height(x + 3, z) - h, this.sampler.height(x, z + 3) - h);
+      const t = Math.min(1, smoothstep(-6, 24, h) * 0.38 + patch * 0.52 + slope * 0.15);
       colors.push(base.r + (accent.r - base.r) * t, base.g + (accent.g - base.g) * t, base.b + (accent.b - base.b) * t, 1);
     }
     ground.setVerticesData("position", positions);
@@ -151,27 +156,47 @@ export function buildSkyAndHorizon(
   mat.disableLighting = true;
   mat.emissiveColor = fog.scale(0.25);
 
+  const forestTemplates = kind === "forest" ? [false, true].map((b, i) => {
+    const tree = branchingTree(`horizon-tree-${i}`, seed + i * 41, b, scene);
+    const merged = Mesh.MergeMeshes([tree.trunk, tree.crown], true, true)!;
+    merged.material = mat; merged.isVisible = false; merged.isPickable = false;
+    return merged;
+  }) : [];
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2 + rng.range(-0.1, 0.1);
     const dist = rng.range(760, 860);
     const x = Math.cos(angle) * dist;
     const z = Math.sin(angle) * dist;
-    let m: Mesh;
+    let m: Mesh | import("@babylonjs/core").InstancedMesh;
     if (kind === "city") {
-      m = MeshBuilder.CreateBox(`sil${i}`, { width: rng.range(20, 46), height: rng.range(30, 90), depth: rng.range(20, 40) }, scene);
+      const w = rng.range(20, 46), h = rng.range(30, 90), d = rng.range(20, 40);
+      const body = MeshBuilder.CreateBox(`sil${i}`, { width: w, height: h, depth: d }, scene);
+      body.position.y = h / 2;
+      const roof = gabledRoof(`sil-roof-${i}`, w * 1.1, d * 1.1, w * 0.7, scene);
+      roof.position.y = h;
+      m = Mesh.MergeMeshes([body, roof], true, true)!;
+      m.position.y = -10;
     } else if (kind === "ruins") {
-      m = MeshBuilder.CreateCylinder(`sil${i}`, { diameterTop: rng.range(2, 10), diameterBottom: rng.range(14, 22), height: rng.range(40, 90), tessellation: 6 }, scene);
+      m = weatheredRock(`sil${i}`, seed + i * 11, scene);
+      m.scaling.set(rng.range(9, 16), rng.range(35, 65), rng.range(10, 19));
+      m.position.y = 20;
     } else if (kind === "forest") {
-      m = MeshBuilder.CreateCylinder(`sil${i}`, { diameterTop: 0, diameterBottom: rng.range(24, 42), height: rng.range(40, 70), tessellation: 6 }, scene);
+      m = forestTemplates[i % 2].createInstance(`horizon-forest-${i}`);
+      const scale = rng.range(5.5, 9);
+      m.scaling.set(scale * 1.3, scale, scale * 1.3);
+      m.position.y = -10;
     } else {
-      m = MeshBuilder.CreateCylinder(`sil${i}`, { diameterTop: 0, diameterBottom: rng.range(60, 120), height: rng.range(80, 150), tessellation: 5 }, scene);
+      // Overlapping asymmetric rock masses form a broken ridge instead of a ring of cones.
+      m = weatheredRock(`sil${i}`, seed + i * 31, scene);
+      m.scaling.set(rng.range(55, 95), rng.range(75, 145), rng.range(40, 80));
+      m.rotation.set(rng.range(-0.14, 0.14), angle, rng.range(-0.18, 0.18));
+      m.position.y = 10;
     }
-    m.position.set(x, 0, z);
+    m.position.x = x; m.position.z = z;
     m.material = mat;
     m.isPickable = false;
+    // Freeze only after all transforms: the former horizon was frozen at y=0.
     m.freezeWorldMatrix();
-    const groundY = -10;
-    m.position.y = groundY + (m.getBoundingInfo().boundingBox.extendSize.y);
   }
 
   // cloud layer: two large semi-transparent planes with procedural blob texture

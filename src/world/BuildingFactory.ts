@@ -9,6 +9,7 @@ import {
 } from "@babylonjs/core";
 import { SeededRng } from "../core/SeededRng";
 import { texturedMaterial } from "./WorldMaterials";
+import { gabledRoof, weatheredRock } from "./SceneryGeometry";
 
 export type BuildingKind = "house" | "tower" | "barracks" | "fort" | "wall" | "gate" | "keep" | "grandTower";
 
@@ -80,14 +81,15 @@ export class BuildingFactory {
     const { w, h, d } = spec.size;
     const parts: Mesh[] = [];
     const roofParts: Mesh[] = [];
+    const timberParts: Mesh[] = [];
+    const ironParts: Mesh[] = [];
     const winParts: Mesh[] = [];
 
     switch (kind) {
       case "house": {
         parts.push(MeshBuilder.CreateBox("h-wall", { width: w, height: h, depth: d }, this.scene));
-        const roof = MeshBuilder.CreateCylinder("h-roof", { diameterTop: 0, diameterBottom: Math.max(w, d) * 1.2, height: 2.6, tessellation: 4 }, this.scene);
-        roof.rotation.y = Math.PI / 4;
-        roof.position.y = h / 2 + 1.3;
+        const roof = gabledRoof("h-roof", w + 1.2, d + 1.3, 2.8, this.scene);
+        roof.position.y = h / 2;
         roofParts.push(roof);
         const chimney = MeshBuilder.CreateBox("h-chim", { width: 0.7, height: 1.6, depth: 0.7 }, this.scene);
         chimney.position.set(w * 0.28, h / 2 + 1.4, 0);
@@ -113,8 +115,8 @@ export class BuildingFactory {
       }
       case "barracks": {
         parts.push(MeshBuilder.CreateBox("b-body", { width: w, height: h, depth: d }, this.scene));
-        const roof = MeshBuilder.CreateBox("b-roof", { width: w * 1.08, height: 0.4, depth: d * 1.15 }, this.scene);
-        roof.position.y = h / 2 + 0.2;
+        const roof = gabledRoof("b-roof", w + 1.1, d + 1.2, 3.2, this.scene);
+        roof.position.y = h / 2;
         roofParts.push(roof);
         break;
       }
@@ -151,7 +153,7 @@ export class BuildingFactory {
           parts.push(turret);
           const cap = MeshBuilder.CreateCylinder("k-cap", { diameterTop: 0, diameterBottom: w * 0.3, height: h * 0.18, tessellation: 12 }, this.scene);
           cap.position.set(cx2 * (w / 2 - w * 0.14), h * 0.55, cz2 * (d / 2 - d * 0.14));
-          parts.push(cap);
+          roofParts.push(cap);
         }
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * Math.PI * 2;
@@ -183,7 +185,7 @@ export class BuildingFactory {
         }
         const troof = MeshBuilder.CreateCylinder("gt-roof", { diameterTop: 0, diameterBottom: w * 1.15, height: h * 0.3, tessellation: 8 }, this.scene);
         troof.position.y = h / 2 + h * 0.15 + 1.6;
-        parts.push(troof);
+        roofParts.push(troof);
         for (const [a, hy] of [[0.8, h * 0.5], [3.9, h * 0.75]] as const) {
           this.addWindow(winParts, Math.cos(a) * (w / 2), -h / 2 + hy, Math.sin(a) * (w / 2), Math.PI / 2 - a, 0.4, 1.1);
         }
@@ -224,10 +226,64 @@ export class BuildingFactory {
         const arch = MeshBuilder.CreateBox("g-arch", { width: w - 3, height: h * 0.6, depth: d * 0.7 }, this.scene);
         arch.position.y = h * 0.2 + 1.5;
         parts.push(arch);
-        const portcullis = MeshBuilder.CreateBox("g-port", { width: 2.4, height: 3.2, depth: 0.3 }, this.scene);
-        portcullis.position.set(0, 1.6, 0);
-        parts.push(portcullis);
+        // Portcullis reaches the ground and leaves visible openings between bars.
+        const openingWidth = w - 6.4;
+        const gateHeight = h * 0.5 + 0.2;
+        for (let x = -openingWidth / 2 + 0.25; x < openingWidth / 2; x += 0.6) {
+          const bar = MeshBuilder.CreateBox("gate-iron-bar", { width: 0.13, height: gateHeight, depth: 0.16 }, this.scene);
+          bar.position.set(x, -h / 2 + gateHeight / 2, d * 0.22);
+          ironParts.push(bar);
+        }
+        for (let y = -h / 2 + 0.8; y < -h / 2 + gateHeight; y += 1.35) {
+          const rail = MeshBuilder.CreateBox("gate-iron-rail", { width: openingWidth, height: 0.13, depth: 0.19 }, this.scene);
+          rail.position.set(0, y, d * 0.22); ironParts.push(rail);
+        }
+        // Curved wedge stones give the gatehouse an arched mouth from both approaches.
+        for (const side of [-1, 1]) for (let i = 0; i < 11; i++) {
+          const a = i * Math.PI / 10;
+          const voussoir = MeshBuilder.CreateBox("gate-arch-stone", { width: 0.8, height: 0.95, depth: 0.7 }, this.scene);
+          voussoir.position.set(Math.cos(a) * openingWidth / 2, -h / 2 + gateHeight - 2.1 + Math.sin(a) * 2.0, side * d * 0.35);
+          voussoir.rotation.z = a - Math.PI / 2; parts.push(voussoir);
+        }
         break;
+      }
+    }
+
+    // Built construction details share a single draw per material, including damage/collapse.
+    const beam = (name: string, x: number, y: number, z: number, bw: number, bh: number, bd: number, angle = 0) => {
+      const p = MeshBuilder.CreateBox(name, { width: bw, height: bh, depth: bd }, this.scene);
+      p.position.set(x, y, z); p.rotation.z = angle; timberParts.push(p);
+    };
+    if (kind === "house" || kind === "barracks") {
+      // Half-timber facades, roof verge, door lintel, and structural braces.
+      for (const side of [-1, 1]) {
+        for (const x of [-w / 2 + 0.12, 0, w / 2 - 0.12]) beam("facade-post", x, 0, side * (d / 2 + 0.035), 0.19, h, 0.19);
+        for (const y of [-h / 2 + 0.22, h / 2 - 0.15, 0.65]) beam("facade-rail", 0, y, side * (d / 2 + 0.05), w, 0.18, 0.2);
+        for (const x of [-w * 0.25, w * 0.25]) beam("facade-brace", x, -0.25, side * (d / 2 + 0.07), 0.14, h * 0.65, 0.17, x < 0 ? -0.55 : 0.55);
+        beam("roof-eave", side * (w / 2 + 0.48), h / 2, 0, 0.18, 0.22, d + 1.3);
+      }
+      beam("roof-ridge", 0, h / 2 + (kind === "house" ? 2.8 : 3.2), 0, 0.18, 0.2, d + 1.4);
+      this.addWindow(winParts, -w * 0.23, -h / 2 + 1.05, d / 2 + 0.09, 0, 1.05, 2.1);
+      this.addWindow(winParts, w * 0.26, 0.15, d / 2 + 0.1, 0, 0.8, 1.1);
+      this.addWindow(winParts, 0, 0.15, -d / 2 - 0.1, 0, 0.8, 1.1);
+    } else {
+      // Foundation plinths, string courses and tapered buttresses break up unrelieved walls.
+      if (kind === "tower" || kind === "grandTower") {
+        for (const y of [-h / 2 + 0.55, -h * 0.12, h * 0.29]) {
+          const ring = MeshBuilder.CreateCylinder("tower-course", { diameter: w * 1.08, height: 0.32, tessellation: 16 }, this.scene);
+          ring.position.y = y; parts.push(ring);
+        }
+        for (let i = 0; i < 6; i++) {
+          const a = i * Math.PI / 3;
+          const buttress = MeshBuilder.CreateCylinder("tower-buttress", { diameterBottom: w * 0.2, diameterTop: w * 0.09, height: h * 0.58, tessellation: 4 }, this.scene);
+          buttress.position.set(Math.cos(a) * w * 0.45, -h * 0.21, Math.sin(a) * w * 0.45);
+          buttress.rotation.y = -a; parts.push(buttress);
+        }
+      } else if (kind === "wall" || kind === "keep" || kind === "fort") {
+        for (const side of [-1, 1]) {
+          const ledge = MeshBuilder.CreateBox("stone-string-course", { width: w * 1.02, height: 0.38, depth: 0.35 }, this.scene);
+          ledge.position.set(0, -h * 0.24, side * d / 2); parts.push(ledge);
+        }
       }
     }
 
@@ -240,10 +296,13 @@ export class BuildingFactory {
     walls.isPickable = false;
     const solidMeshes: Mesh[] = [walls];
     const materials: StandardMaterial[] = [mat];
+    for (let i = roofParts.length - 1; i >= 0; i--) {
+      if (!roofParts[i].isVisible) { roofParts[i].dispose(); roofParts.splice(i, 1); }
+    }
     if (roofParts.length) {
       const roofMat = texturedMaterial(this.scene, `rmat-${kind}-${this.rng.int(0, 1e6)}`, "roof", {
         uScale: Math.max(2, Math.round(uv.u * 1.5)), vScale: Math.max(2, Math.round(uv.v * 0.6)),
-        tint: new Color3(0.32, 0.16, 0.1), specular: new Color3(0.03, 0.03, 0.03),
+        tint: new Color3(0.22, 0.25, 0.27), specular: new Color3(0.03, 0.03, 0.03),
       });
       const roofs = Mesh.MergeMeshes(roofParts, true, true, undefined, false, false)!;
       roofs.material = roofMat;
@@ -251,6 +310,18 @@ export class BuildingFactory {
       roofs.isPickable = false;
       solidMeshes.push(roofs);
       materials.push(roofMat);
+    }
+    if (timberParts.length) {
+      const timber = Mesh.MergeMeshes(timberParts, true, true)!;
+      const timberMat = texturedMaterial(this.scene, `${root.name}-timber`, "wood", { uScale: 1, vScale: 3, tint: new Color3(0.20, 0.15, 0.11) });
+      timber.material = timberMat; timber.parent = root; timber.isPickable = false;
+      solidMeshes.push(timber); materials.push(timberMat);
+    }
+    if (ironParts.length) {
+      const iron = Mesh.MergeMeshes(ironParts, true, true)!;
+      const ironMat = texturedMaterial(this.scene, `${root.name}-iron`, "metal", { uScale: 2, vScale: 3, tint: new Color3(0.14, 0.15, 0.16), specular: new Color3(0.24, 0.25, 0.27) });
+      iron.material = ironMat; iron.parent = root; iron.isPickable = false;
+      solidMeshes.push(iron); materials.push(ironMat);
     }
     if (winParts.length) {
       const wins = Mesh.MergeMeshes(winParts, true, true, undefined, false, false)!;
@@ -264,11 +335,9 @@ export class BuildingFactory {
     const rubbleParts: Mesh[] = [];
     const rubbleCount = kind === "fort" || kind === "wall" ? 10 : 7;
     for (let i = 0; i < rubbleCount; i++) {
-      const rb = MeshBuilder.CreateBox("rubble", {
-        width: this.rng.range(0.8, w * 0.4),
-        height: this.rng.range(0.5, 1.6),
-        depth: this.rng.range(0.8, d * 0.4),
-      }, this.scene);
+      const rb = weatheredRock("rubble", 113 + i * 31, this.scene);
+      rb.scaling.set(this.rng.range(0.8, w * 0.4), this.rng.range(0.5, 1.6), this.rng.range(0.8, d * 0.4));
+      rb.scaling.scaleInPlace(0.65);
       rb.rotation.y = this.rng.range(0, Math.PI);
       rb.rotation.z = this.rng.range(-0.2, 0.2);
       rb.position.set(this.rng.range(-w / 2, w / 2), this.rng.range(0.1, 0.9), this.rng.range(-d / 2, d / 2));

@@ -70,6 +70,9 @@ export class WarDragon {
   private staggerAngle = 0;
   private fireLight: PointLight;
   private readonly tmp = new Vector3();
+  private importedVisual: import("../../world/CharacterAssets").CharacterModel | null = null;
+  private visualDisposed = false;
+  private anchorVisual: (() => void) | null = null;
 
   constructor(private scene: Scene, private effects: EffectsLibrary, private bus: GameEventBus) {
     this.rig = new DragonRig(scene, VHARAX);
@@ -79,6 +82,24 @@ export class WarDragon {
     this.fireLight.diffuse = new Color3(1, 0.45, 0.15);
     this.fireLight.intensity = 0;
     this.fireLight.range = 90;
+    const params = typeof location === "undefined" ? null : new URLSearchParams(location.search);
+    if (params && params.get("test") !== "1" && params.get("benchmark") !== "1") {
+      const fallbackMeshes = this.rig.root.getChildMeshes();
+      void import("../../world/CharacterAssets").then(async ({ loadCharacterAssets, CharacterModel, prepareDragon, anchorDragon }) => {
+        const containers = await loadCharacterAssets(scene);
+        if (scene.isDisposed || this.visualDisposed) return;
+        const model = new CharacterModel(containers[0], "vharax-imported", scene);
+        prepareDragon(model, VHARAX);
+        model.root.parent = this.rig.root;
+        for (const mesh of fallbackMeshes) mesh.setEnabled(false);
+        const head = model.node("fireBreath.") ?? model.node("head.");
+        if (head) { this.rig.headTip.parent = head; this.rig.headTip.position.setAll(0); }
+        this.importedVisual = model;
+        this.anchorVisual = () => anchorDragon(model);
+      }).catch(error => {
+        if (!scene.isDisposed) console.warn("War dragon character fallback:", error);
+      });
+    }
   }
 
   get state(): WarDragonState {
@@ -359,6 +380,12 @@ export class WarDragon {
     const flapRate = this.state_ === "STAGGERED" ? 2.4 : this.hp < this.maxHp * 0.25 ? 4.4 : 5.2;
     this.rig.animate({ flapRate, flapAmp: 0.8, sweep: wingSweep, jawOpen, dt });
 
+    if (this.importedVisual) {
+      this.importedVisual.sample(dt, this.state_ === "CHARGING" ? 1.2 : 0.8);
+      const model = this.importedVisual;
+      this.anchorVisual?.();
+      model.pose("jaw_01.", 0.24 * jawOpen);
+    }
     this.fireLight.position.copyFrom(this.rig.headTip.getAbsolutePosition());
     this.fireLight.intensity = this.state_ === "ATTACK" ? 2.2 : this.state_ === "TELEGRAPH" ? 0.8 : 0;
   }
@@ -380,10 +407,8 @@ export class WarDragon {
     const d = Vector3.Distance(origin, closest);
     if (d > range) return false;
     const toDragon = closest.subtract(origin);
-    toDragon.y = 0;
-    const flat = Vector3.Normalize(toDragon);
-    const flatDir = new Vector3(dir.x, 0, dir.z).normalize();
-    if (Vector3.Dot(flat, flatDir) < Math.cos(halfAngle + 0.15)) return false;
+    if (toDragon.lengthSquared() > 1e-8 &&
+      Vector3.Dot(toDragon.normalize(), dir.clone().normalize()) < Math.cos(halfAngle + 0.15)) return false;
     const falloff = 1 - 0.35 * (d / range);
     this.hp = Math.max(this.floor, this.hp - dps * dt * falloff);
     if (Math.random() < dt * 6) this.bus.emit("sfx", { name: "bossHit" });
@@ -391,6 +416,7 @@ export class WarDragon {
   }
 
   dispose(): void {
+    this.visualDisposed = true;
     this.rig.dispose(); // meshes only — materials are scene-scoped cache-owned
     this.fireLight.dispose();
   }
