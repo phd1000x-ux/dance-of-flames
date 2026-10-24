@@ -145,7 +145,8 @@ export class GameApp {
   }
 
   private hasProgress(): boolean {
-    return this.save.unlockedMissions.length > 1 || this.save.coins > 0 || Object.keys(this.save.upgrades).length > 0;
+    return this.save.unlockedMissions.length > 1 || this.save.coins > 0 || Object.keys(this.save.upgrades).length > 0
+      || this.save.selectedRider !== null;
   }
 
   // ---------------- scenes ----------------
@@ -449,6 +450,13 @@ export class GameApp {
       },
       onAbandon: () => {
         this.setPaused(false);
+        this.backToMenu();
+      },
+      onSaveSelection: (riderId: string, dragonId: string) => {
+        // character select: remember the pairing without starting a mission
+        this.save.selectedRider = riderId;
+        this.save.selectedDragon = dragonId;
+        this.persistSave();
         this.backToMenu();
       },
       onSaveAndQuit: () => {

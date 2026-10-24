@@ -24,6 +24,7 @@ export interface UiCallbacks {
   onRestartMission(): void;
   onAbandon(): void;
   onSaveAndQuit(): void;
+  onSaveSelection(riderId: string, dragonId: string): void;
   onSettingsChange(settings: GameSettings): void;
   onToggleMusic(): void;
   onPreviewRotate(phase: "start" | "move" | "end", clientX: number): void;
@@ -368,9 +369,10 @@ export class UIManager {
           <div class="charselect-name" id="cs-rider-name" style="margin-top:14px"></div>
           <div class="charselect-epithet" id="cs-rider-epithet"></div>
           <div class="charselect-desc" id="cs-desc"></div>
-          <div class="charselect-actions">
+          <div class="charselect-actions sticky">
             <button class="btn ghost" data-act="back">BACK</button>
             <button class="btn" data-act="confirm">CONFIRM</button>
+            <button class="btn ghost wide" data-act="savequit">SAVE &amp; MAIN MENU</button>
           </div>
         </div>
       </div>`;
@@ -399,6 +401,7 @@ export class UIManager {
       this.click();
       if (t.dataset.act === "back") historyBack();
       else if (t.dataset.act === "confirm") this.cb.onConfirmSelection(this.selectedRider, this.selectedDragon);
+      else if (t.dataset.act === "savequit") this.cb.onSaveSelection(this.selectedRider, this.selectedDragon);
       function historyBack() {
         (window as any).__UI?.goBack?.();
       }
