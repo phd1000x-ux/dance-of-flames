@@ -44,3 +44,22 @@ Run one E2E test: `npx playwright test e2e/gameplay.spec.ts -g "E2E 5"`
 - Audio is 100% synthesized WebAudio (`AudioManager` SFX + `MusicComposer`/`MusicSystem` original score). No audio assets exist; `THIRD_PARTY_ASSETS.md` documents this — keep it that way.
 - Babylon imports must come from `@babylonjs/core` subpath (`import { X } from "@babylonjs/core"`); there is no `BABYLON` global at runtime.
 - Untracked `*.png` QA screenshots at repo root are artifacts of browser verification — don't commit them intentionally (they occasionally get committed; harmless but avoid adding more).
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. Route only to skills in the session's available-skills list; answer directly for quick questions or small scoped edits.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore
+- Author a backlog-ready spec/issue → invoke /spec
