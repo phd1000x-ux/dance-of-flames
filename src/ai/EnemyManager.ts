@@ -49,6 +49,8 @@ export interface Soldier {
   isCommander: boolean;
   /** finale boss owns this soldier — generic AI skipped */
   puppeted?: boolean;
+  /** riding Vharax — off the ground: hidden, untargetable, undamageable */
+  aboard?: boolean;
   scatterT?: number;
   scatterDir?: { x: number; z: number };
 }
@@ -266,7 +268,7 @@ export class EnemyManager {
   }
 
   damageSoldier(s: Soldier, amount: number, byFire: boolean): void {
-    if (s.state === "dead") return;
+    if (s.state === "dead" || s.aboard) return;
     s.hp -= amount;
     // hit flash
     s.material.emissiveColor = new Color3(0.8, 0.2, 0.1);
@@ -330,7 +332,7 @@ export class EnemyManager {
   }
 
   getGroundEnemies() {
-    return this.soldiers.filter((s) => s.state !== "dead");
+    return this.soldiers.filter((s) => s.state !== "dead" && !s.aboard);
   }
 
   /** tower/wall collapse: knock down nearby soldiers, destroy nearby ballistae */

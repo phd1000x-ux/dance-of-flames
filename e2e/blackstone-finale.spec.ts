@@ -78,6 +78,8 @@ test("finale: courtyard → land → ground duel → transition → remount → 
   // is duel-gated in WarDragon.applyFire, and a mid-chase flee now resolves via
   // the CHASE un-strand instead of dead-ending the loop)
   await page.waitForFunction(() => (window as any).__GAME.api.getFinale()?.phase === "DUEL_AIR", null, { timeout: 120000 });
+  // he mounted Vharax: off the courtyard, untargetable until the crash
+  expect(await page.evaluate(() => (window as any).__GAME.api.getFinale()?.castellan)).toBe("aboard");
 
   // aerial duel: war dragon is revealed; the staged finale now walks
   // RETURN → FINAL_STAGGER → FINAL_CRASH → RESOLVED. damageWarDragon floors

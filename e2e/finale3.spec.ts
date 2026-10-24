@@ -139,6 +139,7 @@ test("finale3: full crash chain", async ({ page }) => {
 
   const fin = await page.evaluate(() => (window as any).__GAME.api.getFinale());
   expect(fin.crashDetached).toBe(true);
+  expect(fin.castellan).toBe("dead"); // he rode Vharax into the spire
   expect(fin.crownY).toBeLessThan((yHome as number) - 30);
 
   await expectVictory(page);

@@ -60,6 +60,13 @@ export class BlackstoneFinale {
     return this.warHorns;
   }
 
+  /** e2e spy — where the castellan is: null before the claim */
+  get castellanFate(): "ground" | "aboard" | "dead" | null {
+    const c = this.castellan;
+    if (!c) return null;
+    return !c.alive ? "dead" : c.aboard ? "aboard" : "ground";
+  }
+
   /** e2e spy — the spire crown detached during the crash sequence (latched) */
   get crashDetached(): boolean {
     return this.crashDetached_;
@@ -108,6 +115,7 @@ export class BlackstoneFinale {
     // dragon died mid-finale → resolve silently (tracker splices event objectives);
     // AWAIT_LANDING included — a crash-landing dying dragon must not trigger the dismount
     if ((m.phase === "dragonDying") && !this.phases.isTerminal() && this.phases.current !== "INACTIVE") {
+      if (this.castellan?.aboard) this.deps.bus.emit("finale-subtitle", { text: "VHARAX BEARS THE CASTELLAN AWAY", ms: 3000 });
       this.vharax?.flee();
       this.phases.transition("RESOLVED");
     }
@@ -180,6 +188,7 @@ export class BlackstoneFinale {
       case "REMOUNT": {
         if (this.stageT > 1.2 && m.phase === "ground") {
           m.remountDragon();
+          this.castellan?.board();
           this.vharax?.startChase(new Vector3(0, 75, -95));
           this.chaseLoopNeeded = CHASE_LOOPS;
           this.setStage("CHASE");
@@ -404,6 +413,7 @@ export class BlackstoneFinale {
         // mode at the restored position — remountDragon would reset speed/pitch
         // and dispose a rider figure that does not exist
         if (!this.mission.skipLandingSideEffect) this.mission.remountDragon();
+        this.castellan?.board();
         this.vharax?.startChase(new Vector3(0, 75, -95));
         this.chaseLoopNeeded = CHASE_LOOPS;
         break;
@@ -508,10 +518,14 @@ export class BlackstoneFinale {
     this.breaker.begin(crown, spireBaseTop, v.rig.root);
     this.mission.slowmoT = Math.max(this.mission.slowmoT, 1.0);
     this.slowmoSeen_ = true;
+    this.deps.bus.emit("finale-subtitle", { text: "THE CASTELLAN FALLS WITH HIS DRAGON", ms: 3200 });
     return true;
   }
 
   private resolveVharaxEvents(): void {
+    // he rode Vharax into the spire — mark him dead without tripping the short-circuit
+    this.shortCircuited = true;
+    this.castellan?.fall();
     this.mission.tracker.notifyEvent("vharax-resolved");
     this.deps.bus.emit("finale-boss", { show: false });
     this.deps.bus.emit("finale-music", { state: "resolve" });
@@ -519,6 +533,7 @@ export class BlackstoneFinale {
 
   private shortCircuit(): void {
     this.shortCircuited = true;
+    this.deps.bus.emit("finale-subtitle", { text: this.vharax ? "THE CASTELLAN IS SLAIN — VHARAX FLEES" : "THE CASTELLAN IS SLAIN", ms: 3000 });
     const t = this.mission.tracker;
     t.notifyEvent("castellan-transition");
     t.notifyEvent("chase-complete");

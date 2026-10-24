@@ -35,6 +35,23 @@ export class CastellanBoss {
     this.duel.markTransitioned();
   }
 
+  get aboard(): boolean {
+    return !!this.s.aboard;
+  }
+
+  /** he mounts Vharax: the courtyard body is gone until the crash */
+  board(): void {
+    this.s.aboard = true;
+    this.s.root.setEnabled(false);
+  }
+
+  /** dies in the spire crash — dead, so the short-circuit guard must already be set */
+  fall(): void {
+    this.s.aboard = false;
+    this.s.hp = 0;
+    this.s.state = "dead";
+  }
+
   get hpFrac(): number {
     return this.s.maxHp > 0 ? this.s.hp / this.s.maxHp : 0;
   }
