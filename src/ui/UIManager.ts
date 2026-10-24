@@ -23,6 +23,7 @@ export interface UiCallbacks {
   onResume(): void;
   onRestartMission(): void;
   onAbandon(): void;
+  onSaveAndQuit(): void;
   onSettingsChange(settings: GameSettings): void;
   onToggleMusic(): void;
   onPreviewRotate(phase: "start" | "move" | "end", clientX: number): void;
@@ -680,6 +681,7 @@ export class UIManager {
           <button class="btn ghost" data-act="controls">CONTROLS</button>
           <button class="btn ghost" data-act="settings">SETTINGS</button>
           <button class="btn ghost" data-act="restart">RESTART MISSION</button>
+          <button class="btn ghost" data-act="savequit">SAVE &amp; MAIN MENU</button>
           <button class="btn danger" data-act="abandon">ABANDON MISSION</button>
         </div>
       </div></div>`;
@@ -692,6 +694,7 @@ export class UIManager {
         case "controls": this.showManual("pause"); break;
         case "settings": this.cb.onSettings(); break;
         case "restart": this.cb.onRestartMission(); break;
+        case "savequit": this.cb.onSaveAndQuit(); break;
         case "abandon": this.cb.onAbandon(); break;
       }
     });
