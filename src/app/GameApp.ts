@@ -374,6 +374,25 @@ export class GameApp {
     console.log(`[mission] ${victory ? "VICTORY" : "DEFEAT"} score=${score} rank=${rank} coins=+${coinsEarned}`);
   }
 
+  /**
+   * Pause-menu "SAVE & MAIN MENU": keep the rider/dragon/difficulty choice and
+   * bank coins picked up so far. Mission progress itself is not resumable, so
+   * coins are banked at the defeat rate — quitting never pays more than dying.
+   */
+  saveAndQuit(): number {
+    const stats = this.mission?.stats;
+    const banked = stats ? Math.round(stats.coinsCollected * 0.4) : 0;
+    if (banked > 0) this.upgrades.addCoins(banked);
+    if (this.missionCfg) {
+      this.save.selectedRider = this.missionCfg.riderId;
+      this.save.selectedDragon = this.missionCfg.dragonId;
+      this.save.selectedDifficulty = this.missionCfg.difficulty;
+    }
+    this.persistSave();
+    console.log(`[save] saved & quit, banked coins +${banked}`);
+    return banked;
+  }
+
   private persistSave(): void {
     this.save.coins = this.upgrades.coins;
     this.save.upgrades = this.upgrades.serialize().levels;
@@ -429,6 +448,11 @@ export class GameApp {
         this.loadMission();
       },
       onAbandon: () => {
+        this.setPaused(false);
+        this.backToMenu();
+      },
+      onSaveAndQuit: () => {
+        this.saveAndQuit();
         this.setPaused(false);
         this.backToMenu();
       },
