@@ -37,6 +37,8 @@ async function clearSiege(page: Page) {
     g.api.collapseBuildingsWithTag("wallTower", 4);
     g.api.collapseBuildingsWithTag("gatehouse", 1);
     g.api.killByType("soldier", 12);
+    // bs-final (courtyard hold) now precedes the duel — fast-forward it via the pure tracker
+    for (let i = 0; i < 90; i++) g.mission.tracker.update(1);
   });
 }
 

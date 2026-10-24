@@ -226,15 +226,15 @@ test("castle mission: full phased completion → VICTORY (§90)", async ({ page 
   await page.waitForFunction(() => document.querySelector("#objective-text")!.textContent.includes("courtyard"), null, { timeout: 8000 });
   // Phase 4: clear courtyard defenders
   await page.evaluate(() => (window as any).__GAME.api.killByType("soldier", 12));
-  await page.waitForFunction(() => document.querySelector("#objective-text")!.textContent!.toLowerCase().includes("castellan"), null, { timeout: 8000 });
-  // Phase 5: eliminate the castellan
-  await page.evaluate(() => (window as any).__GAME.api.killByType("commander", 1));
   await page.waitForFunction(() => document.querySelector("#objective-text")!.textContent.includes("counterattack"), null, { timeout: 8000 });
-  // Phase 6: survive the final wave (fast-forward)
+  // Phase 5: hold the courtyard (fast-forward the survive window)
   await page.evaluate(() => {
     const m = (window as any).__GAME.mission;
     for (let i = 0; i < 90; i++) m.tracker.update(1);
   });
+  await page.waitForFunction(() => document.querySelector("#objective-text")!.textContent!.toLowerCase().includes("castellan"), null, { timeout: 8000 });
+  // Phase 6: eliminate the castellan — the finale short-circuits to the last objective
+  await page.evaluate(() => (window as any).__GAME.api.killByType("commander", 1));
   await page.waitForFunction(() => (window as any).__GAME.state === "VICTORY", null, { timeout: 15000 });
   await page.waitForSelector("#screen-results.visible");
   expect(await page.locator("#results-title").textContent()).toBe("VICTORY");
