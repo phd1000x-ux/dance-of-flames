@@ -271,6 +271,19 @@ export class GameApp {
     });
     this.mission = mission;
     const characterDebug = new URLSearchParams(location.search).get("characters") === "1";
+    if (this.opts.testMode && !this.opts.benchmark && !characterDebug) {
+      // easy to miss: plain ?test=1 plays with the old procedural dragon/rider/soldiers
+      console.warn("[characters] ?test=1 without &characters=1 — using procedural fallback models, not the shipped characters");
+      if (!document.getElementById("fallback-models-badge")) {
+        const badge = document.createElement("div");
+        badge.id = "fallback-models-badge";
+        badge.textContent = "TEST MODE · FALLBACK MODELS (add &characters=1)";
+        badge.style.cssText =
+          "position:fixed;left:50%;bottom:4px;transform:translateX(-50%);z-index:9999;pointer-events:none;" +
+          "font:11px monospace;color:#ffd27a;background:rgba(0,0,0,0.6);padding:2px 8px;border:1px solid #ffd27a55";
+        document.body.appendChild(badge);
+      }
+    }
     if (!this.opts.testMode || this.opts.benchmark || characterDebug) {
       status.textContent = "Loading Characters…";
       try {
@@ -483,20 +496,24 @@ export class GameApp {
         const res = this.upgrades.purchase(upgradeId);
         if (res.ok) {
           this.audio.coin();
+          this.ui.markPurchased(upgradeId);
           this.persistSave();
         }
         this.ui.populateShop(this.upgrades.coins, this.upgrades.serialize().levels);
       },
       onShopClose: (next: boolean) => {
         if (next) {
+          // preselect the mission after the one just won (unlock rules unchanged; the
+          // finale has no successor, so it stays selected for a replay)
           const idx = MISSIONS.findIndex((m) => m.id === this.missionCfg?.missionId);
-          const nextM = MISSIONS[Math.min(MISSIONS.length - 1, idx + 1)];
+          const nextM = MISSIONS[idx + 1];
+          const target = nextM && this.save.unlockedMissions.includes(nextM.id) ? nextM.id : MISSIONS[Math.max(0, idx)].id;
+          this.ui.setSelectedMission(target);
           this.state.transition(GameState.CHARACTER_SELECT);
           this.ui.populateCharacterSelect(this.save);
           this.ui.showScreen("character-select");
           this.openShowcase();
           this.showcase?.setMode("select");
-          void nextM;
         } else {
           this.backToMenu();
         }
@@ -747,6 +764,8 @@ export class GameApp {
       loot: m.loot.entities.map((l) => ({ x: l.pos.x, z: l.pos.z })),
       bounds: 760,
       lock: m.getLockScreenPos(),
+      markers: m.getObjectiveMarkers(),
+      threats: m.getBallistaThreats(),
       objectives: m.tracker.objectives().map((o) => ({
         desc: o.description,
         progress: o.progress,

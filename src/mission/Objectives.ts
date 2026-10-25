@@ -37,6 +37,8 @@ export class ObjectiveTracker {
    *  (the world does not wait for the chain head — out-of-order play must not soft-lock) */
   private destroyedByTag = new Map<string, number>();
   private killsByType = new Map<string, number>();
+  /** kill counts at the dragon→ground switch; ground objectives count past it */
+  private killBaseline: Map<string, number> | null = null;
   /** matched events already reflected in the current objective's progress —
    *  fresh activations absorb nothing (retroactive jump); restored progress
    *  absorbs the full history so replayed events are not double-counted */
@@ -108,15 +110,22 @@ export class ObjectiveTracker {
       const o = this.items[i];
       if (o.completed) continue;
       const alt = o.groundAlternative;
-      if (alt) {
+      const prev = this.items[i - 1];
+      if (alt && !(prev && !prev.completed && prev.id === alt.id)) {
         this.items[i] = { ...alt, progress: 0, completed: false };
       } else {
-        // No alternative defined: remove so the mission stays completable.
+        // No alternative, or the same ground task twice in a row (e.g. two survive
+        // windows back to back): drop it so the mission stays completable and varied.
         this.items.splice(i, 1);
         i--;
       }
     }
     this.surviveTimer = 0;
+    // on-foot kill objectives count only kills made from here on — without this
+    // the fresh activation absorbed nothing and dragon kills completed them instantly
+    this.killBaseline = new Map(this.killsByType);
+    this.absorbedKillKey = null;
+    this.absorbedKill = 0;
   }
 
   /** Restore exact progress/completion from a checkpoint snapshot.
@@ -152,7 +161,7 @@ export class ObjectiveTracker {
   private matchedKillTotal(cur: ObjectiveState): number {
     let total = 0;
     for (const [type, n] of this.killsByType) {
-      if (this.matchesTarget(cur, type)) total += n;
+      if (this.matchesTarget(cur, type)) total += n - (this.killBaseline?.get(type) ?? 0);
     }
     return total;
   }

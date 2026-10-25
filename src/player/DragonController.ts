@@ -170,7 +170,11 @@ export class DragonController {
       // bank turn + direct A/D response + arrow-key look steering
       const turnScale = this.inputTurnScale;
       yawRate = -this.roll * 1.9 + bankInput * turnRate * 0.45 * turnScale + mouse.dx * 2.6 + lookYaw * 2.4 * turnScale;
-      pitchRate = mouse.dy * 2.1 + lookPitch * 1.5 + verticalInput * 0.35;
+      pitchRate = mouse.dy * 2.1 + lookPitch * 1.5;
+      // Space/C ease the nose toward a fixed climb/descent attitude (pitch > 0 = nose
+      // down in Babylon) — a target, not a rate, so holding never over-rotates and
+      // reversing responds immediately
+      if (verticalInput !== 0) pitchRate += (-verticalInput * VERTICAL_PITCH - this.pitch) * 2.2;
       if (recentering) {
         this.pitch = damp(this.pitch, 0, 9, dt);
         pitchRate = 0;
@@ -194,11 +198,11 @@ export class DragonController {
     } else if (this.player.boostRegenLocked) {
       this.player.boostRegenLocked = false;
     }
-    // dive accelerates
-    const diving = this.pitch < -0.35;
-    if (diving) targetSpeed = Math.max(targetSpeed, diveSpeed * Math.min(1, -this.pitch / 0.9));
-    // climb bleeds speed
-    if (this.pitch > 0.45) targetSpeed = Math.min(targetSpeed, maxSpeed * 0.8);
+    // dive (nose down, pitch > 0) accelerates
+    const diving = this.pitch > 0.35;
+    if (diving) targetSpeed = Math.max(targetSpeed, diveSpeed * Math.min(1, this.pitch / 0.9));
+    // climb (nose up) bleeds speed
+    if (this.pitch < -0.45) targetSpeed = Math.min(targetSpeed, maxSpeed * 0.8);
 
     this.speed = damp(this.speed, targetSpeed, accel / 22, dt);
 
@@ -268,29 +272,34 @@ export class DragonController {
       const impactSpeed = -Math.min(0, 0);
       void impactSpeed;
       this.pos.y = minY;
-      if (this.pitch < -0.5 && this.speed > 40 && this.player.mode === "dragon") {
+      if (this.pitch > 0.5 && this.speed > 40 && this.player.mode === "dragon") {
         const staggerResist = this.player.dragonStats.staggerResistance ?? 0.5;
         this.bus.emit("player-damaged", { amount: 25, dirX: 0, dirZ: 1, source: "terrain" });
         this.player.damageDragon(25 * (1 - staggerResist * 0.5));
         this.enterStagger(1.1);
       } else {
-        this.pitch = Math.max(this.pitch, 0.05);
+        this.pitch = Math.min(this.pitch, -0.05); // level the nose off the ground
       }
     }
 
     // world bounds (soft)
     const d = Math.sqrt(this.pos.x * this.pos.x + this.pos.z * this.pos.z);
     if (d > this.boundsRadius) {
-      const k = (d - this.boundsRadius) / 60;
-      const pushX = (-this.pos.x / d) * k;
-      const pushZ = (-this.pos.z / d) * k;
-      this.yaw += (pushX * Math.cos(this.yaw) - pushZ * Math.sin(this.yaw)) * -dt * 2.0;
+      // steer the heading toward the map center, harder the further out
+      const k = clamp((d - this.boundsRadius) / 60, 0, 1.5);
+      this.yaw += boundsSteer(this.yaw, this.pos.x, this.pos.z) * k * 1.6 * dt;
+      // hard wall short of the terrain edge (terrain is 1700 wide → edge at 850)
+      const hard = this.boundsRadius * HARD_BOUND_FACTOR;
+      if (d > hard) {
+        this.pos.x *= hard / d;
+        this.pos.z *= hard / d;
+      }
       this.bus.emit("bounds-warning", { distance: d - this.boundsRadius });
     }
     // altitude ceiling
     if (this.pos.y > 380) {
       this.pos.y = 380;
-      this.pitch = Math.min(this.pitch, 0);
+      this.pitch = Math.max(this.pitch, 0); // no nose-up past the ceiling
     }
   }
 
@@ -346,4 +355,16 @@ export class DragonController {
       riderBoost: this.state === "BOOST",
     });
   }
+}
+
+/** Nose attitude (rad) held Space/C steer toward. */
+export const VERTICAL_PITCH = 0.55;
+
+/** Hard flight wall as a multiple of the soft bound (836 of 760; terrain edge is 850). */
+export const HARD_BOUND_FACTOR = 1.1;
+
+/** Signed yaw delta (rad, -PI..PI) that turns heading `yaw` toward the world origin. */
+export function boundsSteer(yaw: number, x: number, z: number): number {
+  const want = Math.atan2(-x, -z); // forward = (sin yaw, cos yaw)
+  return Math.atan2(Math.sin(want - yaw), Math.cos(want - yaw));
 }

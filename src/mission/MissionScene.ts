@@ -1,3 +1,4 @@
+import { pickLandingSpot, reinforcementSpot, type LandingObstacle } from "./GroundLanding";
 import type { CastleAabb } from "../world/CastleBuilder";
 import {
   Scene,
@@ -101,10 +102,14 @@ export class MissionScene {
   // tutorial
   tutorialStep = -1;
   private tutorialProgress = 0;
-  private tutorialSteps = [
+  private tutorialStepTime = 0;
+  private tutorialSteps: { label: string; key: string; need: number; skipAfter?: number }[] = [
     { label: "[W] — Accelerate", key: "accelerate", need: 1.2 },
     { label: "[A / D] — Turn Dragon", key: "turn", need: 1.0 },
-    { label: "[ARROW KEYS] — Aim", key: "look", need: 0.8 },
+    { label: "[SPACE / C] — Climb / Descend", key: "vertical", need: 0.8 },
+    // aim is an optional alternative to A/D: skipped after a while so it can't
+    // park over the screen and hold back the fire/boost steps
+    { label: "[ARROW KEYS] — Aim (optional)", key: "look", need: 0.8, skipAfter: 8 },
     { label: "[F] — Breathe Fire", key: "fire", need: 0.8 },
     { label: "[SHIFT] — Boost", key: "boost", need: 0.8 },
   ];
@@ -618,6 +623,7 @@ export class MissionScene {
         }
       }
       this.buildings.collideRider(p, 0.5);
+      this.updateGroundReinforcements(dt, p);
     }
 
     // camera
@@ -680,6 +686,30 @@ export class MissionScene {
     this.dragonCam.addShake(0.7);
   }
 
+  /** -1 = off (flight, or the finale's scripted dismount). */
+  private groundReinforceTimer = -1;
+
+  /**
+   * After the dragon falls the rider must have someone to fight: when fewer than
+   * 3 soldiers are within 70 m, a small squad walks in from the battlefield side.
+   * Keeps "survive" windows active and on-foot kill objectives always completable.
+   */
+  private updateGroundReinforcements(dt: number, rider: Vector3): void {
+    if (this.groundReinforceTimer < 0 || this.ended) return;
+    this.groundReinforceTimer -= dt;
+    if (this.groundReinforceTimer > 0) return;
+    this.groundReinforceTimer = 9;
+    const near = this.enemies.soldiers.filter(
+      (s) => s.state !== "dead" && Math.hypot(s.pos.x - rider.x, s.pos.z - rider.z) < 70
+    ).length;
+    if (near >= 3) return;
+    const count = this.rng.int(2, 3);
+    for (let i = 0; i < count; i++) {
+      const at = reinforcementSpot(rider, i, () => this.rng.range(0, 1));
+      this.enemies.spawnSoldier(this.rng.chance(0.65) ? "swordsman" : "spearman", new Vector3(at.x, 0, at.z));
+    }
+  }
+
   private spawnRider(): void {
     this.phase = "ground";
     // the flight tutorial is dragon-only: an unfinished step must not linger
@@ -694,18 +724,23 @@ export class MissionScene {
     this.deps.audio.buildingCollapse();
     this.dragonCam.addShake(1.0);
 
-    // find flat ground near crash site
-    let spawn = crashPos.clone();
-    for (let i = 0; i < 30; i++) {
-      const a = this.rng.range(0, Math.PI * 2);
-      const r = this.rng.range(8, 34);
-      const x = crashPos.x + Math.cos(a) * r;
-      const z = crashPos.z + Math.sin(a) * r;
-      if (this.world.terrain.isFlat(x, z, 3)) {
-        spawn = new Vector3(x, 0, z);
-        break;
-      }
-    }
+    // land within fighting range of the nearest live squad (flat, clear of buildings)
+    const live = this.enemies.soldiers.filter((s) => s.state !== "dead" && s.state !== "burning");
+    const obstacles: LandingObstacle[] = [
+      ...this.buildings.buildings
+        .filter((b) => !b.collapsed)
+        .map((b) => ({ x: b.pos.x, z: b.pos.z, r: Math.max(b.size.w, b.size.d) * 0.6 })),
+      ...this.castleAabbs.map((a) => ({ x: a.x, z: a.z, r: Math.hypot(a.hx, a.hz) })),
+    ];
+    const land = pickLandingSpot(
+      crashPos,
+      live.map((s) => s.pos),
+      obstacles,
+      (x, z) => this.world.terrain.isFlat(x, z, 3),
+      () => this.rng.range(0, 1)
+    );
+    const spawn = new Vector3(land.x, 0, land.z);
+    this.groundReinforceTimer = 3; // first squad shortly after the fallen overlay
     const factory = new SoldierFactory(this.scene);
     const figure = factory.createRiderFigure(this.deps.rider);
     for (const m of figure.root.getChildMeshes()) {
@@ -876,11 +911,17 @@ export class MissionScene {
       case "boost":
         contribution = input.isDown("boost") ? dt : 0;
         break;
+      case "vertical":
+        contribution = input.isDown("climb") || input.isDown("descend") ? dt : 0;
+        break;
     }
     this.tutorialProgress += contribution;
-    if (this.tutorialProgress >= step.need) {
+    this.tutorialStepTime += dt;
+    const skipped = step.skipAfter !== undefined && this.tutorialStepTime >= step.skipAfter;
+    if (this.tutorialProgress >= step.need || skipped) {
       this.tutorialStep++;
       this.tutorialProgress = 0;
+      this.tutorialStepTime = 0;
       this.deps.bus.emit("tutorial-advanced", {
         step: this.tutorialStep < this.tutorialSteps.length ? this.tutorialSteps[this.tutorialStep].label : "done",
       });
@@ -1052,6 +1093,64 @@ export class MissionScene {
   getLockScreenPos(): { x: number; y: number; kind: string } | null {
     const world = this.phase === "ground" ? (this.riderCtrl?.lockTarget ? this.riderCtrl.lockTarget.pos : null) : this.lockTargetPos;
     if (!world) return null;
+    const at = this.projectToScreen(world);
+    return at && { ...at, kind: this.phase === "ground" ? "Enemy" : this.lockTargetKind ?? "Target" };
+  }
+
+  /**
+   * Small HUD markers over the CURRENT objective's targets while flying, so the
+   * player finds archers/scorpions/marked buildings by looking, not only by the
+   * minimap. Only targets 70–600 m away (closer ones are plainly visible), at
+   * most 8, nearest first — enough to steer by without cluttering the screen.
+   */
+  getObjectiveMarkers(): { x: number; y: number }[] {
+    if (this.phase !== "dragon") return [];
+    const obj = this.tracker.current();
+    if (!obj || (obj.type !== "kill" && obj.type !== "destroy")) return [];
+    const me = this.dragonCtrl.pos;
+    const worlds: Vector3[] = [];
+    if (obj.type === "kill") {
+      const t = obj.targetType;
+      if (t === "ballista") {
+        for (const b of this.enemies.ballistae) if (!b.dead) worlds.push(b.pos.add(new Vector3(0, 3, 0)));
+      } else if (t && t !== "any" && t !== "soldier") {
+        for (const so of this.enemies.soldiers) {
+          if (so.state !== "dead" && !so.aboard && so.def.id === t) worlds.push(so.pos.add(new Vector3(0, 2.5, 0)));
+        }
+      }
+    } else if (obj.targetTag && obj.targetTag !== "any" && obj.targetTag !== "relic-building") {
+      for (const b of this.buildings.buildings) {
+        if (!b.collapsed && b.tag === obj.targetTag) worlds.push(b.pos.add(new Vector3(0, b.size.h ?? 10, 0)));
+      }
+    }
+    return worlds
+      .map((w) => ({ w, d: Math.hypot(w.x - me.x, w.z - me.z) }))
+      .filter((e) => e.d > 70 && e.d < 600)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 8)
+      .map((e) => this.projectToScreen(e.w))
+      .filter((p): p is { x: number; y: number } => p !== null);
+  }
+
+  /**
+   * Scorpions about to fire at the dragon (in range, in their 1.2 s telegraph).
+   * Bolts lead the dragon's flight, so the readable counter is a timed dodge —
+   * the rail glow alone is invisible from the air, so the HUD flags them.
+   */
+  getBallistaThreats(): { x: number; y: number }[] {
+    if (this.phase !== "dragon") return [];
+    const me = this.dragonCtrl.pos;
+    const out: { x: number; y: number }[] = [];
+    for (const b of this.enemies.ballistae) {
+      if (b.dead || b.state !== "telegraph" || b.cooldown <= 0) continue;
+      if (Vector3.Distance(b.pos, me) > b.def.range) continue;
+      const at = this.projectToScreen(b.pos.add(new Vector3(0, 3, 0)));
+      if (at) out.push(at);
+    }
+    return out;
+  }
+
+  private projectToScreen(world: Vector3): { x: number; y: number } | null {
     const cam = this.activeCamera();
     const canvas = this.deps.engine.getRenderingCanvas();
     if (!canvas) return null;
@@ -1064,7 +1163,6 @@ export class MissionScene {
     return {
       x: (ndcX * 0.5 + 0.5) * canvas.clientWidth,
       y: (1 - (ndcY * 0.5 + 0.5)) * canvas.clientHeight,
-      kind: this.phase === "ground" ? "Enemy" : this.lockTargetKind ?? "Target",
     };
   }
 

@@ -341,9 +341,24 @@ export class UIManager {
     return d;
   }
 
+  private lastBuyAt = 0;
+  private justBought: string | null = null;
+
+  /** GameApp calls this after a successful purchase, before repopulating the shop. */
+  markPurchased(id: string): void {
+    this.justBought = id;
+  }
+
+  setSelectedMission(id: string): void {
+    this.selectedMission = id;
+  }
+
   setContinueEnabled(enabled: boolean): void {
     const btn = this.screens.get("main-menu")?.querySelector('[data-act="continue"]') as HTMLButtonElement | null;
-    if (btn) btn.disabled = !enabled;
+    if (btn) {
+      btn.disabled = !enabled;
+      btn.hidden = !enabled; // a brand-new player sees NEW CAMPAIGN first
+    }
     // if keyboard focus was on CONTINUE, move it to the next enabled item
     this.applyFocusIfActive("main-menu");
   }
@@ -362,17 +377,17 @@ export class UIManager {
         </div>
         <div class="panel">
           <div class="panel-title" id="cs-dragon-name">SYRAX</div>
-          <div class="section-label">DRAGON</div>
-          <div class="dragon-list" id="dragon-list"></div>
-          <div class="section-label" style="margin-top:14px">BATTLE STATS</div>
+          <div class="section-label">BATTLE STATS</div>
           <div class="stat-rows" id="cs-stats"></div>
+          <div class="section-label" style="margin-top:14px">DRAGON</div>
+          <div class="dragon-list" id="dragon-list"></div>
           <div class="charselect-name" id="cs-rider-name" style="margin-top:14px"></div>
           <div class="charselect-epithet" id="cs-rider-epithet"></div>
           <div class="charselect-desc" id="cs-desc"></div>
           <div class="charselect-actions sticky">
             <button class="btn ghost" data-act="back">BACK</button>
             <button class="btn" data-act="confirm">CONFIRM</button>
-            <button class="btn ghost wide" data-act="savequit">SAVE &amp; MAIN MENU</button>
+            <button class="btn ghost wide" data-act="savequit">SAVE SELECTION &amp; MENU</button>
           </div>
         </div>
       </div>`;
@@ -622,6 +637,7 @@ export class UIManager {
       <div class="shop-layout panel" id="shop-layout">
         <div class="shop-header">
           <div class="panel-title" style="border:none;margin:0">ARMORY &amp; DRAGON LORE</div>
+          <div class="shop-toast" id="shop-toast"></div>
           <div class="shop-coins" id="shop-coins">0</div>
         </div>
         <div class="shop-col" id="shop-dragon"></div>
@@ -636,7 +652,13 @@ export class UIManager {
       const t = (e.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
       if (!t) return;
       this.click();
-      if (t.dataset.act === "buy") this.cb.onShopBuy(t.dataset.id!);
+      if (t.dataset.act === "buy") {
+        // a fast double-click used to buy two levels at once — one level per beat
+        const now = performance.now();
+        if (now - this.lastBuyAt < 350) return;
+        this.lastBuyAt = now;
+        this.cb.onShopBuy(t.dataset.id!);
+      }
       if (t.dataset.act === "menu") this.cb.onShopClose(false);
       if (t.dataset.act === "next") this.cb.onShopClose(true);
     });
@@ -657,10 +679,13 @@ export class UIManager {
         const maxed = lvl >= u.maxLevel;
         const price = maxed ? 0 : u.prices[lvl];
         const item = this.el("div", "shop-item");
+        item.classList.toggle("unaffordable", !maxed && coins < price);
+        item.classList.toggle("just-bought", u.id === this.justBought);
         item.innerHTML = `
           <div>
             <div class="si-name">${u.name}</div>
             <div class="si-desc">${u.description}</div>
+            <div class="si-effect">${shopEffectText(u, lvl)}</div>
             <div class="si-level">${"◆".repeat(lvl)}${"◇".repeat(u.maxLevel - lvl)} <span style="color:var(--parchment-dark)">Lv ${lvl}/${u.maxLevel}</span></div>
           </div>
           ${maxed
@@ -668,6 +693,15 @@ export class UIManager {
             : `<button class="btn" data-act="buy" data-id="${u.id}" ${coins < price ? "disabled" : ""}>${price}</button>`}`;
         col.appendChild(item);
       }
+    }
+    const toast = screen.querySelector("#shop-toast") as HTMLElement;
+    if (this.justBought) {
+      const u = SHOP_UPGRADES.find((x) => x.id === this.justBought);
+      toast.textContent = u ? `PURCHASED · ${u.name} Lv ${levels[u.id] ?? 0}` : "";
+      toast.classList.remove("show");
+      void toast.offsetWidth;
+      toast.classList.add("show");
+      this.justBought = null;
     }
     // re-apply keyboard focus after the DOM rebuild (keep position)
     this.applyFocusIfActive("shop");
@@ -1051,3 +1085,15 @@ export class UIManager {
 }
 
 export type { RiderDefinition, DragonDefinition, MissionDefinition };
+
+/** "+10% → +20%" for stat upgrades, "1 → 2 per mission" for start charges (unit tested). */
+export function shopEffectText(u: ShopUpgradeDef, lvl: number): string {
+  const maxed = lvl >= u.maxLevel;
+  if (u.category === "consumable") {
+    // GameApp hands the level straight to the mission as the starting charge count
+    const n = (l: number) => `${l} charge${l === 1 ? "" : "s"}`;
+    return maxed ? `${n(lvl)} (max)` : `${n(lvl)} → ${n(lvl + 1)}`;
+  }
+  const pct = (l: number) => `+${Math.round(l * u.perLevel * 100)}%`;
+  return maxed ? `${pct(lvl)} (max)` : `${pct(lvl)} → ${pct(lvl + 1)}`;
+}

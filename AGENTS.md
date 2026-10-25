@@ -27,6 +27,7 @@ Run one E2E test: `npx playwright test e2e/gameplay.spec.ts -g "E2E 5"`
 ## Testing quirks
 
 - E2E runs against `?test=1` mode: exposes `window.__GAME` (test API: `api.startMission`, `api.damageDragon`, `api.killByType`, etc.) and `window.__APP` (the GameApp). `?test=1` also enables synthetic input injection (`input.injectKeyDown/injectMouse`).
+- **`?test=1` alone plays with the old procedural dragon/rider/soldier models** (cheap for software GL). Any visual check, playtest, or screenshot meant to reflect the real game must use `?test=1&characters=1`. Fallback mode logs a `[characters]` warning and shows a "FALLBACK MODELS" badge at the bottom of the screen.
 - Headless Chrome uses SwiftShader (software GL, 2–6 FPS). **Never use wall-clock waits** for gameplay assertions — use `simWait()` (waits on `mission.time`, defined in `e2e/keyboard.spec.ts`) or `waitForFunction` polling game state. Timing-based tests were the main source of flakiness; the pattern is mandatory.
 - Benchmarks must run **headed** (`node scripts/run-benchmark.mjs`, launches its own browser). Headless numbers are meaningless.
 - Keyboard-only E2E tests (`e2e/keyboard.spec.ts`) must never call `page.mouse`. Tab keypresses go through `window.dispatchEvent` (CDP Tab retargets focus). `?keyboardOnly=1` disables mouse gameplay input entirely for manual verification.
