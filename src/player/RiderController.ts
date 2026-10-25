@@ -353,3 +353,21 @@ export class RiderController {
     this.figure.shieldMesh.setEnabled(!this.lockTarget || this.blocking);
   }
 }
+
+/** rider + soldier body radii: closer than this, the rider is pushed back out (unit tested) */
+export const BODY_SEPARATION = 1.1;
+
+/** Push `pos` out of every body closer than `minDist` on the ground plane; mutates and returns pos. */
+export function separateFromBodies(pos: Vector3, bodies: { pos: Vector3 }[], minDist = BODY_SEPARATION): Vector3 {
+  for (const b of bodies) {
+    const dx = pos.x - b.pos.x;
+    const dz = pos.z - b.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d >= minDist) continue;
+    if (d < 1e-4) { pos.z = b.pos.z + minDist; continue; } // exactly overlapping: pick a direction
+    const push = (minDist - d) / d;
+    pos.x += dx * push;
+    pos.z += dz * push;
+  }
+  return pos;
+}
