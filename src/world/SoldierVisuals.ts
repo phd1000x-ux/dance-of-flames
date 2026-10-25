@@ -42,7 +42,7 @@ export function stanceFor(state: SoldierState, role: Role, speed: number, swingi
 }
 
 /** Max animated stand-ins at once; everyone else keeps the cheap merged mesh. */
-const CAP = 24;
+const CAP = 40; // past this the old procedural figure shows (read as "robots" at 55m+)
 /** Only soldiers this close to the player get a stand-in. */
 const RANGE = 85;
 const FOLLOW_THROUGH = 0.32;
@@ -69,7 +69,7 @@ interface Puppet {
 export function excessGlow(s: Pick<Soldier, "material" | "baseEmissive">): Color3 {
   const e = s.material.emissiveColor;
   const b = s.baseEmissive;
-  return new Color3(Math.max(0, e.r - b.r), Math.max(0, e.g - b.g), Math.max(0, e.b - b.b)).scale(0.45);
+  return new Color3(Math.max(0, e.r - b.r), Math.max(0, e.g - b.g), Math.max(0, e.b - b.b)).scale(0.32); // the GlowLayer blooms it further: 0.45 painted whole knights red
 }
 
 function emissiveOf(mat: Material): Color3 | null {
@@ -93,9 +93,11 @@ export async function installSoldierVisuals(mission: MissionScene): Promise<void
   if (scene.isDisposed) return;
   const pools = new Map<string, Puppet[]>();
   let created = 0;
+  let serial = 0;
 
   function createPuppet(def: EnemyDefinition): Puppet {
-    const id = created++;
+    const id = serial++;
+    created++;
     const model = new CharacterModel(knight, `soldier-puppet-${id}`, scene);
     prepareKnight(model);
     // soldiers stand a little shorter than the protagonist (2.05m)
@@ -116,7 +118,8 @@ export async function installSoldierVisuals(mission: MissionScene): Promise<void
     for (const m of meshes) m.receiveShadows = true;
     const materials = [...new Set(meshes.map(m => m.material).filter((m): m is Material => !!m))];
     // after the material list: the windup/hurt glow must not repaint the crown and cape
-    if (def.role === "commander") addCastellanRegalia(model, scene);
+    // only the Castellan wears the crown — earlier commanders are his field officers
+    if (def.role === "commander" && mission.missionId === "blackstone") addCastellanRegalia(model, scene);
     model.root.setEnabled(false);
     const p: Puppet = { defId: def.id, model, main, off, materials, soldier: null, lastPos: new Vector3(), speed: 0, walkPhase: 0, lastState: null, follow: 0, clips, baseY: model.root.position.y, lastHp: Infinity };
     if (!pools.has(def.id)) pools.set(def.id, []);
@@ -143,7 +146,24 @@ export async function installSoldierVisuals(mission: MissionScene): Promise<void
 
   function acquire(s: Soldier): void {
     const pool = pools.get(s.def.id) ?? [];
-    const p = pool.find(x => !x.soldier) ?? (created < CAP + 10 ? createPuppet(s.def) : null);
+    let p = pool.find(x => !x.soldier) ?? null;
+    if (!p) {
+      // pools are per enemy type: once the budget is spent, recycle an idle puppet
+      // of another type instead of leaving the old procedural figure on screen
+      if (created >= CAP + 10) {
+        for (const [id, other] of pools) {
+          const i = other.findIndex(x => !x.soldier);
+          if (i < 0 || id === s.def.id) continue;
+          const victim = other.splice(i, 1)[0];
+          victim.model.root.dispose(false, false);
+          // per-puppet material clones go too; textures stay shared with the asset container
+          for (const mat of victim.materials) mat.dispose(false, false);
+          created--;
+          break;
+        }
+      }
+      if (created < CAP + 10) p = createPuppet(s.def);
+    }
     if (!p) return;
     p.soldier = s;
     p.model.root.parent = s.root;
