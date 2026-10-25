@@ -1,5 +1,6 @@
 import { Color3, GlowLayer, Mesh, Vector3, type Material, PBRMaterial, StandardMaterial } from "@babylonjs/core";
 import { addCastellanRegalia } from "./CastellanRegalia";
+import { addRoleGear } from "./RoleGear";
 import type { MissionScene } from "../mission/MissionScene";
 import type { Soldier, SoldierState } from "../ai/EnemyManager";
 import type { EnemyDefinition } from "../data/enemies";
@@ -73,6 +74,26 @@ export function excessGlow(s: Pick<Soldier, "material" | "baseEmissive">): Color
   return new Color3(Math.max(0, e.r - b.r), Math.max(0, e.g - b.g), Math.max(0, e.b - b.b)).scale(0.2); // dark metallic guard plate shows almost only emissive: 0.32 painted the Castellan solid yellow
 }
 
+/**
+ * Spearmen carry the guard model's own spear (hidden by prepareGuard, since it
+ * rides a free bone rather than the hand) in place of the procedural haft: it is
+ * re-parented under the hand-held weapon node, its long axis on +Y and its
+ * length/centre matched to the procedural spear the grip poses were tuned for.
+ */
+function useGuardSpear(model: CharacterModel, weapon: HeldWeapon): void {
+  const spear = model.root.getChildMeshes().find(m => /Spear/i.test(m.material?.name ?? ""));
+  if (!spear) return;
+  const box = spear.getBoundingInfo().boundingBox;
+  const s = 2.6 / Math.max(1e-6, box.extendSize.y * 2);
+  spear.parent = weapon.node;
+  spear.rotationQuaternion = null;
+  spear.rotation.setAll(0);
+  spear.scaling.setAll(s);
+  spear.position.set(-box.center.x * s, 0.6 - box.center.y * s, -box.center.z * s);
+  spear.setEnabled(true);
+  for (const m of weapon.node.getChildMeshes()) if (m !== spear && /-(haft|point)$/.test(m.name)) m.dispose();
+}
+
 function emissiveOf(mat: Material): Color3 | null {
   if (mat instanceof PBRMaterial || mat instanceof StandardMaterial) return mat.emissiveColor;
   return null;
@@ -125,6 +146,8 @@ export async function installSoldierVisuals(mission: MissionScene): Promise<void
     // after the material list: the windup/hurt glow must not repaint the crown and cape
     // only the Castellan wears the crown — earlier commanders are his field officers
     if (def.role === "commander" && mission.missionId === "blackstone") addCastellanRegalia(model, scene);
+    else if (guard) addRoleGear(model, def.role, def.color, scene);
+    if (guard && loadout.main === "spear") useGuardSpear(model, main);
     // the telegraph is a tint on the armor, not a light source: kept out of the
     // GlowLayer, whose bloom washed whole (dark-armored) soldiers solid red/yellow
     const glow = scene.effectLayers.find((l): l is GlowLayer => l instanceof GlowLayer);

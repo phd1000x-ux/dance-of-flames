@@ -87,8 +87,8 @@ describe("stat composition", () => {
     expect(out.fireRange).toBeCloseTo(60);
   });
 
-  it("all six starter dragons have complete stat blocks", () => {
-    expect(DRAGONS).toHaveLength(6);
+  it("all seven dragons have complete stat blocks", () => {
+    expect(DRAGONS).toHaveLength(7);
     for (const d of DRAGONS) {
       expect(d.maxHealth).toBeGreaterThan(0);
       expect(d.fireDamage).toBeGreaterThan(0);

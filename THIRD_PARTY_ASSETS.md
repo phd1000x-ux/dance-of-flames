@@ -18,7 +18,8 @@ models listed below. All audio remains generated at runtime.
 Retrieved 2026-10-24 (axe and guard 2026-10-25) from [Ai2's public Objaverse distribution](https://huggingface.co/datasets/allenai/objaverse).
 The GLBs embed matching title, author, source and CC-BY-4.0 metadata.
 `public/character-prototype/sources.json` records exact download URLs and SHA256 hashes.
-The original binary files are preserved. Runtime adaptations: normalized size and
+The original binary files are preserved, except `guard.glb`, whose textures were re-encoded
+PNG → WebP to halve the download (geometry and rig untouched; original hash kept in sources.json). Runtime adaptations: normalized size and
 orientation, removal of unused UV streams for WebGPU compatibility, material
 lighting adjustments, and added skeletal poses for mounting/movement/combat.
 The original clips are `Flying` (dragon) and `idle1` (knight); knight walking, running,
