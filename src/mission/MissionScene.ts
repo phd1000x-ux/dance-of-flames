@@ -1134,6 +1134,8 @@ export class MissionScene {
 
   /**
    * Scorpions about to fire at the dragon (in range, in their 1.2 s telegraph).
+   * Measured: steady slow flight was hit 6/6; a dodge (Q/E) or a boost during
+   * the warning 0/6 each.
    * Bolts lead the dragon's flight, so the readable counter is a timed dodge —
    * the rail glow alone is invisible from the air, so the HUD flags them.
    */
