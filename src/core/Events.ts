@@ -19,6 +19,8 @@ export interface GameEvents {
   "tutorial-advanced": { step: string };
   "bounds-warning": { distance: number };
   "hit-enemy": { killed: boolean };
+  /** running flight fire-kill chain; bonus > 0 marks the streak's end payout */
+  "fire-streak": { count: number; bonus: number };
   "melee-hit-rider": { amount: number };
   sfx: { name: string; intensity?: number; pan?: number };
   "thunder": Record<string, never>;

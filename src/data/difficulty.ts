@@ -10,6 +10,8 @@ export interface DifficultyDef {
   ballistaCount: number;
   healDropRate: number;
   aggression: number;
+  /** scorpion warning (rail glow + HUD marker) before release, seconds — Hard asks for faster reads, not just more HP */
+  ballistaTelegraph: number;
 }
 
 export const DIFFICULTIES: DifficultyDef[] = [
@@ -23,6 +25,7 @@ export const DIFFICULTIES: DifficultyDef[] = [
     ballistaCount: 0.6,
     healDropRate: 1.6,
     aggression: 0.7,
+    ballistaTelegraph: 1.6,
   },
   {
     id: "normal",
@@ -34,6 +37,7 @@ export const DIFFICULTIES: DifficultyDef[] = [
     ballistaCount: 1,
     healDropRate: 1,
     aggression: 1,
+    ballistaTelegraph: 1.35,
   },
   {
     id: "hard",
@@ -45,6 +49,7 @@ export const DIFFICULTIES: DifficultyDef[] = [
     ballistaCount: 1.5,
     healDropRate: 0.7,
     aggression: 1.4,
+    ballistaTelegraph: 0.95,
   },
 ];
 

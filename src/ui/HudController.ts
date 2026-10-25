@@ -37,7 +37,7 @@ export interface HudSnapshot {
   /** current-objective targets in the distance (screen px) */
   markers?: { x: number; y: number }[];
   /** scorpions in their pre-shot telegraph (screen px) */
-  threats?: { x: number; y: number }[];
+  threats?: { x: number; y: number; off?: boolean }[];
   objectives: { desc: string; progress: number; need: number; completed: boolean }[];
 }
 
@@ -55,6 +55,8 @@ export class HudController {
   private boostFill!: HTMLElement;
   private riderHpFill!: HTMLElement;
   private staminaFill!: HTMLElement;
+  private streakEl!: HTMLElement;
+  private streakTimer: ReturnType<typeof setTimeout> | null = null;
   private comboPips: HTMLElement[] = [];
   private coinsEl!: HTMLElement;
   private objectiveEl!: HTMLElement;
@@ -205,6 +207,10 @@ export class HudController {
     this.hudHint.style.display = "none";
     this.root.appendChild(this.hudHint);
 
+    // flight fire-kill streak (×N INFERNO, then +coins when it lapses)
+    this.streakEl = this.el("div", "fire-streak", "");
+    this.root.appendChild(this.streakEl);
+
     // Tab objectives panel
     this.objectivesPanel = this.el("div", "objectives-panel", `
       <div class="op-title">MISSION OBJECTIVES</div>
@@ -262,6 +268,7 @@ export class HudController {
     this.bus.on("hit-enemy", () => this.flashHitmarker(true));
     this.bus.on("relic-found", (e) => this.showRelicToast(e.relicId));
     this.bus.on("hud-hint", (e) => this.showHint(e.text));
+    this.bus.on("fire-streak", (e) => this.showStreak(e.count, e.bonus));
     // emitted every sim step past the soft bound; the hint stays up while outside
     this.bus.on("bounds-warning", () => this.showHint("TURN BACK — LEAVING THE BATTLEFIELD"));
     this.bus.on("toggle-objectives", (e) => {
@@ -305,6 +312,18 @@ export class HudController {
     }
     this.fallenOverlay.classList.remove("show");
     this.fallenOverlay.style.display = "none";
+  }
+
+  private showStreak(count: number, bonus: number): void {
+    const el = this.streakEl;
+    el.innerHTML = bonus > 0
+      ? `<b>×${count}</b> INFERNO <i>+${bonus} COINS</i>`
+      : `<b>×${count}</b> INFERNO`;
+    el.classList.remove("pop");
+    void el.offsetWidth; // restart the pop animation
+    el.classList.add("pop", "show");
+    if (this.streakTimer) clearTimeout(this.streakTimer);
+    this.streakTimer = setTimeout(() => el.classList.remove("show"), bonus > 0 ? 1600 : 1700);
   }
 
   private showHint(text: string): void {
@@ -414,14 +433,17 @@ export class HudController {
     // scorpion telegraph warnings — dodge window
     const threats = s.threats ?? [];
     while (this.threatPool.length < threats.length) {
-      const m = this.el("div", "threat-marker", "<span>SCORPION · DODGE Q/E or BOOST</span>");
+      const m = this.el("div", "threat-marker", "<span>SCORPION · TURN, CLIMB or DODGE Q/E</span>");
       this.root.appendChild(m);
       this.threatPool.push(m);
     }
     this.threatPool.forEach((m, i) => {
       const at = threats[i];
       m.style.display = at ? "block" : "none";
-      if (at) m.style.transform = `translate(${at.x - 16}px, ${at.y - 16}px)`;
+      if (at) {
+        m.style.transform = `translate(${at.x - 16}px, ${at.y - 16}px)`;
+        m.classList.toggle("offscreen", !!at.off);
+      }
     });
 
     // target lock bracket
