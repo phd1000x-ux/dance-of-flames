@@ -919,6 +919,28 @@ html, body {
 }
 .hud-hint.show { opacity: 1; }
 
+/* flight fire-kill streak */
+.fire-streak {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 18px;
+  letter-spacing: 5px;
+  color: #ffd27a;
+  text-shadow: 0 0 10px rgba(255, 110, 20, 0.9), 0 2px 3px #000;
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 13;
+}
+.fire-streak b { font-size: 34px; color: #fff1c9; margin-right: 6px; }
+.fire-streak i { font-style: normal; font-size: 14px; color: var(--gold); margin-left: 10px; }
+.fire-streak.show { opacity: 1; }
+.fire-streak.pop { animation: streak-pop 0.22s ease-out; }
+@keyframes streak-pop { from { transform: translateX(-50%) scale(1.35); } to { transform: translateX(-50%) scale(1); } }
+
 /* ---------- HUD: objectives panel (Tab) ---------- */
 .objectives-panel {
   position: absolute;
@@ -1122,4 +1144,6 @@ html, body {
   color: #ffcf6a;
   text-shadow: 0 1px 2px #000;
 }
+.threat-marker.offscreen { border-color: #ff5a20; background: rgba(255, 90, 32, 0.25); }
+.threat-marker.offscreen span { color: #ff9a6a; }
 @keyframes threat-pulse { from { box-shadow: 0 0 2px #ffb020; } to { box-shadow: 0 0 14px #ff8a00; } }

@@ -40,6 +40,7 @@ import { AmbientBattle } from "../world/AmbientBattle";
 import { emptyStats, type MissionStats } from "./Scoring";
 import { getRelic } from "../data/items";
 import { clamp } from "../core/MathUtils";
+import { FireStreak, STREAK_MIN, streakBonus } from "../combat/FireStreak";
 import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
 export interface MissionSceneDeps {
@@ -134,6 +135,8 @@ export class MissionScene {
   slowmoT = 0;
   /** remaining real seconds of impact hit-stop (see hitStop) */
   hitStopT = 0;
+  /** flight fire-kill chain (×N INFERNO + coin bonus) */
+  private streak = new FireStreak();
   /** scaled sim dt of the latest update — visual layers animate on this so hit-stop/slow-mo apply */
   lastSimDt = 0;
   /** checkpoint-restore replay guard — suppresses minting side effects (loot/super/stats/relic sfx) */
@@ -359,6 +362,15 @@ export class MissionScene {
         this.groundCam.addShake(0.45);
       } else if (p.byFire) {
         this.dragonCam.addShake(p.type === "ballista" ? 0.35 : 0.08);
+        const n = this.streak.kill();
+        if (n >= STREAK_MIN) {
+          d.bus.emit("fire-streak", { count: n, bonus: 0 });
+          // a short punch on every third link — felt, not a slideshow
+          if (n % 3 === 0) {
+            this.dragonCam.addShake(0.25);
+            this.hitStop(0.035);
+          }
+        }
       }
     });
     d.bus.on("player-damaged", (p) => {
@@ -450,6 +462,13 @@ export class MissionScene {
     }
     dt = simDt;
     this.lastSimDt = dt;
+    const streakEnded = this.streak.update(dt);
+    if (streakEnded >= STREAK_MIN && !this.restoring) {
+      const bonus = streakBonus(streakEnded);
+      this.stats.coinsCollected += bonus;
+      d.onCoins(bonus);
+      d.bus.emit("fire-streak", { count: streakEnded, bonus });
+    }
     this.time += dt;
     this.stats.timeSeconds = this.time;
 
@@ -1133,23 +1152,47 @@ export class MissionScene {
   }
 
   /**
-   * Scorpions about to fire at the dragon (in range, in their 1.2 s telegraph).
-   * Measured: steady slow flight was hit 6/6; a dodge (Q/E) or a boost during
-   * the warning 0/6 each.
-   * Bolts lead the dragon's flight, so the readable counter is a timed dodge —
-   * the rail glow alone is invisible from the air, so the HUD flags them.
+   * Scorpions about to fire at the dragon (in range, in their telegraph, which
+   * lasts until the shot — a turret still swinging onto target keeps warning).
+   * Bolts intercept the dragon's current flight, so any change of course after
+   * the warning makes them miss (tests/ballista-dodge.test.ts: steady 10/10 hit,
+   * turn/climb/Q/E 0/10). Off-screen scorpions are pinned to the screen edge —
+   * a shot from behind must never come without notice.
    */
-  getBallistaThreats(): { x: number; y: number }[] {
+  getBallistaThreats(): { x: number; y: number; off: boolean }[] {
     if (this.phase !== "dragon") return [];
     const me = this.dragonCtrl.pos;
-    const out: { x: number; y: number }[] = [];
+    const out: { x: number; y: number; off: boolean }[] = [];
     for (const b of this.enemies.ballistae) {
-      if (b.dead || b.state !== "telegraph" || b.cooldown <= 0) continue;
+      if (b.dead || b.state !== "telegraph") continue;
       if (Vector3.Distance(b.pos, me) > b.def.range) continue;
-      const at = this.projectToScreen(b.pos.add(new Vector3(0, 3, 0)));
-      if (at) out.push(at);
+      const w = b.pos.add(new Vector3(0, 3, 0));
+      const at = this.projectToScreen(w);
+      if (at) out.push({ ...at, off: false });
+      else {
+        const edge = this.projectToEdge(w);
+        if (edge) out.push({ ...edge, off: true });
+      }
     }
     return out;
+  }
+
+  /** screen-edge point in the direction of an off-screen world position */
+  private projectToEdge(world: Vector3): { x: number; y: number } | null {
+    const cam = this.activeCamera();
+    const canvas = this.deps.engine.getRenderingCanvas();
+    if (!canvas) return null;
+    const p = Vector3.TransformCoordinates(world, cam.getViewMatrix());
+    let dx = p.x;
+    let dy = p.y;
+    if (p.z < 0 && Math.hypot(dx, dy) < 1e-3) dy = -1; // dead behind → bottom edge
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    const hw = canvas.clientWidth / 2 - 40;
+    const hh = canvas.clientHeight / 2 - 40;
+    const k = Math.min(hw / Math.max(1e-3, Math.abs(dx)), hh / Math.max(1e-3, Math.abs(dy)));
+    return { x: canvas.clientWidth / 2 + dx * k, y: canvas.clientHeight / 2 - dy * k };
   }
 
   private projectToScreen(world: Vector3): { x: number; y: number } | null {

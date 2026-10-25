@@ -37,6 +37,12 @@ export interface BuildingEntity {
 let buildingId = 1;
 
 /** State-based destructible buildings: INTACT → DAMAGED → BURNING → COLLAPSED. */
+/** fraction of max HP below which timber buildings keep burning (= DAMAGED, flames visible) */
+export const BURN_THRESHOLD = 0.6;
+/** fraction of max HP lost per second while burning */
+export const BURN_RATE = 0.03;
+const BURNS_DOWN: ReadonlySet<BuildingKind> = new Set<BuildingKind>(["house", "tower", "barracks"]);
+
 export class BuildingSystem {
   buildings: BuildingEntity[] = [];
   private originalColors = new WeakMap<import("@babylonjs/core").StandardMaterial, Color3>();
@@ -197,9 +203,17 @@ export class BuildingSystem {
   }
 
   update(dt: number): void {
-    void dt;
     // burning visuals are self-sustaining; collapsed buildings keep smoke briefly then fade
     for (const b of this.buildings) {
+      // timber that has caught (DAMAGED or worse) keeps burning on its own, so a
+      // strafing pass that sets a barracks alight finishes it — the player is
+      // rewarded for moving on instead of hovering 16 s in front of the ballistae.
+      // Stone (forts, walls, gates, keeps, Blackstone grand towers) does not burn down
+      // by itself — the finale scripts exactly which wall towers fall.
+      if (!b.collapsed && BURNS_DOWN.has(b.kind) && b.hp / b.maxHp <= BURN_THRESHOLD) {
+        this.damageBuilding(b, b.maxHp * BURN_RATE * dt);
+        continue;
+      }
       if (b.collapsed) {
         if (b.smokePs && b.smokePs.emitRate > 4) {
           b.smokePs.emitRate = Math.max(4, b.smokePs.emitRate - dt * 2);

@@ -96,6 +96,31 @@ const ASSAULT_ANCHORS = [
 const ASSAULT_LIVE_CAP = 60;
 
 /** Exact low-arc ballistic launch direction from origin to target at given speed. */
+/** Ballista bolt speed (m/s). */
+export const BOLT_SPEED = 95;
+
+/**
+ * Where a ballista aims at a flying dragon: a true intercept against its
+ * current velocity (fixed-point on the bolt's flight time). A dragon that holds
+ * course through the warning (DifficultyDef.ballistaTelegraph) is hit; turning, climbing, diving or
+ * dodging after release makes it miss — measured in tests/ballista-dodge.test.ts.
+ * (The old `dist / speed * 0.85` lead fell 15–55 m behind a cruising dragon, so
+ * bolts only ever hit slow fliers and the warning taught nothing.)
+ */
+export function boltAimPoint(origin: Vector3, target: Vector3, forward: Vector3, speed: number): Vector3 {
+  const vel = forward.scale(speed);
+  let aim = target;
+  for (let i = 0; i < 4; i++) {
+    const d = aim.subtract(origin);
+    const horiz = Math.hypot(d.x, d.z);
+    // flight time of the actual arc: horizontal distance over v·cos(elevation)
+    const dir = ballisticDir(origin, aim, BOLT_SPEED);
+    const t = horiz / Math.max(1, BOLT_SPEED * Math.hypot(dir.x, dir.z));
+    aim = target.add(vel.scale(t));
+  }
+  return aim;
+}
+
 export function ballisticDir(origin: Vector3, target: Vector3, speed: number, gravity = 9.8): Vector3 {
   const delta = target.subtract(origin);
   const h = delta.y;
@@ -739,32 +764,28 @@ export class EnemyManager {
 
     b.cooldown -= dt;
     const aimOk = Math.abs(angleDelta(b.turret.rotation.y, desiredYaw)) < 0.15;
-    if (b.cooldown <= 1.2 && b.state !== "telegraph") {
+    const warn = this.difficulty.ballistaTelegraph;
+    if (b.cooldown <= warn && b.state !== "telegraph") {
       b.state = "telegraph";
       this.bus.emit("sfx", { name: "ballistaTelegraph", pan: this.panFromWorld?.({ x: b.pos.x, z: b.pos.z }) });
     }
     // telegraph glow
-    const glow = clamp(1 - b.cooldown / 1.2, 0, 1);
-    if (b.cooldown > 0 && b.cooldown < 1.2) {
+    const glow = clamp(1 - b.cooldown / warn, 0, 1);
+    if (b.cooldown > 0 && b.cooldown < warn) {
       b.railMat.emissiveColor = new Color3(glow * 0.9, glow * 0.35, 0);
     }
     if (b.cooldown <= 0 && aimOk && dist < b.def.range) {
       b.cooldown = b.def.attackCooldown / this.difficulty.aggression;
       b.state = "reload";
       b.railMat.emissiveColor = Color3.Black();
-      const origin = b.pos.add(new Vector3(0, 1.9, 0));
-      // lead the flying target using its velocity
-      const flightT = dist / 95;
-      const lead = ctx.playerMode === "dragon"
-        ? ctx.dragonForward.scale(ctx.dragonSpeed * flightT * 0.85)
-        : new Vector3(0, 0, 0);
       const jitter = b.volleyAimJitter ?? 0;
-      const aim = target.add(lead);
+      const origin = b.pos.add(new Vector3(0, 1.9, 0));
+      const aim = ctx.playerMode === "dragon" ? boltAimPoint(origin, target, ctx.dragonForward, ctx.dragonSpeed) : target.clone();
       aim.x += jitter;
       aim.z -= jitter;
       b.volleyAimJitter = 0;
-      const dir = ballisticDir(origin, aim, 95);
-      this.projectiles.spawn("bolt", origin, dir, 95, b.def.damage * this.difficulty.enemyDamage, 0.02);
+      const dir = ballisticDir(origin, aim, BOLT_SPEED);
+      this.projectiles.spawn("bolt", origin, dir, BOLT_SPEED, b.def.damage * this.difficulty.enemyDamage, 0.02);
       this.bus.emit("sfx", { name: "ballistaFire", pan: this.panFromWorld?.({ x: b.pos.x, z: b.pos.z }) });
     }
   }

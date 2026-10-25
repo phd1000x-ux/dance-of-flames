@@ -8,6 +8,7 @@ import { DRAGONS } from "../src/data/dragons";
 import { RIDERS } from "../src/data/riders";
 import { CastellanBoss } from "../src/mission/blackstone/CastellanBoss";
 import { WarDragon } from "../src/mission/blackstone/WarDragon";
+import { FireStreak } from "../src/combat/FireStreak";
 
 const engines: NullEngine[] = [];
 afterEach(() => { engines.splice(0).forEach(e => e.dispose()); vi.restoreAllMocks(); });
@@ -24,7 +25,7 @@ function projectileMission() {
   const { player, ctrl, bus } = riderSetup();
   const m = Object.create(MissionScene.prototype) as any;
   const stop = new Error("stop after projectile wiring");
-  Object.assign(m, { ended: false, phase: "ground", player, riderCtrl: ctrl, slowmoT: 0, hitStopT: 0, time: 0,
+  Object.assign(m, { ended: false, phase: "ground", player, riderCtrl: ctrl, slowmoT: 0, hitStopT: 0, time: 0, streak: new FireStreak(),
     groundCam: { addShake: vi.fn() }, dragonCam: { addShake: vi.fn() },
     stats: { damageTaken: 0 }, projectiles: {}, dragonCtrl: { pos: Vector3.Zero(), forward: Vector3.Forward(), invulnerable: 0 },
     deps: { bus, audio: { playerHurt: vi.fn() } } });
