@@ -7,6 +7,7 @@ import type { Terrain } from "../world/Terrain";
 import type { GameEvents } from "../core/Events";
 import type { EventBus } from "../core/EventBus";
 import { clamp, damp, lerp } from "../core/MathUtils";
+import { turnAgility } from "./FlightFeel";
 
 function smoothstep01(t: number): number {
   const x = clamp(t, 0, 1);
@@ -179,7 +180,10 @@ export class DragonController {
         this.pitch = damp(this.pitch, 0, 9, dt);
         pitchRate = 0;
       }
-      yawRate = clamp(yawRate, -turnRate * 1.6 * Math.max(1, turnScale), turnRate * 1.6 * Math.max(1, turnScale));
+      // slow flight turns tighter, boost/dive turns wider (FlightFeel)
+      const agility = turnAgility(this.speed, maxSpeed, boostSpeed);
+      const yawLimit = turnRate * 1.6 * Math.max(1, turnScale) * agility;
+      yawRate = clamp(yawRate * agility, -yawLimit, yawLimit);
       pitchRate = clamp(pitchRate, -turnRate * 1.1, turnRate * 1.1);
     }
     if (this.recenterTimer > 0) this.recenterTimer -= dt;
@@ -188,7 +192,8 @@ export class DragonController {
     this.pitch = clamp(this.pitch + pitchRate * dt, -1.25, 1.15);
 
     // ---- speed & states ----
-    let targetSpeed = throttling * maxSpeed;
+    // braking settles into a hover — never negative (holding S used to fly the dragon backwards)
+    let targetSpeed = Math.max(0, throttling * maxSpeed);
     let newBoost = false;
     if (wantBoost) {
       targetSpeed = boostSpeed;
