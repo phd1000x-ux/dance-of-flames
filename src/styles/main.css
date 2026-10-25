@@ -1067,7 +1067,8 @@ html, body {
   .main-menu { padding-top: 60px; gap: 4px; }
   .main-menu .game-subtitle { margin-bottom: 16px; }
   .main-menu .menu-btn { padding-block: 7px; }
-  .charselect-layout { height: 92vh; }
+  /* clear the fixed MUSIC toggle (top 16px, ~32px tall) instead of overlapping the rider title */
+  .charselect-layout { height: calc(100vh - 62px); margin-top: 54px; }
   .charselect-layout > .panel { overflow-y: auto; }
 }
 @media (max-width: 720px) {

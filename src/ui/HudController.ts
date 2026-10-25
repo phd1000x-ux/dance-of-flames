@@ -414,7 +414,7 @@ export class HudController {
     // scorpion telegraph warnings — dodge window
     const threats = s.threats ?? [];
     while (this.threatPool.length < threats.length) {
-      const m = this.el("div", "threat-marker", "<span>SCORPION AIMING</span>");
+      const m = this.el("div", "threat-marker", "<span>SCORPION · DODGE Q/E or BOOST</span>");
       this.root.appendChild(m);
       this.threatPool.push(m);
     }
