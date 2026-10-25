@@ -1,9 +1,10 @@
 import { AbstractMesh, Matrix, Ray, Scene, UniversalCamera, Vector3 } from "@babylonjs/core";
 import type { DragonController } from "../player/DragonController";
 import type { InputManager } from "../input/InputManager";
-import { clamp, damp, lerp } from "../core/MathUtils";
+import { clamp, damp } from "../core/MathUtils";
 import type { Terrain } from "../world/Terrain";
 import type { GameSettings } from "../save/SaveSystem";
+import { cameraSpeedFeel } from "../player/FlightFeel";
 
 /**
  * Third-person back view camera for dragon flight.
@@ -18,6 +19,8 @@ export class DragonCamera {
   private fov = 68;
   private camPos = new Vector3(0, 130, -20);
   private rollInfluence = 0.28;
+  private lastYaw = 0;
+  private turnLead = 0;
 
   constructor(
     scene: Scene,
@@ -41,7 +44,9 @@ export class DragonCamera {
     const boosting = ctrl.state === "BOOST";
     const diving = ctrl.state === "DIVE";
     const framing = this.visualFraming;
-    const dist = (framing?.distance ?? (10.5 + scale * 2.2)) * (boosting ? 1.18 : diving ? 1.1 : 1);
+    const stats = ctrl.player.dragonStats;
+    const feel = cameraSpeedFeel(ctrl.speed, stats.maxSpeed ?? 40, stats.boostSpeed ?? 60, boosting, diving);
+    const dist = (framing?.distance ?? (10.5 + scale * 2.2)) * feel.distScale;
     const height = framing?.height ?? (3.6 + scale * 1.6);
     const chaseUp = framing
       ? Vector3.TransformNormal(Vector3.Up(), Matrix.RotationYawPitchRoll(ctrl.yaw, ctrl.pitch, 0))
@@ -84,6 +89,12 @@ export class DragonCamera {
 
     // look at point ahead of the dragon; target lock gently biases the view
     const target = ctrl.pos.add(ctrl.forward.scale(framing?.lookAhead ?? (14 * scale))).add(chaseUp.scale(1.2));
+    // turn lead: look into the turn so the exit line is on screen before the nose gets there
+    const yawDelta = Math.atan2(Math.sin(ctrl.yaw - this.lastYaw), Math.cos(ctrl.yaw - this.lastYaw));
+    this.lastYaw = ctrl.yaw;
+    this.turnLead = damp(this.turnLead, dt > 0 ? clamp(yawDelta / dt, -2.5, 2.5) : 0, 4, dt);
+    const side = new Vector3(ctrl.forward.z, 0, -ctrl.forward.x);
+    if (side.lengthSquared() > 1e-4) target.addInPlace(side.normalize().scale(this.turnLead * 2.2 * scale));
     if (biasTarget) {
       const offset = biasTarget.subtract(target);
       const len = offset.length();
@@ -103,13 +114,13 @@ export class DragonCamera {
     this.camera.setTarget(target);
 
     // dynamic FOV
-    const speedT = clamp(ctrl.speed / (ctrl.player.dragonStats.boostSpeed ?? 60), 0, 1.2);
-    const targetFov = lerp(66, 82, boosting ? 1 : speedT * 0.55);
-    this.fov = damp(this.fov, targetFov, 3, dt);
+    this.fov = damp(this.fov, feel.fov, 3, dt);
     this.camera.fov = this.fov * (Math.PI / 180);
   }
 
   reset(ctrl: DragonController): void {
+    this.lastYaw = ctrl.yaw;
+    this.turnLead = 0;
     if (this.visualFraming) {
       // Remount updates pitch before the controller has refreshed its forward vector.
       const basis = Matrix.RotationYawPitchRoll(ctrl.yaw, ctrl.pitch, 0);

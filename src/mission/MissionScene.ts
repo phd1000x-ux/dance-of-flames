@@ -40,6 +40,7 @@ import { AmbientBattle } from "../world/AmbientBattle";
 import { emptyStats, type MissionStats } from "./Scoring";
 import { getRelic } from "../data/items";
 import { clamp } from "../core/MathUtils";
+import { assistCone, assistPull } from "../player/FlightFeel";
 import { FireStreak, STREAK_MIN, streakBonus } from "../combat/FireStreak";
 import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
@@ -1088,6 +1089,7 @@ export class MissionScene {
     // soft assist: nearest target close to the nose
     let bestPos: Vector3 | null = null;
     let bestScore = Infinity;
+    let bestDist = Infinity;
     const origin = this.dragonCtrl.pos;
     for (const s of this.enemies.soldiers) {
       if (s.state === "dead" || s.aboard) continue;
@@ -1095,17 +1097,19 @@ export class MissionScene {
       const dist = v.length();
       if (dist > 160 || dist < 4) continue;
       const cosA = Vector3.Dot(v.scale(1 / dist), base);
-      if (cosA > Math.cos(cone * 0.8)) {
+      // the cone widens up close, where soldiers sweep across the nose fast
+      if (cosA > Math.cos(assistCone(cone * 0.8, dist))) {
         const score = Math.acos(Math.min(1, cosA)) + dist / 300;
         if (score < bestScore) {
           bestScore = score;
           bestPos = s.pos;
+          bestDist = dist;
         }
       }
     }
     if (!bestPos) return null;
     const to = Vector3.Normalize(bestPos.subtract(head));
-    return Vector3.Normalize(Vector3.Lerp(base, to, 0.5 * assist));
+    return Vector3.Normalize(Vector3.Lerp(base, to, assistPull(assist, bestDist)));
   }
 
   /** lock indicator world position (dragon lock or rider lock) projected to canvas CSS px */
