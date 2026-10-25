@@ -2,8 +2,12 @@
  * Mid-mission scripted beats: when a named objective completes, the battlefield
  * answers — a subtitle, a war horn, and a reinforcement squad at a meaningful
  * place (a building group or ahead of the player). Data lives in missions.ts.
+ * An event may also insert a new objective right after the one that triggered it
+ * (a mid-mission twist), and may place its squad on the high ground.
  * Pure logic — no rendering dependencies (unit-testable).
  */
+import type { ObjectiveDef } from "./Objectives";
+
 export interface MissionEventDef {
   id: string;
   /** fires once, when the objective with this id completes */
@@ -13,6 +17,10 @@ export interface MissionEventDef {
   reinforce?: Record<string, number>;
   /** building tag the squad musters at (first standing one), or "player" (ahead of the player) */
   anchor?: string;
+  /** squad takes the highest ground around the anchor (archers on ridges) */
+  elevated?: boolean;
+  /** new objective inserted right after the trigger — needs its own groundAlternative */
+  insertObjective?: ObjectiveDef;
 }
 
 export interface SpawnPoint {
@@ -43,18 +51,32 @@ export class MissionEventDirector {
 }
 
 /** Squad placement: a loose ring around the anchor, 12–28 m out, so the group
- *  reads as one muster rather than a stacked pile. */
+ *  reads as one muster rather than a stacked pile. `elevated` squads try a few
+ *  wider spots (up to 45 m) per soldier and keep the highest. */
 export function reinforcementPoints(
   def: MissionEventDef,
   anchor: { x: number; z: number },
-  rand: () => number
+  rand: () => number,
+  heightAt?: (x: number, z: number) => number
 ): SpawnPoint[] {
   const pts: SpawnPoint[] = [];
+  const tries = def.elevated && heightAt ? 6 : 1;
+  const reach = def.elevated && heightAt ? 33 : 16;
   for (const [type, n] of Object.entries(def.reinforce ?? {})) {
     for (let i = 0; i < n; i++) {
-      const a = rand() * Math.PI * 2;
-      const r = 12 + rand() * 16;
-      pts.push({ type, x: anchor.x + Math.cos(a) * r, z: anchor.z + Math.sin(a) * r });
+      let best: SpawnPoint | null = null;
+      let bestH = -Infinity;
+      for (let t = 0; t < tries; t++) {
+        const a = rand() * Math.PI * 2;
+        const r = 12 + rand() * reach;
+        const p = { type, x: anchor.x + Math.cos(a) * r, z: anchor.z + Math.sin(a) * r };
+        const h = heightAt && tries > 1 ? heightAt(p.x, p.z) : 0;
+        if (!best || h > bestH) {
+          best = p;
+          bestH = h;
+        }
+      }
+      pts.push(best!);
     }
   }
   return pts;

@@ -46,6 +46,9 @@ export class ObjectiveTracker {
   private absorbedKill = 0;
   private absorbedDestroyKey: string | null = null;
   private absorbedDestroy = 0;
+  /** objectives inserted mid-mission count only events after their insertion */
+  private insertedKillBase = new Map<string, Map<string, number>>();
+  private insertedDestroyBase = new Map<string, Map<string, number>>();
 
   constructor(defs: ObjectiveDef[]) {
     this.items = defs.map((d) => ({ ...d, progress: 0, completed: false }));
@@ -102,6 +105,17 @@ export class ObjectiveTracker {
     const now = this.current();
     if (now && now.type === "kill") this.applyKillProgress();
     if (now && now.type === "destroy") this.applyDestroyProgress();
+  }
+
+  /** Insert a new objective right after `afterId` (a mid-mission twist). It counts
+   *  only kills/destroys from now on — history must not complete it instantly. */
+  insertAfter(afterId: string, def: ObjectiveDef): void {
+    if (this.items.some((o) => o.id === def.id)) return;
+    const i = this.items.findIndex((o) => o.id === afterId);
+    const at = i < 0 ? this.items.length : i + 1;
+    this.items.splice(at, 0, { ...def, progress: 0, completed: false });
+    this.insertedKillBase.set(def.id, new Map(this.killsByType));
+    this.insertedDestroyBase.set(def.id, new Map(this.destroyedByTag));
   }
 
   /** Replace incomplete objectives with their ground-play alternatives. */
@@ -161,22 +175,31 @@ export class ObjectiveTracker {
   private matchedKillTotal(cur: ObjectiveState): number {
     let total = 0;
     for (const [type, n] of this.killsByType) {
-      if (this.matchesTarget(cur, type)) total += n - (this.killBaseline?.get(type) ?? 0);
+      if (!this.matchesTarget(cur, type)) continue;
+      const base = this.insertedKillBase.get(cur.id) ?? this.killBaseline;
+      total += n - (base?.get(type) ?? 0);
     }
     return total;
   }
 
   private matchedDestroyTotal(cur: ObjectiveState): number {
+    const base = this.insertedDestroyBase.get(cur.id);
+    const raw = this.rawDestroyTotal(cur);
+    if (!base) return raw;
+    return raw - this.rawDestroyTotal(cur, base);
+  }
+
+  private rawDestroyTotal(cur: ObjectiveState, byTag: Map<string, number> = this.destroyedByTag): number {
     if (!cur.targetTag || cur.targetTag === "any") {
       // synthetic bookkeeping keys are not buildings — each real tag counts once
       let total = 0;
-      for (const [tag, n] of this.destroyedByTag) {
+      for (const [tag, n] of byTag) {
         if (tag === "any" || tag === "relic-building") continue;
         total += n;
       }
       return total;
     }
-    return this.destroyedByTag.get(cur.targetTag) ?? 0;
+    return byTag.get(cur.targetTag) ?? 0;
   }
 
   private applyKillProgress(): void {
