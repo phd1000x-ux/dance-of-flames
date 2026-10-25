@@ -14,6 +14,9 @@ import { SeededRng } from "../core/SeededRng";
 import { texturedMaterial } from "./WorldMaterials";
 import { gabledRoof } from "./SceneryGeometry";
 
+/** breakable spire crown height — the finale crash choreography derives its keyframes from it */
+export const SPIRE_CROWN_H = 26;
+
 export interface CastleAabb {
   x: number;
   z: number;
@@ -152,9 +155,8 @@ export class CastleBuilder {
     // BLACKSTONE SPIRE — north landmark behind the keep (finale framing).
     // Split: static base tower + separate breakable crown the finale animates
     // (must NOT go through staticTower — that merges + freezes its meshes).
-    aabbs.push(this.staticTower(cx, cz - 85, 7, 40, base + 2, this.darkStoneMat));
+    aabbs.push(this.staticTower(cx, cz - 85, 7, 40, base + 2, this.darkStoneMat, false)); // the breakable crown is its roof
     const SPIRE_BASE_H = 40;
-    const SPIRE_CROWN_H = 26;
     const spireCrownMesh = MeshBuilder.CreateCylinder(
       "spireCrown",
       { diameterTop: 0, diameterBottom: 11, height: SPIRE_CROWN_H, tessellation: 12 },
@@ -262,7 +264,7 @@ export class CastleBuilder {
     aabbs.push({ x: cxw, z: czw, hx, hz, minY: baseY - 0.5, maxY: baseY + height + 2.3 });
   }
 
-  private staticTower(x: number, z: number, radius: number, height: number, baseY: number, mat: StandardMaterial): CastleAabb {
+  private staticTower(x: number, z: number, radius: number, height: number, baseY: number, mat: StandardMaterial, roofed = true): CastleAabb {
     const parts: Mesh[] = [];
     const body = MeshBuilder.CreateCylinder("stow", { diameter: radius * 2, height, tessellation: 16 }, this.scene);
     body.position.y = height / 2;
@@ -281,18 +283,22 @@ export class CastleBuilder {
       course.position.y = y; parts.push(course);
     }
     // steep spire inside the merlon ring — a wide low cone reads as a tent
-    const roof = MeshBuilder.CreateCylinder("stowr", { diameterTop: 0, diameterBottom: radius * 1.8, height: radius * 3.4, tessellation: 12 }, this.scene);
-    roof.position.y = height + radius * 1.7 + 1.4;
-    roof.material = this.roofMat;
+    const roof = roofed
+      ? MeshBuilder.CreateCylinder("stowr", { diameterTop: 0, diameterBottom: radius * 1.8, height: radius * 3.4, tessellation: 12 }, this.scene)
+      : null;
+    if (roof) {
+      roof.position.y = height + radius * 1.7 + 1.4;
+      roof.material = this.roofMat;
+    }
     const t = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
     t.material = mat;
     const holder = new TransformNode("stowHolder", this.scene);
     holder.position.set(x, baseY, z);
     t.parent = holder;
-    roof.parent = holder;
+    if (roof) roof.parent = holder;
     t.isPickable = false;
     t.freezeWorldMatrix();
-    roof.freezeWorldMatrix();
+    roof?.freezeWorldMatrix();
     const bounds = holder.getHierarchyBoundingVectors(true);
     return { x, z, hx: (bounds.max.x - bounds.min.x) / 2, hz: (bounds.max.z - bounds.min.z) / 2,
       minY: bounds.min.y, maxY: bounds.max.y };
