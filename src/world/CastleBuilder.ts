@@ -154,10 +154,10 @@ export class CastleBuilder {
     // (must NOT go through staticTower — that merges + freezes its meshes).
     aabbs.push(this.staticTower(cx, cz - 85, 7, 40, base + 2, this.darkStoneMat));
     const SPIRE_BASE_H = 40;
-    const SPIRE_CROWN_H = 18;
+    const SPIRE_CROWN_H = 26;
     const spireCrownMesh = MeshBuilder.CreateCylinder(
       "spireCrown",
-      { diameterTop: 0, diameterBottom: 13, height: SPIRE_CROWN_H, tessellation: 8 },
+      { diameterTop: 0, diameterBottom: 11, height: SPIRE_CROWN_H, tessellation: 12 },
       this.scene
     );
     spireCrownMesh.material = this.darkStoneMat;
@@ -280,8 +280,9 @@ export class CastleBuilder {
       const course = MeshBuilder.CreateCylinder("tower-course", { diameter: radius * 2.12, height: 0.42, tessellation: 16 }, this.scene);
       course.position.y = y; parts.push(course);
     }
-    const roof = MeshBuilder.CreateCylinder("stowr", { diameterTop: 0, diameterBottom: radius * 2.2, height: radius * 1.6, tessellation: 8 }, this.scene);
-    roof.position.y = height + radius * 0.9 + 1.6;
+    // steep spire inside the merlon ring — a wide low cone reads as a tent
+    const roof = MeshBuilder.CreateCylinder("stowr", { diameterTop: 0, diameterBottom: radius * 1.8, height: radius * 3.4, tessellation: 12 }, this.scene);
+    roof.position.y = height + radius * 1.7 + 1.4;
     roof.material = this.roofMat;
     const t = Mesh.MergeMeshes(parts, true, true, undefined, false, false)!;
     t.material = mat;

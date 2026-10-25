@@ -291,9 +291,13 @@ export class WorldBuilder {
         break;
       }
       case "kingslanding": {
-        placeBuildingGroup("wall", "wall", 3, { cx: 0, cz: 260, spread: 40 }, []);
-        placeBuildingGroup("tower", "wallTower", 4, { cx: 0, cz: 262, spread: 120 }, ["stormWings"]);
-        placeBuildingGroup("gate", "gatehouse", 2, { cx: 0, cz: 240, spread: 26 }, ["ancientFlameGland", "bloodfireHeart"]);
+        // a city raid, not a wall siege (Blackstone owns the castle assault):
+        // streets in the middle, granaries by the docks, beacon towers on the heights
+        placeBuildingGroup("house", "district", 8, { cx: 0, cz: 180, spread: 90 }, []);
+        placeBuildingGroup("barracks", "granary", 3, { cx: 0, cz: 300, spread: 70 }, ["ancientFlameGland", "bloodfireHeart"]);
+        placeBuildingGroup("tower", "beacon", 1, { cx: -230, cz: 220, spread: 20 }, ["stormWings"]);
+        placeBuildingGroup("tower", "beacon", 1, { cx: 230, cz: 220, spread: 20 });
+        placeBuildingGroup("tower", "beacon", 1, { cx: 0, cz: 380, spread: 20 });
         squads.push({ type: "archer", count: 22, center: new Vector3(0, 0, 250), radius: 140 });
         squads.push({ type: "swordsman", count: 16, center: new Vector3(0, 0, 120), radius: 130 });
         squads.push({ type: "spearman", count: 10, center: new Vector3(0, 0, 250), radius: 120 });
@@ -370,8 +374,8 @@ export class WorldBuilder {
 
     // derive POIs from the mission layout
     for (const b of layout.buildings) {
-      if (b.tag === "village" || b.tag === "house") pois.push({ x: b.pos.x, z: b.pos.z, kind: "village" });
-      else if (b.tag === "supply" || b.tag === "camp" || b.tag === "barracks") pois.push({ x: b.pos.x, z: b.pos.z, kind: "camp" });
+      if (b.tag === "village" || b.tag === "house" || b.tag === "district") pois.push({ x: b.pos.x, z: b.pos.z, kind: "village" });
+      else if (b.tag === "supply" || b.tag === "camp" || b.tag === "barracks" || b.tag === "granary") pois.push({ x: b.pos.x, z: b.pos.z, kind: "camp" });
       else if (b.tag === "keep" || b.tag === "gatehouse") pois.push({ x: b.pos.x, z: b.pos.z, kind: "castle" });
     }
     if (pois.length === 0) pois.push({ x: 150, z: 60, kind: "village" });
