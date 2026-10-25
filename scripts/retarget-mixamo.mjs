@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-// Bake Mixamo clips onto the Strong Knight skeleton.
+// Bake Mixamo clips onto the Strong Knight skeleton (or another rig via --rig).
 //
-//   node scripts/retarget-mixamo.mjs <dir-of-converted-glb> [out.json]
+//   node scripts/retarget-mixamo.mjs <dir-of-converted-glb> [out.json] [--rig knight|guard]
+//
+// --rig guard targets the soldiers' Armored Guard Knight; its bones are found
+// through the knight-name aliases in src/data/guard-rig.json.
 //
 // Input: Mixamo "Without Skin" FBX converted to GLB (FBX2glTF -b), one clip per
 // file, named by game role (idle, walk, run, slash1..3, heavy, block, roll, hit,
@@ -109,14 +112,28 @@ const MAP = [
   }),
 ];
 
-const [, , inDir, outFile = "public/character-prototype/knight-anims.json"] = process.argv;
-if (!inDir) { console.error("usage: retarget-mixamo.mjs <dir-of-glb> [out.json]"); process.exit(1); }
+const RIGS = {
+  knight: { file: "public/character-prototype/knight.glb", out: "public/character-prototype/knight-anims.json", label: "Strong Knight", aliases: {} },
+  guard: {
+    file: "public/character-prototype/guard.glb", out: "public/character-prototype/guard-anims.json", label: "Armored Guard Knight",
+    aliases: JSON.parse(fs.readFileSync("src/data/guard-rig.json", "utf8")).aliases,
+  },
+};
+const args = process.argv.slice(2);
+const rigFlag = args.indexOf("--rig");
+const rigName = rigFlag >= 0 ? args.splice(rigFlag, 2)[1] : "knight";
+const target = RIGS[rigName];
+const [inDir, outFile = target?.out] = args;
+if (!inDir || !target) { console.error("usage: retarget-mixamo.mjs <dir-of-glb> [out.json] [--rig knight|guard]"); process.exit(1); }
 
-const knight = rig(readGlb("public/character-prototype/knight.glb"));
-const kIdx = MAP.map(([k]) => knight.find(k));
-const kChild = MAP.map(([, , c]) => (c ? knight.find(c[0]) : -1));
+const knight = rig(readGlb(target.file));
+// knight bone names resolve through the rig's aliases; a name it lacks (finger/toe tip) is skipped
+const hasAlias = k => rigName === "knight" || k in target.aliases;
+const kFind = k => knight.find(target.aliases[k] ?? k);
+const kIdx = MAP.map(([k]) => kFind(k));
+const kChild = MAP.map(([, , c]) => (c && hasAlias(c[0]) ? kFind(c[0]) : -1));
 const kRest = solve(knight, knight.rot);
-const kHipHeight = kRest.P[kIdx[0]][1] - Math.min(kRest.P[knight.find("L_anke_")][1], kRest.P[knight.find("R_anke_")][1]);
+const kHipHeight = kRest.P[kIdx[0]][1] - Math.min(kRest.P[kFind("L_anke_")][1], kRest.P[kFind("R_anke_")][1]);
 
 const clips = {};
 let mixamoT = null; // knight T-pose world rotations (built from the first clip's rest)
@@ -199,7 +216,7 @@ for (const file of fs.readdirSync(inDir).filter(f => f.endsWith(".glb")).sort())
 }
 
 fs.writeFileSync(outFile, JSON.stringify({
-  source: "Mixamo (Adobe) animations retargeted to Strong Knight by scripts/retarget-mixamo.mjs",
+  source: `Mixamo (Adobe) animations retargeted to ${target.label} by scripts/retarget-mixamo.mjs`,
   fps: 30, bones: MAP.map(([k]) => k), hipHeight: +kHipHeight.toFixed(3), clips,
 }));
 console.log("wrote", outFile, (fs.statSync(outFile).size / 1024).toFixed(0) + "KB");

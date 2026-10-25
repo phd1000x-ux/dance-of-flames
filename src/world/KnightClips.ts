@@ -15,15 +15,18 @@ export interface KnightClipData {
   clips: Record<string, { frames: number; start: number; contact: number; end: number; q: number[]; hipsY: number[] }>;
 }
 
-const sceneClips = new WeakMap<object, Promise<KnightClipData>>();
-export function loadKnightClips(key: object): Promise<KnightClipData> {
-  let p = sceneClips.get(key);
+const sceneClips = new WeakMap<object, Map<string, Promise<KnightClipData>>>();
+/** url: the hero's knight-anims.json, or guard-anims.json for the soldiers' rig */
+export function loadKnightClips(key: object, url = "/character-prototype/knight-anims.json"): Promise<KnightClipData> {
+  let byUrl = sceneClips.get(key);
+  if (!byUrl) sceneClips.set(key, (byUrl = new Map()));
+  let p = byUrl.get(url);
   if (!p) {
-    p = fetch("/character-prototype/knight-anims.json").then(r => {
-      if (!r.ok) throw new Error(`knight-anims.json ${r.status}`);
+    p = fetch(url).then(r => {
+      if (!r.ok) throw new Error(`${url} ${r.status}`);
       return r.json() as Promise<KnightClipData>;
     });
-    sceneClips.set(key, p);
+    byUrl.set(url, p);
   }
   return p;
 }

@@ -3,7 +3,7 @@
 ## Policy
 
 The default game uses procedural visuals and synthesized audio. The opt-in
-`?characters=1` character prototype additionally ships the two free CC BY 4.0
+`?characters=1` character prototype additionally ships the free CC BY 4.0
 models listed below. All audio remains generated at runtime.
 
 ## Free character prototype assets
@@ -13,8 +13,9 @@ models listed below. All audio remains generated at runtime.
 | `public/character-prototype/dragon.glb` | Animated Dragon Three Motion Loops, LasquetiSpice | https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `public/character-prototype/knight.glb` | Strong Knight, DJMaesen | https://sketchfab.com/3d-models/strong-knight-9d912e0fedb44b619fbd2a083bbf174f | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `public/character-prototype/axe.glb` | Viking battle axe, xeofox | https://sketchfab.com/3d-models/viking-battle-axe-b7123192adbf40f68043c57dd8ddcd15 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| `public/character-prototype/guard.glb` | Armored Guard Knight Rig, DM-913 (enemy soldiers) | https://sketchfab.com/3d-models/armored-guard-knight-rig-b7bba7eddb13470b88eb8b24531cb6b3 | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
-Retrieved 2026-10-24 (axe 2026-10-25) from [Ai2's public Objaverse distribution](https://huggingface.co/datasets/allenai/objaverse).
+Retrieved 2026-10-24 (axe and guard 2026-10-25) from [Ai2's public Objaverse distribution](https://huggingface.co/datasets/allenai/objaverse).
 The GLBs embed matching title, author, source and CC-BY-4.0 metadata.
 `public/character-prototype/sources.json` records exact download URLs and SHA256 hashes.
 The original binary files are preserved. Runtime adaptations: normalized size and
@@ -25,7 +26,9 @@ guard and axe attacks are code-authored procedural animation (`src/world/KnightA
 `public/character-prototype/knight-anims.json` holds animation data derived from
 [Mixamo](https://www.mixamo.com) (Adobe) motions — idle, walk, run, slashes, power
 slash, block, dive roll, impact, death — retargeted onto the Strong Knight skeleton by
-`scripts/retarget-mixamo.mjs` (`npm run retarget <dir-of-glb>`). Mixamo animations
+`scripts/retarget-mixamo.mjs` (`npm run retarget <dir-of-glb>`); `guard-anims.json` is the same
+motion set retargeted onto the Armored Guard Knight skeleton (`--rig guard`, bone aliases in
+`src/data/guard-rig.json`) so enemy soldiers use their own body instead of the hero's knight. Mixamo animations
 may be used royalty-free inside games; the raw Mixamo FBX downloads are NOT
 redistributed (kept in git-ignored `assets-src/mixamo/`). The code-authored poses in
 `src/world/KnightAnimator.ts` remain as the fallback if the clip file fails to load.

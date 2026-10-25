@@ -1024,6 +1024,7 @@ export class UIManager {
         <a href="https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29" target="_blank" rel="noopener">Animated Dragon Three Motion Loops</a> — LasquetiSpice.<br>
         <a href="https://sketchfab.com/3d-models/strong-knight-9d912e0fedb44b619fbd2a083bbf174f" target="_blank" rel="noopener">Strong Knight</a> — DJMaesen.<br>
         <a href="https://sketchfab.com/3d-models/viking-battle-axe-b7123192adbf40f68043c57dd8ddcd15" target="_blank" rel="noopener">Viking battle axe</a> — xeofox.<br>
+        <a href="https://sketchfab.com/3d-models/armored-guard-knight-rig-b7bba7eddb13470b88eb8b24531cb6b3" target="_blank" rel="noopener">Armored Guard Knight Rig</a> — DM-913 (soldiers).<br>
         Free Objaverse distribution; adapted size, materials and animation.</p>
         <p>Built with TypeScript, Babylon.js (WebGPU / WebGL2), Vite &amp; WebAudio.</p>
         <div class="modal-btns"><button class="btn" data-act="back">BACK</button></div>

@@ -1,9 +1,10 @@
-import { Color3, Vector3, type Material, PBRMaterial, StandardMaterial } from "@babylonjs/core";
+import { Color3, GlowLayer, Mesh, Vector3, type Material, PBRMaterial, StandardMaterial } from "@babylonjs/core";
 import { addCastellanRegalia } from "./CastellanRegalia";
 import type { MissionScene } from "../mission/MissionScene";
 import type { Soldier, SoldierState } from "../ai/EnemyManager";
 import type { EnemyDefinition } from "../data/enemies";
-import { CharacterModel, HeldWeapon, loadCharacterAssets, prepareKnight, tintCharacter, type WeaponKind } from "./CharacterAssets";
+import { CharacterModel, HeldWeapon, loadCharacterAssets, loadGuardAsset, prepareGuard, prepareKnight, tintCharacter, type WeaponKind } from "./CharacterAssets";
+import guardRig from "../data/guard-rig.json";
 import { swingPose } from "./CharacterPrototype";
 import { KnightClipPlayer, loadKnightClips, type KnightClipData } from "./KnightClips";
 
@@ -69,7 +70,7 @@ interface Puppet {
 export function excessGlow(s: Pick<Soldier, "material" | "baseEmissive">): Color3 {
   const e = s.material.emissiveColor;
   const b = s.baseEmissive;
-  return new Color3(Math.max(0, e.r - b.r), Math.max(0, e.g - b.g), Math.max(0, e.b - b.b)).scale(0.32); // the GlowLayer blooms it further: 0.45 painted whole knights red
+  return new Color3(Math.max(0, e.r - b.r), Math.max(0, e.g - b.g), Math.max(0, e.b - b.b)).scale(0.2); // dark metallic guard plate shows almost only emissive: 0.32 painted the Castellan solid yellow
 }
 
 function emissiveOf(mat: Material): Color3 | null {
@@ -85,11 +86,15 @@ function emissiveOf(mat: Material): Color3 | null {
  */
 export async function installSoldierVisuals(mission: MissionScene): Promise<void> {
   const scene = mission.scene;
-  const containers = await loadCharacterAssets(scene);
+  // soldiers wear the Armored Guard Knight so they never read as copies of the hero;
+  // if it fails to load they fall back to the hero's knight and its clips
+  const guard = await loadGuardAsset(scene).catch(() => null);
   if (scene.isDisposed) return;
-  const knight = containers[1];
-  // the hero's retargeted mocap set; without it soldiers keep the code-authored poses
-  const clipData: KnightClipData | null = await loadKnightClips(scene).catch(() => null);
+  const body = guard ?? (await loadCharacterAssets(scene))[1];
+  if (scene.isDisposed) return;
+  const aliases: Record<string, string> = guard ? guardRig.aliases : {};
+  // mocap baked onto the soldier rig; without it soldiers keep the code-authored poses
+  const clipData: KnightClipData | null = await loadKnightClips(scene, guard ? "/character-prototype/guard-anims.json" : undefined).catch(() => null);
   if (scene.isDisposed) return;
   const pools = new Map<string, Puppet[]>();
   let created = 0;
@@ -98,8 +103,8 @@ export async function installSoldierVisuals(mission: MissionScene): Promise<void
   function createPuppet(def: EnemyDefinition): Puppet {
     const id = serial++;
     created++;
-    const model = new CharacterModel(knight, `soldier-puppet-${id}`, scene);
-    prepareKnight(model);
+    const model = new CharacterModel(body, `soldier-puppet-${id}`, scene, aliases);
+    if (guard) prepareGuard(model); else prepareKnight(model);
     // soldiers stand a little shorter than the protagonist (2.05m)
     const k = (1.88 * def.scale) / 2.05;
     model.root.scaling.scaleInPlace(k);
@@ -120,6 +125,10 @@ export async function installSoldierVisuals(mission: MissionScene): Promise<void
     // after the material list: the windup/hurt glow must not repaint the crown and cape
     // only the Castellan wears the crown — earlier commanders are his field officers
     if (def.role === "commander" && mission.missionId === "blackstone") addCastellanRegalia(model, scene);
+    // the telegraph is a tint on the armor, not a light source: kept out of the
+    // GlowLayer, whose bloom washed whole (dark-armored) soldiers solid red/yellow
+    const glow = scene.effectLayers.find((l): l is GlowLayer => l instanceof GlowLayer);
+    for (const m of model.root.getChildMeshes()) if (m instanceof Mesh) glow?.addExcludedMesh(m);
     model.root.setEnabled(false);
     const p: Puppet = { defId: def.id, model, main, off, materials, soldier: null, lastPos: new Vector3(), speed: 0, walkPhase: 0, lastState: null, follow: 0, clips, baseY: model.root.position.y, lastHp: Infinity };
     if (!pools.has(def.id)) pools.set(def.id, []);

@@ -1,0 +1,28 @@
+{
+  "comment": "Armored Guard Knight bones under the Strong Knight names the game code and scripts/retarget-mixamo.mjs use (prefix match). Bones absent here (toe tips) are skipped.",
+  "aliases": {
+    "hips_": "Pelvis_",
+    "spine_": "Spine_",
+    "chest_": "Torso_",
+    "neck_": "Neck_",
+    "head_": "Head_",
+    "L_shoulder_": "Shoulder.L_",
+    "L_arm_": "Upperarm.L_",
+    "L_elbow_": "Bone_24",
+    "L_wrist_": "Hand.L_",
+    "L_middle1_": "MiddleFinger Base.L_",
+    "L_thumb1_": "Thumbbase.L_",
+    "L_leg_": "Thigh.L_",
+    "L_knee_": "Bone.002_",
+    "L_anke_": "Foot.L_",
+    "R_shoulder_": "Shoulder.R_",
+    "R_arm_": "Upperarm.R_",
+    "R_elbow_": "Bone.001_",
+    "R_wrist_": "Hand.R_",
+    "R_middle1_": "MiddleFinger Base.R_",
+    "R_thumb1_": "Thumbbase.R_",
+    "R_leg_": "Thigh.R_",
+    "R_knee_": "Bone.003_",
+    "R_anke_": "Foot.R_"
+  }
+}

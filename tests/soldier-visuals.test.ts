@@ -42,8 +42,8 @@ describe("hit-flash glow for imported armor", () => {
   });
   it("a red telegraph carries over, softened", () => {
     const g = excessGlow({ material: { emissiveColor: new Color3(0.7, 0.1, 0.05) } as any, baseEmissive: new Color3(0.05, 0.05, 0.05) });
-    expect(g.r).toBeGreaterThan(0.2);
-    expect(g.r).toBeLessThan(0.7);
+    expect(g.r).toBeGreaterThan(0.1);
+    expect(g.r).toBeLessThan(0.2); // brighter painted the dark guard plate solid
     expect(g.g).toBeLessThan(0.05);
   });
 });
