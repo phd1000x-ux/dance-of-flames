@@ -163,7 +163,7 @@ export class MissionScene {
       ? new Vector3(-80, 140, -420)
       : this.worldLayout.playerStart.clone(), this.worldLayout.playerStartYaw);
     if (d.mission.id === "kingslanding") {
-      this.dragonCtrl.yaw = Math.PI * 0.02; // face the wall
+      this.dragonCtrl.yaw = Math.PI * 0.02; // face the city
     }
 
     this.effects = new EffectsLibrary(this.scene);

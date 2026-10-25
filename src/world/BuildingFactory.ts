@@ -142,31 +142,86 @@ export class BuildingFactory {
         break;
       }
       case "keep": {
-        // colossal central keep: tiered mass + side wings + crown
-        parts.push(MeshBuilder.CreateBox("k-main", { width: w * 0.78, height: h * 0.82, depth: d * 0.78 }, this.scene));
-        const tier2 = MeshBuilder.CreateBox("k-t2", { width: w * 0.5, height: h * 0.3, depth: d * 0.5 }, this.scene);
-        tier2.position.y = h * 0.45;
-        parts.push(tier2);
-        for (const [cx2, cz2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-          const turret = MeshBuilder.CreateCylinder("k-tur", { diameter: w * 0.24, height: h * 0.95, tessellation: 12 }, this.scene);
-          turret.position.set(cx2 * (w / 2 - w * 0.14), 0, cz2 * (d / 2 - d * 0.14));
-          parts.push(turret);
-          const cap = MeshBuilder.CreateCylinder("k-cap", { diameterTop: 0, diameterBottom: w * 0.3, height: h * 0.18, tessellation: 12 }, this.scene);
-          cap.position.set(cx2 * (w / 2 - w * 0.14), h * 0.55, cz2 * (d / 2 - d * 0.14));
-          roofParts.push(cap);
+        // donjon on a battered plinth: machicolated main block, a taller inner
+        // tower, four corner turrets with corbelled crowns and steep slate spires
+        // (the old squat cones read as tents)
+        const y0 = -h / 2;
+        const box = (name: string, bw: number, bh: number, bd: number, x: number, y: number, z: number): Mesh => {
+          const m = MeshBuilder.CreateBox(name, { width: bw, height: bh, depth: bd }, this.scene);
+          m.position.set(x, y, z); parts.push(m); return m;
+        };
+        /** corbel course + parapet + merlons around a square of half-size hs at height y */
+        const crownSquare = (hs: number, y: number) => {
+          box("k-corbel", hs * 2 + 1.6, 1.3, hs * 2 + 1.6, 0, y + 0.65, 0);
+          for (const side of [-1, 1]) {
+            box("k-par", hs * 2 + 1.6, 1.0, 0.6, 0, y + 1.8, side * (hs + 0.5));
+            box("k-par", 0.6, 1.0, hs * 2 + 1.6, side * (hs + 0.5), y + 1.8, 0);
+          }
+          const n = Math.max(3, Math.round(hs / 1.6));
+          for (let i = 0; i <= n; i++) {
+            const t = -hs - 0.5 + (i / n) * (hs * 2 + 1);
+            for (const side of [-1, 1]) {
+              box("k-merlon", 1.1, 1.3, 0.7, t, y + 2.95, side * (hs + 0.5));
+              box("k-merlon", 0.7, 1.3, 1.1, side * (hs + 0.5), y + 2.95, t);
+            }
+          }
+        };
+        const turretCrown = (x: number, z: number, dia: number, y: number, spireH: number) => {
+          const corbel = MeshBuilder.CreateCylinder("k-tcorbel", { diameterTop: dia * 1.22, diameterBottom: dia, height: 1.6, tessellation: 16 }, this.scene);
+          corbel.position.set(x, y + 0.8, z); parts.push(corbel);
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const m = MeshBuilder.CreateBox("k-tmerlon", { width: 0.9, height: 1.3, depth: 0.9 }, this.scene);
+            m.position.set(x + Math.cos(a) * dia * 0.56, y + 2.2, z + Math.sin(a) * dia * 0.56); parts.push(m);
+          }
+          const spire = MeshBuilder.CreateCylinder("k-spire", { diameterTop: 0, diameterBottom: dia * 0.95, height: spireH, tessellation: 12 }, this.scene);
+          spire.position.set(x, y + 1.6 + spireH / 2, z); roofParts.push(spire);
+          const finial = MeshBuilder.CreateCylinder("k-finial", { diameter: 0.25, height: 3, tessellation: 4 }, this.scene);
+          finial.position.set(x, y + 1.6 + spireH + 1.4, z); ironParts.push(finial);
+        };
+
+        const mainHs = w * 0.34, mainH = h * 0.56;
+        box("k-plinth", mainHs * 2 + 3, 3.2, mainHs * 2 + 3, 0, y0 + 1.6, 0);
+        box("k-main", mainHs * 2, mainH, mainHs * 2, 0, y0 + mainH / 2, 0);
+        box("k-course", mainHs * 2 + 0.6, 0.5, mainHs * 2 + 0.6, 0, y0 + mainH * 0.45, 0);
+        crownSquare(mainHs, y0 + mainH);
+        // flat buttresses up each face
+        for (const t of [-0.5, 0.5]) for (const side of [-1, 1]) {
+          box("k-butt", 1.6, mainH - 3, 1.2, t * mainHs, y0 + (mainH - 3) / 2 + 3, side * (mainHs + 0.5));
+          box("k-butt", 1.2, mainH - 3, 1.6, side * (mainHs + 0.5), y0 + (mainH - 3) / 2 + 3, t * mainHs);
         }
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2;
-          const cren = MeshBuilder.CreateBox("k-cren", { width: 2, height: 1.6, depth: 2 }, this.scene);
-          cren.position.set(Math.cos(a) * w * 0.4, h * 0.44, Math.sin(a) * d * 0.4);
-          parts.push(cren);
+        // inner donjon rising out of the roof
+        const donHs = w * 0.17, donH = h * 0.36;
+        box("k-donjon", donHs * 2, donH, donHs * 2, 0, y0 + mainH + donH / 2, 0);
+        crownSquare(donHs, y0 + mainH + donH);
+        const roofTop = y0 + mainH + donH + 1.3;
+        const donSpire = MeshBuilder.CreateCylinder("k-donspire", { diameterTop: 0, diameterBottom: donHs * 2.2, height: h * 0.32, tessellation: 4 }, this.scene);
+        donSpire.rotation.y = Math.PI / 4;
+        donSpire.position.y = roofTop + h * 0.16; roofParts.push(donSpire);
+        // corner turrets, taller than the main block
+        const tDia = w * 0.2, tH = mainH + h * 0.16;
+        for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+          const x = sx * mainHs, z = sz * mainHs;
+          const t = MeshBuilder.CreateCylinder("k-turret", { diameterTop: tDia * 0.92, diameterBottom: tDia * 1.12, height: tH, tessellation: 16 }, this.scene);
+          t.position.set(x, y0 + tH / 2, z); parts.push(t);
+          turretCrown(x, z, tDia, y0 + tH, h * 0.26);
+          this.addWindow(winParts, x + sx * tDia * 0.5, y0 + tH * 0.7, z, Math.PI / 2, 0.4, 1.4);
         }
-        const gate = MeshBuilder.CreateBox("k-gate", { width: 4, height: 6, depth: 1 }, this.scene);
-        gate.position.set(0, -h / 2 + 3, d / 2);
-        parts.push(gate);
-        for (let r = 0; r < 4; r++) for (let cx = -1; cx <= 1; cx++) {
-          this.addWindow(winParts, cx * w * 0.2, -h * 0.28 + r * h * 0.17, d * 0.39, 0, 0.8, 1.6);
-          this.addWindow(winParts, cx * w * 0.2, -h * 0.28 + r * h * 0.17, -d * 0.39, 0, 0.8, 1.6);
+        // great door: stone arch frame + timber leaves
+        box("k-portal", 7, 9.5, 1.6, 0, y0 + 4.75, mainHs + 0.6);
+        const door = MeshBuilder.CreateBox("k-door", { width: 4.6, height: 7, depth: 0.4 }, this.scene);
+        door.position.set(0, y0 + 3.5, mainHs + 1.45); timberParts.push(door);
+        // arrow slits and tall hall windows on every face
+        for (let r = 0; r < 3; r++) for (const cx of [-1, 1]) {
+          const y = y0 + mainH * (0.32 + r * 0.22);
+          this.addWindow(winParts, cx * mainHs * 0.25, y, mainHs + 0.05, 0, 0.6, 1.8);
+          this.addWindow(winParts, cx * mainHs * 0.25, y, -mainHs - 0.05, 0, 0.6, 1.8);
+          this.addWindow(winParts, mainHs + 0.05, y, cx * mainHs * 0.25, Math.PI / 2, 0.6, 1.8);
+          this.addWindow(winParts, -mainHs - 0.05, y, cx * mainHs * 0.25, Math.PI / 2, 0.6, 1.8);
+        }
+        for (const side of [-1, 1]) {
+          this.addWindow(winParts, 0, y0 + mainH + donH * 0.55, side * (donHs + 0.05), 0, 0.9, 2.6);
+          this.addWindow(winParts, side * (donHs + 0.05), y0 + mainH + donH * 0.55, 0, Math.PI / 2, 0.9, 2.6);
         }
         break;
       }
@@ -183,8 +238,9 @@ export class BuildingFactory {
           crens.push(cren);
           parts.push(cren);
         }
-        const troof = MeshBuilder.CreateCylinder("gt-roof", { diameterTop: 0, diameterBottom: w * 1.15, height: h * 0.3, tessellation: 8 }, this.scene);
-        troof.position.y = h / 2 + h * 0.15 + 1.6;
+        // steep slate spire (a wide squat cone reads as a tent from the air)
+        const troof = MeshBuilder.CreateCylinder("gt-roof", { diameterTop: 0, diameterBottom: w * 0.92, height: h * 0.55, tessellation: 12 }, this.scene);
+        troof.position.y = h / 2 + h * 0.275 + 1.4;
         roofParts.push(troof);
         for (const [a, hy] of [[0.8, h * 0.5], [3.9, h * 0.75]] as const) {
           this.addWindow(winParts, Math.cos(a) * (w / 2), -h / 2 + hy, Math.sin(a) * (w / 2), Math.PI / 2 - a, 0.4, 1.1);
@@ -279,7 +335,7 @@ export class BuildingFactory {
           buttress.position.set(Math.cos(a) * w * 0.45, -h * 0.21, Math.sin(a) * w * 0.45);
           buttress.rotation.y = -a; parts.push(buttress);
         }
-      } else if (kind === "wall" || kind === "keep" || kind === "fort") {
+      } else if (kind === "wall" || kind === "fort") {
         for (const side of [-1, 1]) {
           const ledge = MeshBuilder.CreateBox("stone-string-course", { width: w * 1.02, height: 0.38, depth: 0.35 }, this.scene);
           ledge.position.set(0, -h * 0.24, side * d / 2); parts.push(ledge);
