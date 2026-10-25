@@ -1,4 +1,5 @@
 import type { ObjectiveDef } from "../mission/Objectives";
+import type { MissionEventDef } from "../mission/MissionEvents";
 
 export interface EnvironmentDef {
   skyTop: string;
@@ -53,6 +54,8 @@ export interface MissionDefinition {
   spawns: SpawnBudget;
   buildings: BuildingSpawnDef[];
   objectives: ObjectiveDef[];
+  /** mid-mission beats keyed to objective completion (reinforcements + subtitle) */
+  events?: MissionEventDef[];
 }
 
 const groundKillSoldiers = (n: number): ObjectiveDef => ({
@@ -113,6 +116,15 @@ export const MISSIONS: MissionDefinition[] = [
       { kind: "house", tag: "house", count: 4 },
       { kind: "tower", tag: "watchtower", count: 1, relicIds: ["dragonfireCore"] },
     ],
+    events: [
+      {
+        id: "ev-boats",
+        afterObjective: "obj-burn",
+        subtitle: "Boats row ashore — the watchtower calls for help!",
+        reinforce: { swordsman: 3 },
+        anchor: "watchtower",
+      },
+    ],
     objectives: [
       {
         id: "obj-burn",
@@ -164,6 +176,15 @@ export const MISSIONS: MissionDefinition[] = [
       { kind: "barracks", tag: "supply", count: 2, relicIds: ["windriderSpurs"] },
       { kind: "house", tag: "village", count: 5 },
       { kind: "tower", tag: "watchtower", count: 2, relicIds: ["obsidianScale"] },
+    ],
+    events: [
+      {
+        id: "ev-relief",
+        afterObjective: "obj-supply",
+        subtitle: "A relief column fords the river — spears rally at the watchtowers!",
+        reinforce: { spearman: 4, shieldman: 3 },
+        anchor: "watchtower",
+      },
     ],
     objectives: [
       {
@@ -233,6 +254,22 @@ export const MISSIONS: MissionDefinition[] = [
       { kind: "house", tag: "ruin", count: 5 },
       { kind: "barracks", tag: "camp", count: 2, relicIds: ["emberCapacitor", "valyrianSaddle"] },
     ],
+    events: [
+      {
+        id: "ev-sally",
+        afterObjective: "obj-ballistae",
+        subtitle: "The siege park is ash — the keep's garrison sallies into the mud!",
+        reinforce: { swordsman: 4, elite: 1 },
+        anchor: "keep",
+      },
+      {
+        id: "ev-walls",
+        afterObjective: "obj-structures",
+        subtitle: "Crossbowmen man the melted walls — burn the camps out from under them!",
+        reinforce: { archer: 6 },
+        anchor: "camp",
+      },
+    ],
     objectives: [
       {
         id: "obj-ballistae",
@@ -301,6 +338,22 @@ export const MISSIONS: MissionDefinition[] = [
       { kind: "house", tag: "district", count: 8 },
       { kind: "barracks", tag: "granary", count: 3, relicIds: ["ancientFlameGland", "bloodfireHeart"] },
       { kind: "tower", tag: "beacon", count: 3, relicIds: ["stormWings"] },
+    ],
+    events: [
+      {
+        id: "ev-goldcloaks",
+        afterObjective: "obj-scorpions",
+        subtitle: "Gold cloaks pour from the city gates to guard the granaries!",
+        reinforce: { swordsman: 4, shieldman: 3 },
+        anchor: "granary",
+      },
+      {
+        id: "ev-beacon-guard",
+        afterObjective: "obj-beacons",
+        subtitle: "The beacons fall dark — the commander's guard forms up to meet you!",
+        reinforce: { elite: 2, archer: 3 },
+        anchor: "player",
+      },
     ],
     objectives: [
       {

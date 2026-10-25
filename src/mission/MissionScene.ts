@@ -33,6 +33,7 @@ import { EnemyManager, type CombatContext, type Soldier } from "../ai/EnemyManag
 import { BuildingSystem } from "../world/BuildingSystem";
 import { LootSystem } from "../world/LootSystem";
 import { ObjectiveTracker } from "./Objectives";
+import { MissionEventDirector, aheadOfPlayer, reinforcementPoints, type MissionEventDef } from "./MissionEvents";
 import { BlackstoneFinale } from "./blackstone/BlackstoneFinale";
 import type { FinalePhase } from "./blackstone/FinalePhases";
 import type { FinaleSnapshot } from "./blackstone/FinalePatterns";
@@ -89,6 +90,7 @@ export class MissionScene {
   readonly finale: BlackstoneFinale | null = null;
   readonly ambient: AmbientBattle | null = null;
   readonly tracker: ObjectiveTracker;
+  readonly missionEvents: MissionEventDirector;
   readonly stats: MissionStats = emptyStats();
   readonly rng: SeededRng;
   phase: MissionPhase = "dragon";
@@ -193,6 +195,7 @@ export class MissionScene {
     this.loot = new LootSystem(this.scene, d.bus, d.mission.seed);
 
     this.tracker = new ObjectiveTracker(d.mission.objectives);
+    this.missionEvents = new MissionEventDirector(d.mission.events ?? []);
 
     this.glow = new GlowLayer("glow", this.scene, { mainTextureSamples: 1 });
     this.glow.intensity = 0.55;
@@ -345,6 +348,8 @@ export class MissionScene {
     this.tracker.onObjectiveComplete((o) => {
       this.deps.audio.objective();
       this.emitObjective();
+      if (this.ended || this.restoring) return;
+      for (const ev of this.missionEvents.onObjectiveComplete(o.id)) this.fireMissionEvent(ev);
     });
   }
 
@@ -379,6 +384,27 @@ export class MissionScene {
       this.recentDamageT = 3.5;
       if (this.phase === "ground") this.groundCam.addShake(Math.min(0.9, 0.25 + p.amount / 60));
     });
+  }
+
+  /** Mid-mission beat: subtitle + war horn + a squad mustering at the anchor. */
+  private fireMissionEvent(ev: MissionEventDef): void {
+    let anchor: { x: number; z: number };
+    if (ev.anchor && ev.anchor !== "player") {
+      const group = this.buildings.buildings.filter((b) => b.tag === ev.anchor);
+      const b = group.find((x) => !x.collapsed) ?? group[0];
+      anchor = b ? b.pos : aheadOfPlayer(this.playerPosition(), this.playerYaw());
+    } else {
+      anchor = aheadOfPlayer(this.playerPosition(), this.playerYaw());
+    }
+    for (const p of reinforcementPoints(ev, anchor, () => this.rng.range(0, 1))) {
+      this.enemies.spawnSoldier(p.type, new Vector3(p.x, 0, p.z));
+    }
+    this.deps.audio.warHorn(this.panFromWorld(anchor));
+    this.deps.bus.emit("finale-subtitle", { text: ev.subtitle, ms: 4500 });
+  }
+
+  private playerYaw(): number {
+    return this.phase === "ground" && this.riderCtrl ? this.riderCtrl.yaw : this.dragonCtrl.yaw;
   }
 
   /** Freeze the sim almost completely for `seconds` of real time (longest request wins). */
