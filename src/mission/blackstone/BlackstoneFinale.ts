@@ -1,5 +1,6 @@
 import { Vector3 } from "@babylonjs/core";
 import type { MissionScene, MissionSceneDeps } from "../MissionScene";
+import { SPIRE_CROWN_H } from "../../world/CastleBuilder";
 import type { GameEventBus } from "../../core/Events";
 import { PhaseMachine, type FinalePhase } from "./FinalePhases";
 import { CastellanBoss } from "./CastellanBoss";
@@ -518,8 +519,9 @@ export class BlackstoneFinale {
     const top = this.mission.worldLayout.spireCrownTop;
     const v = this.vharax;
     if (!crown || !top || !v) return false;
-    // crown center sits 9 m above the base top (18 m tall cone)
-    const spireBaseTop = new Vector3(top.x, top.y - 9, top.z);
+    // SpireBreaker's keyframes are tuned to a point 9 m above the tower's top
+    // (the crown center back when it was 18 m tall) — derive it from the real height
+    const spireBaseTop = new Vector3(top.x, top.y - SPIRE_CROWN_H + 9, top.z);
     this.breaker = new SpireBreaker(this.mission.effects, this.deps.bus, (s) => this.mission.dragonCam.addShake(s));
     this.breaker.begin(crown, spireBaseTop, v.rig.root);
     this.mission.slowmoT = Math.max(this.mission.slowmoT, 1.0);
