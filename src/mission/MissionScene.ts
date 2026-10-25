@@ -24,7 +24,7 @@ import { DragonRig } from "../world/DragonRig";
 import { SoldierFactory } from "../world/SoldierFactory";
 import { PlayerState } from "../player/PlayerState";
 import { DragonController } from "../player/DragonController";
-import { RiderController } from "../player/RiderController";
+import { RiderController, separateFromBodies } from "../player/RiderController";
 import { DragonCamera, GroundCamera } from "../camera/GameCameras";
 import { FireSystem } from "../combat/FireSystem";
 import { ProjectileSystem } from "../combat/ProjectileSystem";
@@ -543,6 +543,8 @@ export class MissionScene {
         .getGroundEnemies()
         .map((s) => ({ pos: s.pos, yaw: s.yaw, hp: s.hp, alive: true, isShielded: s.def.role === "shield", staggered: s.staggered }));
       this.riderCtrl.update(dt, d.input, this.groundCam, groundEnemies);
+      // bodies are solid: the rider can no longer walk through soldiers or the Castellan
+      separateFromBodies(this.riderCtrl.pos, groundEnemies);
       // Z recenter for ground camera
       if (d.input.pressed("recenterCamera")) this.groundCam.startRecenter();
       this.groundCam.update(dt, this.riderCtrl.pos, this.riderCtrl.yaw, d.input, d.settings, this.riderCtrl.lockTarget ? this.riderCtrl.lockTarget.pos : null);

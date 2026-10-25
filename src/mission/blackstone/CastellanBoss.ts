@@ -118,6 +118,7 @@ export class CastellanBoss {
       this.pattern = null;
       s.cooldown = 0.8;
       s.material.emissiveColor.copyFrom(s.baseEmissive);
+      s.state = "alert"; // drop the guard: otherwise he idles in the raised-sword windup pose
     }
   }
 
@@ -131,6 +132,8 @@ export class CastellanBoss {
     }
     if (!this.swingStruck) {
       this.swingStruck = true;
+      s.state = "attack"; // windup → attack plays the follow-through instead of holding the raised sword
+      s.material.emissiveColor.copyFrom(s.baseEmissive);
       this.swingIndex++;
       if (dist < s.def.range + 1.4) {
         const from = Vector3.Normalize(this.playerPos.subtract(s.pos));
