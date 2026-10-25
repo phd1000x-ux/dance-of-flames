@@ -34,6 +34,10 @@ export interface HudSnapshot {
   loot: { x: number; z: number }[];
   bounds: number;
   lock: { x: number; y: number; kind: string } | null;
+  /** current-objective targets in the distance (screen px) */
+  markers?: { x: number; y: number }[];
+  /** scorpions in their pre-shot telegraph (screen px) */
+  threats?: { x: number; y: number }[];
   objectives: { desc: string; progress: number; need: number; completed: boolean }[];
 }
 
@@ -65,6 +69,8 @@ export class HudController {
   private dmgDirContainer!: HTMLElement;
   private hitmarker!: HTMLElement;
   private healChargesEl!: HTMLElement;
+  private markerPool: HTMLElement[] = [];
+  private threatPool: HTMLElement[] = [];
   private lockBracket!: HTMLElement;
   private lockKindEl!: HTMLElement;
   private hudHint!: HTMLElement;
@@ -256,6 +262,8 @@ export class HudController {
     this.bus.on("hit-enemy", () => this.flashHitmarker(true));
     this.bus.on("relic-found", (e) => this.showRelicToast(e.relicId));
     this.bus.on("hud-hint", (e) => this.showHint(e.text));
+    // emitted every sim step past the soft bound; the hint stays up while outside
+    this.bus.on("bounds-warning", () => this.showHint("TURN BACK — LEAVING THE BATTLEFIELD"));
     this.bus.on("toggle-objectives", (e) => {
       this.objectivesPanel.style.display = e.visible ? "block" : "none";
     });
@@ -389,6 +397,32 @@ export class HudController {
     } else {
       this.tutorialEl.style.display = "none";
     }
+
+    // objective target markers (pooled)
+    const marks = s.markers ?? [];
+    while (this.markerPool.length < marks.length) {
+      const m = this.el("div", "objective-marker");
+      this.root.appendChild(m);
+      this.markerPool.push(m);
+    }
+    this.markerPool.forEach((m, i) => {
+      const at = marks[i];
+      m.style.display = at ? "block" : "none";
+      if (at) m.style.transform = `translate(${at.x - 6}px, ${at.y - 14}px) rotate(45deg)`;
+    });
+
+    // scorpion telegraph warnings — dodge window
+    const threats = s.threats ?? [];
+    while (this.threatPool.length < threats.length) {
+      const m = this.el("div", "threat-marker", "<span>SCORPION AIMING</span>");
+      this.root.appendChild(m);
+      this.threatPool.push(m);
+    }
+    this.threatPool.forEach((m, i) => {
+      const at = threats[i];
+      m.style.display = at ? "block" : "none";
+      if (at) m.style.transform = `translate(${at.x - 16}px, ${at.y - 16}px)`;
+    });
 
     // target lock bracket
     if (s.lock) {

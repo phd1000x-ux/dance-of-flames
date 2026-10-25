@@ -155,8 +155,11 @@ export class MenuShowcase {
     if (this.mode === "menu") {
       this.camera.viewport = new Viewport(0.28, 0, 0.72, 1);
     } else {
-      const left = Math.min(300, width * 0.3);
-      const right = Math.min(320, width * 0.3);
+      // fit the real center column (panels shrink on small windows); fixed widths are the fallback
+      const center = document.querySelector(".charselect-center")?.getBoundingClientRect();
+      const fits = center && center.width > 40;
+      const left = fits ? Math.max(0, center.left) : Math.min(300, width * 0.3);
+      const right = fits ? Math.max(0, width - center.right) : Math.min(320, width * 0.3);
       this.camera.viewport = new Viewport(left / width, 0, (width - left - right) / width, 1);
     }
     const aspect = width * this.camera.viewport.width / Math.max(1, height);

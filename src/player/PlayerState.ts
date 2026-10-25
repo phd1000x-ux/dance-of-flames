@@ -38,6 +38,7 @@ export class PlayerState {
 
   relicIds: string[] = [];
   private relicMods: StatModSource[] = [];
+  private shopMods: StatModSource = {};
   buffs: TemporaryBuff[] = [];
   lifesteal = 0;
   fireBoostTimer = 0;
@@ -54,24 +55,8 @@ export class PlayerState {
   ) {
     this.dragonDef = dragon;
     this.riderDef = rider;
-    const baseDragon: StatBlock = {
-      maxHealth: dragon.maxHealth,
-      armor: dragon.armor,
-      fireDamage: dragon.fireDamage,
-      fireRange: dragon.fireRange,
-      fireCone: dragon.fireCone,
-      fireCapacity: dragon.fireCapacity,
-      fireDrain: dragon.fireDrain,
-      fireRecharge: dragon.fireRecharge,
-      acceleration: dragon.acceleration,
-      maxSpeed: dragon.maxSpeed,
-      boostSpeed: dragon.boostSpeed,
-      turnRate: dragon.turnRate,
-      climbRate: dragon.climbRate,
-      diveSpeed: dragon.diveSpeed,
-      staggerResistance: dragon.staggerResistance,
-    };
-    this.dragonStats = computeFinalStats(baseDragon, [rider.dragonBonus, shopMods]);
+    this.shopMods = shopMods;
+    this.dragonStats = this.composeDragonStats();
     this.recomputeDerived();
 
     this.riderStats = computeFinalStats(
@@ -113,44 +98,45 @@ export class PlayerState {
     const relic = RELICS.find((r) => r.id === relicId);
     if (!relic) return;
     this.relicIds.push(relicId);
-    this.relicMods.push(relic.effect);
-    if ("healFlat" in relic.effect) {
-      // immediate large heal
-      this.dragonHp = Math.min(this.maxDragonHp, this.dragonHp + this.maxDragonHp * (relic.effect.healFlat as number));
-      this.recomputeStatsKeepHp();
-    } else {
-      this.recomputeStatsKeepHp();
+    // healFlat is a one-shot flag, not a multiplier — copy so the shared RELICS data stays intact
+    const { healFlat, ...mods } = relic.effect as StatModSource & { healFlat?: number };
+    this.relicMods.push(mods);
+    this.recomputeStatsKeepHp();
+    if (healFlat !== undefined) {
+      this.dragonHp = Math.min(this.maxDragonHp, this.dragonHp + this.maxDragonHp * healFlat);
     }
     this.onRelicFound?.(relicId);
   }
 
-  private recomputeStatsKeepHp(): void {
+  /** base × rider bond × shop upgrades × relics × active buffs — the one stat recipe */
+  private composeDragonStats(): StatBlock {
+    const d = this.dragonDef;
     const baseDragon: StatBlock = {
-      maxHealth: this.dragonDef.maxHealth,
-      armor: this.dragonDef.armor,
-      fireDamage: this.dragonDef.fireDamage,
-      fireRange: this.dragonDef.fireRange,
-      fireCone: this.dragonDef.fireCone,
-      fireCapacity: this.dragonDef.fireCapacity,
-      fireDrain: this.dragonDef.fireDrain,
-      fireRecharge: this.dragonDef.fireRecharge,
-      acceleration: this.dragonDef.acceleration,
-      maxSpeed: this.dragonDef.maxSpeed,
-      boostSpeed: this.dragonDef.boostSpeed,
-      turnRate: this.dragonDef.turnRate,
-      climbRate: this.dragonDef.climbRate,
-      diveSpeed: this.dragonDef.diveSpeed,
-      staggerResistance: this.dragonDef.staggerResistance,
+      maxHealth: d.maxHealth,
+      armor: d.armor,
+      fireDamage: d.fireDamage,
+      fireRange: d.fireRange,
+      fireCone: d.fireCone,
+      fireCapacity: d.fireCapacity,
+      fireDrain: d.fireDrain,
+      fireRecharge: d.fireRecharge,
+      acceleration: d.acceleration,
+      maxSpeed: d.maxSpeed,
+      boostSpeed: d.boostSpeed,
+      turnRate: d.turnRate,
+      climbRate: d.climbRate,
+      diveSpeed: d.diveSpeed,
+      staggerResistance: d.staggerResistance,
     };
-    // rider bond + relics + active buffs
     const buffMods: StatModSource = {};
     for (const b of this.buffs) buffMods[b.stat] = (buffMods[b.stat] ?? 1) * b.mult;
-    this.dragonStats = computeFinalStats(baseDragon, [this.riderDef.dragonBonus, ...this.relicMods, buffMods]);
+    return computeFinalStats(baseDragon, [this.riderDef.dragonBonus, this.shopMods, ...this.relicMods, buffMods]);
+  }
+
+  private recomputeStatsKeepHp(): void {
+    this.dragonStats = this.composeDragonStats();
+    this.dragonHp = Math.min(this.dragonHp, this.maxDragonHp);
     this.lifesteal = this.relicMods.reduce((acc, m) => acc + ((m as any).lifesteal ?? 0), 0);
-    // healFlat in relic mods is a flag not multiplier — ensure it wasn't applied
-    for (const m of this.relicMods) {
-      if ("healFlat" in m) delete (m as any).healFlat;
-    }
   }
 
   addBuff(buff: TemporaryBuff): void {

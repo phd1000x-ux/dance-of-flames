@@ -136,6 +136,7 @@ html, body {
   text-shadow: 0 0 18px rgba(240, 207, 142, 0.8);
   transform: scale(1.06);
 }
+.menu-btn[hidden] { display: none; }
 .menu-btn:disabled { opacity: 0.35; cursor: default; transform: none; }
 .menu-btn:disabled:hover { color: var(--parchment); text-shadow: none; }
 .menu-footer {
@@ -663,6 +664,13 @@ html, body {
 .shop-item .si-level { font-size: 11px; color: var(--gold); letter-spacing: 2px; margin-top: 3px; }
 .shop-item .si-level .pip { color: var(--ember); }
 .shop-item .btn { padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+.shop-item .si-effect { font-size: 12px; color: var(--gold-bright); margin-top: 3px; letter-spacing: 1px; }
+.shop-item.unaffordable { opacity: 0.55; }
+.shop-item.just-bought { border-color: var(--gold-bright); animation: shop-bought 0.9s ease-out; }
+@keyframes shop-bought { from { background: rgba(240,207,142,0.35); } to { background: rgba(30,22,14,0.55); } }
+.shop-toast { margin-left: auto; margin-right: 18px; font-size: 13px; letter-spacing: 2px; color: var(--gold-bright); opacity: 0; }
+.shop-toast.show { animation: shop-toast 2.2s ease-out forwards; }
+@keyframes shop-toast { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 .shop-header {
   grid-column: 1 / -1;
   display: flex;
@@ -1078,3 +1086,39 @@ html, body {
   .hud-bottom-left { left: 12px; bottom: 20px; transform: scale(.85); transform-origin: bottom left; }
   .hud-bottom-center { width: 35vw; }
 }
+
+/* ---------- HUD: distant objective target markers ---------- */
+.objective-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 96, 64, 0.9);
+  background: rgba(255, 96, 64, 0.18);
+  box-shadow: 0 0 6px rgba(255, 80, 40, 0.6);
+  pointer-events: none;
+}
+.threat-marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  border: 2px solid #ffb020;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: threat-pulse 0.4s ease-in-out infinite alternate;
+}
+.threat-marker span {
+  position: absolute;
+  top: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #ffcf6a;
+  text-shadow: 0 1px 2px #000;
+}
+@keyframes threat-pulse { from { box-shadow: 0 0 2px #ffb020; } to { box-shadow: 0 0 14px #ff8a00; } }

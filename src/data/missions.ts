@@ -70,6 +70,15 @@ const groundSurvive = (sec: number): ObjectiveDef => ({
   seconds: sec,
 });
 
+/** active alternative to a second survive window: break the wave that lands on the rider */
+const groundRepel = (n: number): ObjectiveDef => ({
+  id: "g-repel",
+  type: "kill",
+  description: `Break the counterattack — cut down ${n} on foot`,
+  targetType: "soldier",
+  count: n,
+});
+
 export const MISSIONS: MissionDefinition[] = [
   {
     id: "dragonstone",
@@ -180,7 +189,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Destroy the watchtowers",
         targetTag: "watchtower",
         count: 2,
-        groundAlternative: groundSurvive(60),
+        groundAlternative: groundRepel(8),
       },
       {
         id: "obj-commander",
@@ -240,7 +249,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Slay 3 elite knights",
         targetType: "elite",
         count: 3,
-        groundAlternative: groundKillSoldiers(10),
+        groundAlternative: groundSurvive(45),
       },
       {
         id: "obj-structures",
@@ -248,7 +257,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Raze 6 structures",
         targetTag: "any",
         count: 6,
-        groundAlternative: groundSurvive(75),
+        groundAlternative: groundRepel(10),
       },
       {
         id: "obj-relics",
@@ -310,7 +319,7 @@ export const MISSIONS: MissionDefinition[] = [
         targetTag: "granary",
         count: 3,
         hint: "Starve the garrison — the granaries sit behind the docks",
-        groundAlternative: groundKillSoldiers(12),
+        groundAlternative: groundSurvive(45),
       },
       {
         id: "obj-beacons",
@@ -318,7 +327,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Topple the beacon towers before they warn Blackstone",
         targetTag: "beacon",
         count: 3,
-        groundAlternative: groundSurvive(60),
+        groundAlternative: groundRepel(12),
       },
       {
         id: "obj-commander",
@@ -403,7 +412,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Breach the gatehouse",
         targetTag: "gatehouse",
         count: 1,
-        groundAlternative: groundSurvive(60),
+        groundAlternative: groundRepel(8),
       },
       {
         id: "bs-courtyard",
