@@ -13,7 +13,11 @@ export class CharacterModel {
   readonly rest = new Map<TransformNode, Quaternion>();
   private clock = 0;
 
-  constructor(container: AssetContainer, name: string, scene: Scene) {
+  /**
+   * aliases: knight bone name → this rig's bone prefix, so poses, weapons and
+   * baked clips written against the Strong Knight skeleton drive other rigs
+   */
+  constructor(container: AssetContainer, name: string, scene: Scene, private aliases: Record<string, string> = {}) {
     if (container.scene !== scene) throw new Error("Character containers must belong to the destination scene");
     this.root = new TransformNode(name, scene);
     const instance = container.instantiateModelsToScene(n => `${name}:${n}`, true, { doNotInstantiate: true });
@@ -37,7 +41,8 @@ export class CharacterModel {
   }
 
   node(prefix: string): TransformNode | undefined {
-    return this.nodes.find(n => n.name.split(":").pop()!.startsWith(prefix));
+    const p = this.aliases[prefix] ?? prefix;
+    return this.nodes.find(n => n.name.split(":").pop()!.startsWith(p));
   }
 
   bounds() {
@@ -162,6 +167,36 @@ export function anchorDragon(model: CharacterModel): void {
   pelvis.computeWorldMatrix(true);
 }
 
+const sceneGuard = new WeakMap<Scene, Promise<AssetContainer>>();
+
+/** Armored Guard Knight (CC BY, see public/character-prototype/sources.json): the soldiers' body, so they no longer share the hero's knight */
+export function loadGuardAsset(scene: Scene): Promise<AssetContainer> {
+  const cached = sceneGuard.get(scene);
+  if (cached) return cached;
+  const promise = LoadAssetContainerAsync("/character-prototype/guard.glb", scene).then(c => {
+    if (scene.isDisposed) { c.dispose(); throw new Error("scene disposed"); }
+    for (const mesh of c.meshes) if (mesh instanceof Mesh)
+      for (const unused of ["uv4", "uv5", "uv6"]) mesh.removeVerticesData(unused);
+    for (const mat of c.materials) if (mat instanceof PBRMaterial) {
+      mat.environmentIntensity = 0.85;
+      mat.backFaceCulling = false;
+    }
+    scene.onDisposeObservable.addOnce(() => c.dispose());
+    return c;
+  });
+  sceneGuard.set(scene, promise);
+  return promise;
+}
+
+/** fit the guard to soldier height; his own spear is replaced by the role's HeldWeapon */
+export function prepareGuard(model: CharacterModel): void {
+  for (const mesh of model.root.getChildMeshes()) if (/Spear/i.test(mesh.material?.name ?? "")) mesh.setEnabled(false);
+  const box = model.bounds();
+  model.root.scaling.setAll(2.05 / Math.max(0.001, box.max.y - box.min.y));
+  const fitted = model.bounds();
+  model.root.position.y = -fitted.min.y;
+}
+
 export function prepareKnight(model: CharacterModel, color?: string): void {
   const box = model.bounds();
   model.root.scaling.setAll(2.05 / Math.max(0.001, box.max.y - box.min.y));
@@ -225,8 +260,14 @@ export class HeldWeapon {
   constructor(private model: CharacterModel, kind: WeaponKind, name: string, scene: Scene, hand = "R_wrist_") {
     this.node = new TransformNode(name, scene);
     this.node.parent = model.node(hand) ?? model.root;
-    // the wrist inherits the model's import scale; weapons are authored in meters
-    this.node.scaling.setAll(1 / model.root.scaling.x);
+    // the wrist inherits the model's import scale (plus any unit scale inside the
+    // GLB, e.g. the guard's centimetre armature); weapons are authored in meters
+    // (measured relative to whatever the model root hangs under, so a scaled
+    // soldier/rider parent still scales the weapon with the body)
+    const parent = this.node.parent as TransformNode;
+    parent.computeWorldMatrix(true);
+    const outer = model.root.parent instanceof TransformNode ? Math.abs(model.root.parent.absoluteScaling.x) : 1;
+    this.node.scaling.setAll(outer / Math.max(1e-6, Math.abs(parent.absoluteScaling.x)));
     this.node.rotationQuaternion = HeldWeapon.idleGrip.clone();
     const metal = new StandardMaterial(`${name}-metal`, scene);
     metal.diffuseColor = new Color3(0.56, 0.6, 0.66);

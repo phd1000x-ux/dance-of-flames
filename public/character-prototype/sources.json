@@ -41,6 +41,21 @@
       "bytes": 2348316,
       "animationClips": [],
       "changes": "Original GLB bytes preserved; runtime haft-axis normalization, scale and grip placement in CharacterAssets.ts (HeldWeapon.useImported)"
+    },
+    {
+      "file": "guard.glb",
+      "author": "DM-913 (https://sketchfab.com/SuperKapoo913)",
+      "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+      "source": "https://sketchfab.com/3d-models/armored-guard-knight-rig-b7bba7eddb13470b88eb8b24531cb6b3",
+      "title": "Armored Guard Knight Rig",
+      "download": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-069/b7bba7eddb13470b88eb8b24531cb6b3.glb",
+      "retrieved": "2026-10-25",
+      "sha256": "c058988fbbc30d7808ae2d24782e6438657d105e498bf6ebd3cd5cc880b14f44",
+      "bytes": 3500388,
+      "animationClips": [
+        "Idle"
+      ],
+      "changes": "Original GLB bytes preserved; runtime size fit, team tint, built-in spear hidden (role weapons used instead) and Mixamo clips retargeted to its skeleton (guard-anims.json) in SoldierVisuals.ts"
     }
   ]
 }
