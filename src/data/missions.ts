@@ -261,6 +261,15 @@ export const MISSIONS: MissionDefinition[] = [
         subtitle: "The siege park is ash — the keep's garrison sallies into the mud!",
         reinforce: { swordsman: 4, elite: 1 },
         anchor: "keep",
+        insertObjective: {
+          id: "obj-sally",
+          type: "kill",
+          description: "Break the sally — cut down 5 of the garrison",
+          targetType: "soldier",
+          count: 5,
+          hint: "They charge across the mud from the keep",
+          groundAlternative: { id: "g-sally", type: "kill", description: "Break the sally — cut down 3 on foot", targetType: "soldier", count: 3 },
+        },
       },
       {
         id: "ev-walls",
@@ -268,6 +277,7 @@ export const MISSIONS: MissionDefinition[] = [
         subtitle: "Crossbowmen man the melted walls — burn the camps out from under them!",
         reinforce: { archer: 6 },
         anchor: "camp",
+        elevated: true,
       },
     ],
     objectives: [
@@ -353,6 +363,15 @@ export const MISSIONS: MissionDefinition[] = [
         subtitle: "The beacons fall dark — the commander's guard forms up to meet you!",
         reinforce: { elite: 2, archer: 3 },
         anchor: "player",
+        insertObjective: {
+          id: "obj-guard",
+          type: "kill",
+          description: "Cut through the commander's guard (2 elite knights)",
+          targetType: "elite",
+          count: 2,
+          hint: "Elites shrug off a glancing breath — hold the flame on them",
+          groundAlternative: { id: "g-guard", type: "survive", description: "Hold out against the guard (30s)", seconds: 30 },
+        },
       },
     ],
     objectives: [

@@ -14,6 +14,11 @@ describe("mission events data", () => {
           expect(m.buildings.map((b) => b.tag)).toContain(ev.anchor);
         }
         expect(ev.subtitle.length).toBeGreaterThan(0);
+        if (ev.insertObjective) {
+          // AGENTS.md: every objective stays completable after dragon death
+          expect(ev.insertObjective.groundAlternative).toBeDefined();
+          expect(m.objectives.map((o) => o.id)).not.toContain(ev.insertObjective.id);
+        }
       });
     }
   }
@@ -74,5 +79,64 @@ describe("MissionEventDirector", () => {
     const a = aheadOfPlayer({ x: 0, z: 0 }, 0);
     expect(a.x).toBeCloseTo(0);
     expect(a.z).toBeCloseTo(80);
+  });
+});
+
+describe("objective twists", () => {
+  it("inserted objective becomes current and ignores kills made before it", () => {
+    const t = new ObjectiveTracker([
+      { id: "o1", type: "kill", description: "", targetType: "soldier", count: 2 },
+      { id: "o2", type: "destroy", description: "", targetTag: "camp", count: 1 },
+    ]);
+    t.notifyBuildingDestroyed("camp"); // early camp kill still counts for o2 later
+    t.notifyKill("swordsman");
+    t.notifyKill("swordsman");
+    expect(t.current()?.id).toBe("o2");
+    // o2 completed retroactively on update; insert before checking that
+    t.insertAfter("o1", { id: "tw", type: "kill", description: "", targetType: "soldier", count: 2 });
+    t.update(0);
+    expect(t.current()?.id).toBe("tw");
+    expect(t.current()?.progress).toBe(0);
+    t.notifyKill("archer");
+    t.notifyKill("spearman");
+    expect(t.objectives().find((o) => o.id === "tw")?.completed).toBe(true);
+    t.update(0);
+    expect(t.allCompleted()).toBe(true);
+  });
+
+  it("inserted destroy objective counts only new destruction; duplicate insert is ignored", () => {
+    const t = new ObjectiveTracker([{ id: "o1", type: "kill", description: "", targetType: "any", count: 1 }]);
+    t.notifyBuildingDestroyed("camp");
+    t.notifyKill("swordsman");
+    t.insertAfter("o1", { id: "tw", type: "destroy", description: "", targetTag: "camp", count: 1 });
+    t.insertAfter("o1", { id: "tw", type: "destroy", description: "", targetTag: "camp", count: 1 });
+    expect(t.objectives().length).toBe(2);
+    t.update(0);
+    expect(t.current()?.id).toBe("tw");
+    t.notifyBuildingDestroyed("camp");
+    expect(t.allCompleted()).toBe(true);
+  });
+
+  it("dragon death converts an inserted objective to its ground alternative", () => {
+    const t = new ObjectiveTracker([{ id: "o1", type: "kill", description: "", targetType: "any", count: 1 }]);
+    t.notifyKill("swordsman");
+    t.insertAfter("o1", {
+      id: "tw", type: "kill", description: "", targetType: "elite", count: 2,
+      groundAlternative: { id: "g-tw", type: "survive", description: "", seconds: 30 },
+    });
+    t.convertToGround();
+    expect(t.current()?.id).toBe("g-tw");
+  });
+
+  it("elevated squads take the highest sampled ground", () => {
+    let i = 0;
+    const rand = () => ((i++ * 0.37) % 1);
+    const hill = (x: number) => x; // terrain rises to the east
+    const def = { id: "e", afterObjective: "o", subtitle: "", reinforce: { archer: 4 } };
+    const flat = reinforcementPoints(def, { x: 0, z: 0 }, rand, hill);
+    i = 0;
+    const high = reinforcementPoints({ ...def, elevated: true }, { x: 0, z: 0 }, rand, hill);
+    const avg = (ps: { x: number }[]) => ps.reduce((a, p) => a + p.x, 0) / ps.length;
+    expect(avg(high)).toBeGreaterThan(avg(flat) + 10);
   });
 });

@@ -349,7 +349,13 @@ export class MissionScene {
       this.deps.audio.objective();
       this.emitObjective();
       if (this.ended || this.restoring) return;
-      for (const ev of this.missionEvents.onObjectiveComplete(o.id)) this.fireMissionEvent(ev);
+      for (const ev of this.missionEvents.onObjectiveComplete(o.id)) {
+        this.fireMissionEvent(ev);
+        if (ev.insertObjective) {
+          this.tracker.insertAfter(o.id, ev.insertObjective);
+          this.emitObjective();
+        }
+      }
     });
   }
 
@@ -396,7 +402,7 @@ export class MissionScene {
     } else {
       anchor = aheadOfPlayer(this.playerPosition(), this.playerYaw());
     }
-    for (const p of reinforcementPoints(ev, anchor, () => this.rng.range(0, 1))) {
+    for (const p of reinforcementPoints(ev, anchor, () => this.rng.range(0, 1), (x, z) => this.world.terrain.heightAt(x, z))) {
       this.enemies.spawnSoldier(p.type, new Vector3(p.x, 0, p.z));
     }
     this.deps.audio.warHorn(this.panFromWorld(anchor));
