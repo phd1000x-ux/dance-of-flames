@@ -13,6 +13,22 @@ import {
 import { SeededRng } from "../core/SeededRng";
 
 /** Shared procedural textures + particle effect factories (pooled, GPU-cheap). */
+/**
+ * Breath particle ramp from a dragon's fireColor (unit tested): a white-hot but
+ * still tinted core, the pure color in the body, a dim ember of it at death.
+ * The old fixed pale-yellow core plus additive blending made every breath read
+ * the same yellow-white regardless of the roster color.
+ */
+export function fireStreamColors(fireColor: string): { core: Color4; body: Color4; dead: Color4 } {
+  const c = Color3.FromHexString(fireColor);
+  const hot = Color3.Lerp(c, Color3.White(), 0.45);
+  return {
+    core: new Color4(hot.r, hot.g, hot.b, 1),
+    body: new Color4(c.r, c.g, c.b, 1),
+    dead: new Color4(c.r * 0.35, c.g * 0.35, c.b * 0.35, 0),
+  };
+}
+
 export class EffectsLibrary {
   private glowTex: Texture | null = null;
   private smokeTex: Texture | null = null;
@@ -71,10 +87,10 @@ export class EffectsLibrary {
     ps.direction2 = new Vector3(0.2, 0.1, 1.2);
     ps.minEmitPower = 26;
     ps.maxEmitPower = 42;
-    const c = Color3.FromHexString(fireColor);
-    ps.color1 = new Color4(1, 0.95, 0.6, 1);
-    ps.color2 = new Color4(c.r, c.g * 0.7, c.b * 0.4, 1);
-    ps.colorDead = new Color4(0.45, 0.1, 0.02, 0);
+    const colors = fireStreamColors(fireColor);
+    ps.color1 = colors.core;
+    ps.color2 = colors.body;
+    ps.colorDead = colors.dead;
     ps.updateSpeed = 0.016;
     this.applyBudget(ps);
     return ps;

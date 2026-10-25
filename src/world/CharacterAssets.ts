@@ -1,6 +1,6 @@
 import {
-  AnimationGroup, AssetContainer, Color3, Constants, LoadAssetContainerAsync,
-  Matrix, Mesh, MeshBuilder, PBRMaterial, Quaternion, RawCubeTexture, Scene,
+  AnimationGroup, AssetContainer, type BaseTexture, Color3, Constants, LoadAssetContainerAsync,
+  Matrix, Mesh, MeshBuilder, PBRMaterial, Quaternion, RawCubeTexture, RawTexture, Scene,
   StandardMaterial, Texture, TransformNode, Vector3,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
@@ -142,8 +142,58 @@ export function prepareDragon(model: CharacterModel, def: DragonDefinition): voi
   // Shared authored mesh, with roster scale, body tint and modest proportion variants.
   model.root.scaling.x *= 0.92 + def.wingShape.span * 0.08;
   model.root.scaling.y *= def.bulk ?? 1;
+  // the authored skin is red-brown: a multiply tint can only darken it, so every
+  // dragon read as the same red. Swap in a grey (shading-only) copy and paint
+  // the roster color over it; until the copy is ready the old tint stands in.
   tintCharacter(model, def.bodyColor, 0.68);
+  void paintDragon(model, def.bodyColor);
   anchorDragon(model);
+}
+
+const greySkins = new WeakMap<BaseTexture, Promise<BaseTexture | null>>();
+
+/** luminance-only copy of a texture, normalized so its mean sits at 0.62 (unit tested) */
+export function greyscalePixels(src: Uint8Array | Uint8ClampedArray): Uint8Array {
+  const out = new Uint8Array(src.length);
+  let sum = 0;
+  const n = src.length / 4;
+  for (let i = 0; i < src.length; i += 4) sum += 0.2126 * src[i] + 0.7152 * src[i + 1] + 0.0722 * src[i + 2];
+  const k = (0.62 * 255) / Math.max(1, sum / n);
+  for (let i = 0; i < src.length; i += 4) {
+    const l = Math.min(255, (0.2126 * src[i] + 0.7152 * src[i + 1] + 0.0722 * src[i + 2]) * k);
+    out[i] = out[i + 1] = out[i + 2] = l;
+    out[i + 3] = src[i + 3];
+  }
+  return out;
+}
+
+function greySkin(tex: BaseTexture, scene: Scene): Promise<BaseTexture | null> {
+  let p = greySkins.get(tex);
+  if (!p) {
+    p = (async () => {
+      const { width, height } = tex.getSize();
+      const px = await tex.readPixels();
+      if (!px || scene.isDisposed) return null;
+      const bytes = px instanceof Uint8Array || px instanceof Uint8ClampedArray ? px : new Uint8Array(px.buffer);
+      const grey = RawTexture.CreateRGBATexture(greyscalePixels(bytes), width, height, scene, true, false);
+      grey.name = `${tex.name}-grey`;
+      if (tex instanceof Texture) { grey.wrapU = tex.wrapU; grey.wrapV = tex.wrapV; }
+      return grey;
+    })().catch(() => null);
+    greySkins.set(tex, p);
+  }
+  return p;
+}
+
+async function paintDragon(model: CharacterModel, color: string): Promise<void> {
+  const tint = Color3.FromHexString(color);
+  for (const mat of new Set(model.root.getChildMeshes().map(m => m.material))) {
+    if (!(mat instanceof PBRMaterial) || !mat.albedoTexture) continue;
+    const grey = await greySkin(mat.albedoTexture, mat.getScene());
+    if (!grey || mat.getScene().isDisposed) return;
+    mat.albedoTexture = grey;
+    mat.albedoColor = tint.clone();
+  }
 }
 
 export function tintCharacter(model: CharacterModel, color: string, amount = 0.3): void {
