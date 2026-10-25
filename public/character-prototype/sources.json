@@ -50,12 +50,14 @@
       "title": "Armored Guard Knight Rig",
       "download": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-069/b7bba7eddb13470b88eb8b24531cb6b3.glb",
       "retrieved": "2026-10-25",
-      "sha256": "c058988fbbc30d7808ae2d24782e6438657d105e498bf6ebd3cd5cc880b14f44",
-      "bytes": 3500388,
+      "sha256": "c8b0959f4f0e8b5cd7521485f917fba678d06fee75154c0ab4e3c64cc6328e4a",
+      "bytes": 1971088,
+      "originalSha256": "c058988fbbc30d7808ae2d24782e6438657d105e498bf6ebd3cd5cc880b14f44",
+      "originalBytes": 3500388,
       "animationClips": [
         "Idle"
       ],
-      "changes": "Original GLB bytes preserved; runtime size fit, team tint, built-in spear hidden (role weapons used instead) and Mixamo clips retargeted to its skeleton (guard-anims.json) in SoldierVisuals.ts"
+      "changes": "Textures re-encoded PNG to WebP (gltf-transform webp --quality 88), geometry and rig unchanged; runtime size fit, team tint, built-in spear moved to the spearmen's hand (hidden for other roles), role cloth/plume/quiver added and Mixamo clips retargeted to its skeleton (guard-anims.json) in SoldierVisuals.ts"
     }
   ]
 }

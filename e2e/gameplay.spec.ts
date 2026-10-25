@@ -33,7 +33,7 @@ test("E2E 1: boot → main menu → character select → mission select → laun
   const riders = page.locator("#rider-list .roster-item");
   await expect(riders).toHaveCount(6);
   const dragons = page.locator("#dragon-list .roster-item");
-  await expect(dragons).toHaveCount(6);
+  await expect(dragons).toHaveCount(7);
 
   // pick Aemond → Vhagar auto-selected
   await page.locator("#rider-list .roster-item", { hasText: "Aemond Targaryen" }).click();
