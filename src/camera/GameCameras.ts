@@ -1,4 +1,4 @@
-import { Matrix, Scene, UniversalCamera, Vector3 } from "@babylonjs/core";
+import { AbstractMesh, Matrix, Ray, Scene, UniversalCamera, Vector3 } from "@babylonjs/core";
 import type { DragonController } from "../player/DragonController";
 import type { InputManager } from "../input/InputManager";
 import { clamp, damp, lerp } from "../core/MathUtils";
@@ -137,6 +137,20 @@ interface SceneLike {
  * Classic third-person shoulder camera for ground combat.
  * Mouse OR Arrow Keys rotate; Z recenters behind the rider; soft lock-on bias.
  */
+/**
+ * Buildings and castle walls only — characters, dragons, props and the terrain
+ * never pull the camera. Merged building meshes are non-pickable, so match the
+ * hierarchy instead (building-* holders, wseg wall segments).
+ */
+const OCCLUDER_NAME = /^(building-|wseg)/;
+function isCameraOccluder(mesh: AbstractMesh): boolean {
+  if (!mesh.isVisible || !mesh.isEnabled()) return false;
+  for (let n: { name: string; parent: unknown } | null = mesh; n; n = n.parent as typeof n) {
+    if (OCCLUDER_NAME.test(n.name)) return true;
+  }
+  return false;
+}
+
 /** keyboard look speed on foot: ~110°/s turn, ~70°/s pitch */
 export const KEY_YAW_RATE = 1.9;
 export const KEY_PITCH_RATE = 1.2;
@@ -147,6 +161,8 @@ export class GroundCamera {
   pitch = 0.18;
   private recenterTimer = 0;
   private shake = 0;
+  /** current occlusion-limited distance from the rider pivot */
+  private reach = Infinity;
 
   constructor(scene: Scene, private terrain: Terrain) {
     this.camera = new UniversalCamera("groundCam", new Vector3(0, 5, -8), scene);
@@ -201,6 +217,19 @@ export class GroundCamera {
 
     const groundY = this.terrain.heightAt(camPos.x, camPos.z) + 0.5;
     camPos.y = Math.max(camPos.y, groundY);
+
+    // occlusion: a keep or tower between rider and camera pulls the camera in
+    // (snap in, ease back out so it doesn't pump when the wall edge flickers)
+    const pivot = targetPos.add(new Vector3(0, 1.8, 0));
+    const toCam = camPos.subtract(pivot);
+    const full = toCam.length();
+    let reach = full;
+    if (full > 0.01) {
+      const hit = this.camera.getScene().pickWithRay(new Ray(pivot, toCam.scale(1 / full), full), isCameraOccluder, true);
+      if (hit?.hit) reach = Math.max(1.2, hit.distance - 0.4);
+    }
+    this.reach = reach < this.reach ? reach : damp(this.reach, reach, 4, dt);
+    if (this.reach < full - 0.01) camPos.copyFrom(pivot.add(toCam.scale(this.reach / full)));
 
     this.camera.position.copyFrom(camPos);
     const look = targetPos.add(new Vector3(0, 2.1, 0)).add(dirH.scale(2));
