@@ -43,6 +43,9 @@ import { getRelic } from "../data/items";
 import { clamp } from "../core/MathUtils";
 import { assistCone, assistPull } from "../player/FlightFeel";
 import { FireStreak, STREAK_MIN } from "../combat/FireStreak";
+
+/** seconds of bolt immunity after a bolt hit (volley stacking guard) */
+export const BOLT_GRACE = 1.2;
 import { CLOSE_CALL_MARGIN, NO_TECHNIQUES, closeCallReward, diveFuryMult, emberChainBonus, emberChainWindow, type TechniqueLevels } from "../combat/Techniques";
 import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
@@ -146,6 +149,8 @@ export class MissionScene {
   private techniques: TechniqueLevels;
   /** technique feedback throttle (s) */
   private stoopHintCd = 0;
+  /** after a bolt connects, further bolts glance off for BOLT_GRACE s */
+  private boltGraceT = 0;
   /** scaled sim dt of the latest update — visual layers animate on this so hit-stop/slow-mo apply */
   lastSimDt = 0;
   /** checkpoint-restore replay guard — suppresses minting side effects (loot/super/stats/relic sfx) */
@@ -521,6 +526,7 @@ export class MissionScene {
     this.time += dt;
     this.stats.timeSeconds = this.time;
     if (this.stoopHintCd > 0) this.stoopHintCd -= dt;
+    if (this.boltGraceT > 0) this.boltGraceT -= dt;
 
     // projectile collision targets
     this.projectiles.playerMode = this.phase === "ground" ? "ground" : "dragon";
@@ -549,6 +555,11 @@ export class MissionScene {
           d.bus.emit("player-damaged", { amount: res.applied, dirX: sx, dirZ: sz, source: kind });
         }
         return;
+      }
+      // a coordinated volley lands as ONE punishing hit, not 2-3 stacked kills
+      if (kind === "bolt") {
+        if (this.boltGraceT > 0) return;
+        this.boltGraceT = BOLT_GRACE;
       }
       const stagger = kind === "bolt" ? 0.7 : 0.12;
       const died = this.player.damageDragon(damage);

@@ -293,7 +293,9 @@ export class GameApp {
       status.textContent = "Loading Characters…";
       try {
         const { installCharacterVisuals } = await import("../world/CharacterPrototype");
-        await installCharacterVisuals(mission, { debugPanel: characterDebug });
+        // the Korean asset-review panel covers the HUD; opt in with &charpanel=1
+        const charPanel = new URLSearchParams(location.search).get("charpanel") === "1";
+        await installCharacterVisuals(mission, { debugPanel: characterDebug && charPanel, testHook: characterDebug });
       } catch (error) {
         console.warn("[characters] using procedural fallback", error);
       }

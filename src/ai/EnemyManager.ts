@@ -138,6 +138,11 @@ export function ballisticDir(origin: Vector3, target: Vector3, speed: number, gr
   return new Vector3(dirH.x * cos, Math.sin(elev), dirH.z * cos);
 }
 
+/** balance pass 7 (measured): bolts were 85-90% of all dragon damage, the ground phase barely scratched the rider */
+export const ARROW_VS_DRAGON = 1.6;
+export const GROUND_ARCHER_RANGE = 52;
+export const GROUND_MELEE_MULT = 1.12;
+
 /** coordinated volley plan: 2-3 ballistae firing inside a 0.6s window */
 export function planVolley(aliveCount: number, rng: { range: (a: number, b: number) => number }): { count: number; window: number } {
   if (aliveCount < 2) return { count: 0, window: 0.6 };
@@ -613,7 +618,7 @@ export class EnemyManager {
             this.moveForward(s, s.def.moveSpeed, dt);
             return;
           }
-          if (dist < 46 && s.cooldown <= 0) {
+          if (dist < GROUND_ARCHER_RANGE && s.cooldown <= 0) {
             s.cooldown = s.def.attackCooldown / this.difficulty.aggression;
             this.fireArrow(s, targetPos.add(new Vector3(0, 1, 0)), s.def.damage, 0.12);
           }
@@ -629,7 +634,8 @@ export class EnemyManager {
           const aimPoint = targetPos
             .add(lead)
             .add(new Vector3((Math.random() - 0.5) * aimError, (Math.random() - 0.5) * aimError * 0.6 + 2, (Math.random() - 0.5) * aimError));
-          this.fireArrow(s, aimPoint, s.def.damage, 0.05);
+          // arrows are the steady pressure between scorpion shots, not decoration
+          this.fireArrow(s, aimPoint, s.def.damage * ARROW_VS_DRAGON, 0.05);
         } else {
           s.state = "alert";
         }
@@ -705,7 +711,7 @@ export class EnemyManager {
           s.cooldown = s.def.attackCooldown / this.difficulty.aggression;
           const fromDir = Vector3.Normalize(ctx.riderPos.subtract(s.pos));
           if (dist < s.def.range + 1.2) {
-            this.onMeleeHitRider?.(s.def.damage * this.difficulty.enemyDamage, fromDir.x, fromDir.z);
+            this.onMeleeHitRider?.(s.def.damage * this.difficulty.enemyDamage * GROUND_MELEE_MULT, fromDir.x, fromDir.z);
           }
         }
       }
