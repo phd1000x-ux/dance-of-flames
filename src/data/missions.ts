@@ -58,6 +58,9 @@ export interface MissionDefinition {
   objectives: ObjectiveDef[];
   /** mid-mission beats keyed to objective completion (reinforcements + subtitle) */
   events?: MissionEventDef[];
+  /** per-mission threat to the dragon (multiplies arrow damage + arrow DPS cap, and bolt damage).
+   *  Shapes the campaign curve: early fields sting, the Blackstone bolt storm stays survivable. */
+  threat?: { arrow?: number; bolt?: number };
 }
 
 const groundKillSoldiers = (n: number): ObjectiveDef => ({
@@ -87,12 +90,13 @@ const groundRepel = (n: number): ObjectiveDef => ({
 export const MISSIONS: MissionDefinition[] = [
   {
     id: "dragonstone",
-    name: "Dragonstone Coast",
-    location: "Dragonstone",
+    name: "Cinderhold Coast",
+    location: "Cinderhold",
     description: "A cold volcanic shore. Enemy scouts hold the fishing village below the fortress.",
     brief: "Learn the feel of wing and flame. Clear the shore, break their watchtower, claim what hides inside.",
     seed: 101,
     enemyPower: 1.0,
+    threat: { arrow: 2.0, bolt: 1 },
     recommendedPower: 1,
     coinBonus: 40,
     tutorial: true,
@@ -151,12 +155,13 @@ export const MISSIONS: MissionDefinition[] = [
   },
   {
     id: "riverlands",
-    name: "Riverlands Raid",
-    location: "The Riverlands",
+    name: "Fenwater Raid",
+    location: "The Fenwater",
     description: "Green fields split by rivers. A supply camp feeds the enemy war camp.",
     brief: "Break their supply lines. Watch the sky — they have scorpions now.",
     seed: 202,
     enemyPower: 1.4,
+    threat: { arrow: 2.4, bolt: 1 },
     recommendedPower: 2,
     coinBonus: 80,
     environment: {
@@ -197,7 +202,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Eliminate 12 archers",
         targetType: "archer",
         count: 12,
-        hint: "Archers shoot back — keep moving",
+        hint: "The archers hold the village to the west — keep moving",
         groundAlternative: groundKillSoldiers(12),
       },
       {
@@ -228,12 +233,13 @@ export const MISSIONS: MissionDefinition[] = [
   },
     {
     id: "harrenhal",
-    name: "Harrenhal Outskirts",
-    location: "Harrenhal",
+    name: "Ashgrave Outskirts",
+    location: "Ashgrave",
     description: "Melted towers against a bruised sky. Rain, mud, and burned stone.",
     brief: "Their siege park aims at our lines. Silence every scorpion. The old keep gives up its dead — and its treasures. Survivors speak of a second shadow over Blackstone, larger than any scorpion.",
     seed: 303,
     enemyPower: 1.9,
+    threat: { arrow: 2.0, bolt: 0.95 },
     recommendedPower: 3,
     coinBonus: 140,
     environment: {
@@ -323,12 +329,13 @@ export const MISSIONS: MissionDefinition[] = [
   },
   {
     id: "kingslanding",
-    name: "King's Landing Assault",
-    location: "King's Landing",
-    description: "The city that started the war. Blackwater smoke on the wind.",
+    name: "Port Calder Assault",
+    location: "Port Calder",
+    description: "The city that started the war. Saltmere smoke on the wind.",
     brief: "No walls to break this time — strike the city itself. Silence the harbor scorpions, burn the granaries, topple the beacons before they light. The city falls — but their Castellan has already fled to Blackstone.",
     seed: 404,
     enemyPower: 2.6,
+    threat: { arrow: 1.6, bolt: 0.9 },
     recommendedPower: 4,
     coinBonus: 220,
     environment: {
@@ -359,7 +366,7 @@ export const MISSIONS: MissionDefinition[] = [
       {
         id: "ev-goldcloaks",
         afterObjective: "obj-scorpions",
-        subtitle: "Gold cloaks pour from the city gates to guard the granaries!",
+        subtitle: "City guards pour from the city gates to guard the granaries!",
         reinforce: { swordsman: 4, shieldman: 3 },
         anchor: "granary",
       },
@@ -387,7 +394,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Silence the harbor scorpions",
         targetType: "ballista",
         count: 5,
-        hint: "Scorpions line the Blackwater quays",
+        hint: "Scorpions line the Saltmere quays",
         groundAlternative: groundKillSoldiers(12),
       },
       {
@@ -433,6 +440,7 @@ export const MISSIONS: MissionDefinition[] = [
       "Their last citadel, and the Castellan who rules it. Silence their scorpions, shatter the walls, take the gate, hold the courtyard — then face him. End this, in fire or in blood.",
     seed: 505,
     enemyPower: 3.2,
+    threat: { arrow: 1.1, bolt: 0.62 },
     recommendedPower: 5,
     coinBonus: 320,
     environment: {

@@ -199,7 +199,7 @@ export class EffectsLibrary {
     setTimeout(() => ps.stop(), 80);
   }
 
-  /** Rain that follows the camera (Harrenhal). */
+  /** Rain that follows the camera (Ashgrave). */
   createRain(followTarget: () => Vector3): ParticleSystem {
     const ps = new ParticleSystem("rain", 900, this.scene);
     ps.particleTexture = this.smoke();

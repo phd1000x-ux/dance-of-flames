@@ -32,7 +32,7 @@ import { ProjectileSystem } from "../combat/ProjectileSystem";
 import { EnemyManager, type CombatContext, type Soldier } from "../ai/EnemyManager";
 import { BuildingSystem } from "../world/BuildingSystem";
 import { LootSystem } from "../world/LootSystem";
-import { ObjectiveTracker } from "./Objectives";
+import { ObjectiveTracker, killTargetMatches } from "./Objectives";
 import { MissionEventDirector, aheadOfPlayer, reinforcementPoints, type MissionEventDef } from "./MissionEvents";
 import { BlackstoneFinale } from "./blackstone/BlackstoneFinale";
 import type { FinalePhase } from "./blackstone/FinalePhases";
@@ -538,7 +538,8 @@ export class MissionScene {
     const dodging = this.dragonCtrl.dodgeTimer;
     if (this.phase === "dragon" && dodging > this.prevDodgeTimer + 0.2) this.projectiles.evadeBolts(BOLT_EVADE_WINDOW);
     this.prevDodgeTimer = dodging;
-    const arrowCap = ARROW_DPS_CAP * (this.deps.difficulty?.enemyDamage ?? 1);
+    const arrowThreat = this.deps.mission?.threat?.arrow ?? 1;
+    const arrowCap = ARROW_DPS_CAP * arrowThreat * (this.deps.difficulty?.enemyDamage ?? 1);
     this.arrowBudget = Math.min(arrowCap * 1.5, this.arrowBudget + arrowCap * dt);
 
     // projectile collision targets
@@ -573,9 +574,10 @@ export class MissionScene {
       if (kind === "bolt") {
         if (this.boltGraceT > 0) return;
         this.boltGraceT = BOLT_GRACE;
+        damage *= d.mission?.threat?.bolt ?? 1;
       } else if (kind === "arrow") {
         // arrows are pressure, not an execution: a token bucket caps sustained arrow DPS
-        damage = Math.min(damage, this.arrowBudget);
+        damage = Math.min(damage * (d.mission?.threat?.arrow ?? 1), this.arrowBudget);
         this.arrowBudget -= damage;
         if (damage <= 0.01) return;
       }
@@ -1225,9 +1227,11 @@ export class MissionScene {
       const t = obj.targetType;
       if (t === "ballista") {
         for (const b of this.enemies.ballistae) if (!b.dead) worlds.push(b.pos.add(new Vector3(0, 3, 0)));
-      } else if (t && t !== "any" && t !== "soldier") {
+      } else if (t) {
+        // "soldier"/"any" objectives mark every matching foot soldier too — the last
+        // stragglers of a "burn 8" count must be findable (eval: stuck at 7/8 for 100 s)
         for (const so of this.enemies.soldiers) {
-          if (so.state !== "dead" && !so.aboard && so.def.id === t) worlds.push(so.pos.add(new Vector3(0, 2.5, 0)));
+          if (so.state !== "dead" && !so.aboard && killTargetMatches(t, so.def.id)) worlds.push(so.pos.add(new Vector3(0, 2.5, 0)));
         }
       }
     } else if (obj.targetTag && obj.targetTag !== "any" && obj.targetTag !== "relic-building") {
@@ -1235,9 +1239,11 @@ export class MissionScene {
         if (!b.collapsed && b.tag === obj.targetTag) worlds.push(b.pos.add(new Vector3(0, b.size.h ?? 10, 0)));
       }
     }
+    // with only a few targets left, mark them at any distance (no "plainly visible" cut)
+    const few = worlds.length <= 3;
     return worlds
       .map((w) => ({ w, d: Math.hypot(w.x - me.x, w.z - me.z) }))
-      .filter((e) => e.d > 70 && e.d < 600)
+      .filter((e) => (few ? e.d > 12 : e.d > 70 && e.d < 600))
       .sort((a, b) => a.d - b.d)
       .slice(0, 8)
       .map((e) => this.projectToScreen(e.w))

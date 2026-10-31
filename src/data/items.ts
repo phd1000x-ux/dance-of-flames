@@ -72,7 +72,7 @@ export const RELICS: RelicDefinition[] = [
   },
   {
     id: "valyrianSaddle",
-    name: "Valyrian Saddle",
+    name: "Elder-Steel Saddle",
     flavor: "Woven before the Freehold fell.",
     effect: { damageTaken: 0.85 },
     announce: "Damage taken -15%",

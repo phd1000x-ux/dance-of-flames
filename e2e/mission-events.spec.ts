@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Mid-mission beats: completing the Riverlands supply objective sends a relief
+ * Mid-mission beats: completing the Fenwater supply objective sends a relief
  * squad to the watchtowers with a subtitle. Polls game state only (SwiftShader).
  */
 test("riverlands: burning the supply camp triggers the relief column", async ({ page }) => {

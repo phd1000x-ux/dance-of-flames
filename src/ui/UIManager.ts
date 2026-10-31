@@ -324,7 +324,7 @@ export class UIManager {
       <button class="menu-btn" data-act="settings">SETTINGS</button>
       <button class="menu-btn" data-act="credits">CREDITS</button>
       <div class="menu-kb-hint"><span class="key">W / S</span> NAVIGATE &nbsp;&nbsp; <span class="key">ENTER</span> SELECT</div>
-      <div class="menu-footer">An independent fan-made battle game.<br>Original world &amp; music · free, credited character models.</div>`;
+      <div class="menu-footer">An independent dragon battle game.<br>Original world &amp; music · free, credited character models.</div>`;
     d.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
       if (!t) return;
@@ -1053,8 +1053,8 @@ export class UIManager {
       <div class="modal-center"><div class="panel credits-panel">
         <div class="panel-title">CREDITS</div>
         <p>DANCE OF FLAMES: DRAGONRIDER</p>
-        <p>A fan-made 3D browser action game inspired by the world and lore of
-        <i>House of the Dragon</i>. Not affiliated with HBO or George R. R. Martin.</p>
+        <p>An independent 3D browser action game set in an original world of rival dragonriders.
+        Not affiliated with any film, TV or book franchise.</p>
         <p>Original procedural environments, effects and synthesized music.</p>
         <p>Character models under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>:<br>
         <a href="https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29" target="_blank" rel="noopener">Animated Dragon Three Motion Loops</a> — LasquetiSpice.<br>

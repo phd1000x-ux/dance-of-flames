@@ -42,8 +42,8 @@ export interface RiderDefinition {
 export const RIDERS: RiderDefinition[] = [
   {
     id: "rhaenyra",
-    name: "Rhaenyra Targaryen",
-    title: "The Realm's Delight",
+    name: "Seren Ashborne",
+    title: "The Ember Heir",
     faction: "The Black Council",
     description: "The declared heir. Rides with a light touch and an iron will.",
     bondedDragonId: "syrax",
@@ -54,10 +54,10 @@ export const RIDERS: RiderDefinition[] = [
   },
   {
     id: "daemon",
-    name: "Daemon Targaryen",
-    title: "The Rogue Prince",
+    name: "Kael Ashborne",
+    title: "The Wandering Blade",
     faction: "The Black Council",
-    description: "The most dangerous man in Westeros takes the sharpest edges of any fight.",
+    description: "The most dangerous blade in the realm takes the sharpest edges of any fight.",
     bondedDragonId: "caraxes",
     dragonBonus: { fireDamage: 1.08, boostSpeed: 1.06 },
     ground: { hp: 220, armor: 22, swordDamage: 34, heavyMultiplier: 2.2, stamina: 110, block: 0.65, dodgeCost: 24, moveSpeed: 7.8 },
@@ -66,8 +66,8 @@ export const RIDERS: RiderDefinition[] = [
   },
   {
     id: "aemond",
-    name: "Aemond Targaryen",
-    title: "One-Eye",
+    name: "Ivor Ashborne",
+    title: "The Hawk-Eyed",
     faction: "The Green Council",
     description: "Rides the largest living dragon as if punishing it for existing.",
     bondedDragonId: "vhagar",
@@ -78,8 +78,8 @@ export const RIDERS: RiderDefinition[] = [
   },
   {
     id: "aegon",
-    name: "Aegon II Targaryen",
-    title: "The Golden King",
+    name: "Edric Ashborne",
+    title: "The Gilded Prince",
     faction: "The Green Council",
     description: "Whatever his faults, his dragon always seems to rise again.",
     bondedDragonId: "sunfyre",
@@ -90,8 +90,8 @@ export const RIDERS: RiderDefinition[] = [
   },
   {
     id: "rhaenys",
-    name: "Rhaenys Targaryen",
-    title: "The Queen Who Never Was",
+    name: "Maelis Ashborne",
+    title: "The Uncrowned Queen",
     faction: "The Black Council",
     description: "A veteran of the skies. She was born forty years too early to be tested.",
     bondedDragonId: "meleys",
@@ -102,8 +102,8 @@ export const RIDERS: RiderDefinition[] = [
   },
   {
     id: "baela",
-    name: "Baela Targaryen",
-    title: "Wing and Wolf-Blood",
+    name: "Lira Ashborne",
+    title: "Storm-Born Wing",
     faction: "The Black Council",
     description: "Half-wild, wholly fearless. Her dragon answers her like a thought.",
     bondedDragonId: "moondancer",

@@ -120,7 +120,7 @@ describe("stat composition", () => {
     }
   });
 
-  it("Vhagar is tankier but slower than Moondancer", () => {
+  it("Morgrath is tankier but slower than Lunaris", () => {
     const vhagar = DRAGONS.find((d) => d.id === "vhagar")!;
     const moondancer = DRAGONS.find((d) => d.id === "moondancer")!;
     expect(vhagar.maxHealth).toBeGreaterThan(moondancer.maxHealth);

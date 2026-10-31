@@ -1,8 +1,8 @@
 # DANCE OF FLAMES: DRAGONRIDER
 
-A third-person 3D dragon-combat action game for the browser, inspired by the world,
-factions and atmosphere of the Dance of the Dragons civil war (fan project;
-procedural visuals, with free CC BY character models in the opt-in prototype).
+A third-person 3D dragon-combat action game for the browser, set in an original
+world of rival dragonriders (independent project; procedural visuals, with free
+CC BY character models).
 
 Ride a dragon over a war-torn battlefield, breathe fire on armies, raze fortifications,
 loot coins and hidden relics, buy upgrades — and if your dragon falls, keep fighting
@@ -10,13 +10,13 @@ on foot with a sword until the mission is done.
 
 ## Screenshots
 
-| Dragon & rider select — Vhagar at true scale | King's Landing assault — dragonfire on the walls |
+| Dragon & rider select — Morgrath at true scale | Port Calder assault — dragonfire on the walls |
 |:---:|:---:|
-| ![Dragon select screen showing Vhagar with battle stats](docs/screenshots/dragon-select.png) | ![Vhagar breathing fire during the King's Landing assault](docs/screenshots/fire-breath-assault.png) |
+| ![Dragon select screen showing Morgrath with battle stats](docs/screenshots/dragon-select.png) | ![Morgrath breathing fire during the Port Calder assault](docs/screenshots/fire-breath-assault.png) |
 
 | The Blackstone Citadel — walls within walls, a keep that scratches the sky | Dragon down — the rider fights on |
 |:---:|:---:|
-| ![Vhagar approaching the colossal Blackstone Citadel fortress](docs/screenshots/citadel-approach.png) | ![The rider fighting with a sword after the dragon falls](docs/screenshots/ground-combat.png) |
+| ![Morgrath approaching the colossal Blackstone Citadel fortress](docs/screenshots/citadel-approach.png) | ![The rider fighting with a sword after the dragon falls](docs/screenshots/ground-combat.png) |
 
 | Dragon vs dragon — the Castellan's war dragon over Blackstone |
 |:---:|
@@ -244,8 +244,7 @@ prototype includes two free CC BY 4.0 models and embedded textures. Details:
 
 ## Credits & Legal
 
-Fan-made battle simulator, licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE)
-(noncommercial use only). Not affiliated with, endorsed by, or reproducing any
-asset from HBO's *House of the Dragon* or GRRM's works — rider and dragon names
-are used as text data only; all art, models, and audio are original procedural
-creations. Built with Babylon.js (Apache-2.0), TypeScript, Vite, WebAudio.
+Independent battle game, licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE)
+(noncommercial use only). The world, places, riders and dragons are original;
+the game is not affiliated with any film, TV or book franchise. Art and audio are
+original procedural creations; character models are credited CC BY assets. Built with Babylon.js (Apache-2.0), TypeScript, Vite, WebAudio.

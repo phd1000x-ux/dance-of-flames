@@ -21,7 +21,7 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
   { id: "boost", name: "Rage of Wings", category: "dragon", stat: "boostSpeed", perLevel: 0.07, maxLevel: 4, prices: P, description: "Boost speed." },
   { id: "turnRate", name: "Keen Instinct", category: "dragon", stat: "turnRate", perLevel: 0.06, maxLevel: 4, prices: P, description: "Turning agility." },
 
-  { id: "swordDamage", name: "Valyrian Edge", category: "rider", stat: "swordDamage", perLevel: 0.12, maxLevel: 4, prices: P, description: "Sword damage." },
+  { id: "swordDamage", name: "Elder-steel Edge", category: "rider", stat: "swordDamage", perLevel: 0.12, maxLevel: 4, prices: P, description: "Sword damage." },
   { id: "riderMaxHp", name: "Hardened Rider", category: "rider", stat: "riderHp", perLevel: 0.1, maxLevel: 4, prices: P, description: "Rider max health." },
   { id: "riderArmor", name: "Half-Plate", category: "rider", stat: "riderArmor", perLevel: 0.12, maxLevel: 4, prices: P, description: "Rider armor." },
   { id: "blockEfficiency", name: "Shield Drill", category: "rider", stat: "riderBlock", perLevel: 0.08, maxLevel: 4, prices: P, description: "Block efficiency." },
