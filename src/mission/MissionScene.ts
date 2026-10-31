@@ -46,6 +46,8 @@ import { FireStreak, STREAK_MIN } from "../combat/FireStreak";
 
 /** seconds of bolt immunity after a bolt hit (volley stacking guard) */
 export const BOLT_GRACE = 1.2;
+/** max sustained arrow damage per second to the dragon (× difficulty enemyDamage); bursts up to 1.5 s worth */
+export const ARROW_DPS_CAP = 5;
 import { CLOSE_CALL_MARGIN, NO_TECHNIQUES, closeCallReward, diveFuryMult, emberChainBonus, emberChainWindow, type TechniqueLevels } from "../combat/Techniques";
 import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
@@ -151,6 +153,8 @@ export class MissionScene {
   private stoopHintCd = 0;
   /** after a bolt connects, further bolts glance off for BOLT_GRACE s */
   private boltGraceT = 0;
+  /** arrow damage token bucket (see ARROW_DPS_CAP) */
+  private arrowBudget = 0;
   /** scaled sim dt of the latest update — visual layers animate on this so hit-stop/slow-mo apply */
   lastSimDt = 0;
   /** checkpoint-restore replay guard — suppresses minting side effects (loot/super/stats/relic sfx) */
@@ -527,6 +531,8 @@ export class MissionScene {
     this.stats.timeSeconds = this.time;
     if (this.stoopHintCd > 0) this.stoopHintCd -= dt;
     if (this.boltGraceT > 0) this.boltGraceT -= dt;
+    const arrowCap = ARROW_DPS_CAP * this.deps.difficulty.enemyDamage;
+    this.arrowBudget = Math.min(arrowCap * 1.5, this.arrowBudget + arrowCap * dt);
 
     // projectile collision targets
     this.projectiles.playerMode = this.phase === "ground" ? "ground" : "dragon";
@@ -560,6 +566,11 @@ export class MissionScene {
       if (kind === "bolt") {
         if (this.boltGraceT > 0) return;
         this.boltGraceT = BOLT_GRACE;
+      } else if (kind === "arrow") {
+        // arrows are pressure, not an execution: a token bucket caps sustained arrow DPS
+        damage = Math.min(damage, this.arrowBudget);
+        this.arrowBudget -= damage;
+        if (damage <= 0.01) return;
       }
       const stagger = kind === "bolt" ? 0.7 : 0.12;
       const died = this.player.damageDragon(damage);

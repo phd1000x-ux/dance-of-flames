@@ -139,7 +139,7 @@ export function ballisticDir(origin: Vector3, target: Vector3, speed: number, gr
 }
 
 /** balance pass 7 (measured): bolts were 85-90% of all dragon damage, the ground phase barely scratched the rider */
-export const ARROW_VS_DRAGON = 1.6;
+export const ARROW_VS_DRAGON = 1.15;
 export const GROUND_ARCHER_RANGE = 52;
 export const GROUND_MELEE_MULT = 1.12;
 
