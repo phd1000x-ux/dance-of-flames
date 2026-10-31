@@ -48,6 +48,8 @@ import { FireStreak, STREAK_MIN } from "../combat/FireStreak";
 export const BOLT_GRACE = 1.2;
 /** max sustained arrow damage per second to the dragon (× difficulty enemyDamage); bursts up to 1.5 s worth */
 export const ARROW_DPS_CAP = 5;
+/** Q/E dodge makes bolts fired within this many seconds miss (covers the Normal 1.35 s telegraph) */
+export const BOLT_EVADE_WINDOW = 1.45;
 import { CLOSE_CALL_MARGIN, NO_TECHNIQUES, closeCallReward, diveFuryMult, emberChainBonus, emberChainWindow, type TechniqueLevels } from "../combat/Techniques";
 import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
@@ -155,6 +157,7 @@ export class MissionScene {
   private boltGraceT = 0;
   /** arrow damage token bucket (see ARROW_DPS_CAP) */
   private arrowBudget = 0;
+  private prevDodgeTimer = 0;
   /** scaled sim dt of the latest update — visual layers animate on this so hit-stop/slow-mo apply */
   lastSimDt = 0;
   /** checkpoint-restore replay guard — suppresses minting side effects (loot/super/stats/relic sfx) */
@@ -531,6 +534,10 @@ export class MissionScene {
     this.stats.timeSeconds = this.time;
     if (this.stoopHintCd > 0) this.stoopHintCd -= dt;
     if (this.boltGraceT > 0) this.boltGraceT -= dt;
+    // a fresh Q/E dodge (timer just set to its full 0.55 s) reads the scorpions
+    const dodging = this.dragonCtrl.dodgeTimer;
+    if (this.phase === "dragon" && dodging > this.prevDodgeTimer + 0.2) this.projectiles.evadeBolts(BOLT_EVADE_WINDOW);
+    this.prevDodgeTimer = dodging;
     const arrowCap = ARROW_DPS_CAP * (this.deps.difficulty?.enemyDamage ?? 1);
     this.arrowBudget = Math.min(arrowCap * 1.5, this.arrowBudget + arrowCap * dt);
 

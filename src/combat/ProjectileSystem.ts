@@ -16,6 +16,8 @@ interface Projectile {
   whistled: boolean;
   /** bolt came within close-call range of the dragon */
   grazed: boolean;
+  /** the dragon's Q/E dodge read this bolt — it flies through harmlessly */
+  evaded: boolean;
   owner: "enemy";
 }
 
@@ -30,6 +32,19 @@ export class ProjectileSystem {
   /** bolt passed within dragon hull + margin without hitting (Close Call technique) */
   onNearMiss: (() => void) | null = null;
   closeCallMargin = 7;
+  /** seconds left in which newly fired bolts are already dodged (see evadeBolts) */
+  private boltEvadeT = 0;
+
+  /**
+   * Q/E dodge vs scorpions: every bolt in flight, and any fired within `window`
+   * seconds, misses. The window spans a whole Normal/Hard telegraph, so dodging
+   * on the warning works as the HUD promises; the 2.2 s dodge cooldown keeps
+   * staggered volleys a real threat.
+   */
+  evadeBolts(window: number): void {
+    this.boltEvadeT = window;
+    for (const p of this.pool) if (p.active && p.kind === "bolt") p.evaded = true;
+  }
 
   /** set by mission scene: current player collision targets */
   dragonPos: Vector3 | null = null;
@@ -82,6 +97,7 @@ export class ProjectileSystem {
         mesh,
         whistled: false,
         grazed: false,
+        evaded: false,
         owner: "enemy",
       });
     }
@@ -104,6 +120,7 @@ export class ProjectileSystem {
     p.life = kind === "bolt" ? 5 : 4;
     p.whistled = false;
     p.grazed = false;
+    p.evaded = kind === "bolt" && this.boltEvadeT > 0;
     p.mesh.isVisible = true;
     p.mesh.position.copyFrom(origin);
   }
@@ -113,6 +130,7 @@ export class ProjectileSystem {
   }
 
   update(dt: number): void {
+    if (this.boltEvadeT > 0) this.boltEvadeT -= dt;
     for (const p of this.pool) {
       if (!p.active) continue;
       p.life -= dt;
@@ -144,7 +162,7 @@ export class ProjectileSystem {
         const c1 = this.dragonPos;
         const c2 = this.dragonPos.subtract(this.dragonForward.scale(3.2 * (r / 4)));
         if (this.distToSegment(p.pos, c1, c2) < r) {
-          if (!this.invulnerable) {
+          if (!this.invulnerable && !p.evaded) {
             this.onPlayerHit?.(p.damage, p.vel.x, p.vel.z, p.kind);
             if (p.kind === "bolt") {
               this.effects.explosion(p.pos, 1.4, [1, 0.5, 0.2]);
