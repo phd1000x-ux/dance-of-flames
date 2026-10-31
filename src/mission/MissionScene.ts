@@ -531,7 +531,7 @@ export class MissionScene {
     this.stats.timeSeconds = this.time;
     if (this.stoopHintCd > 0) this.stoopHintCd -= dt;
     if (this.boltGraceT > 0) this.boltGraceT -= dt;
-    const arrowCap = ARROW_DPS_CAP * this.deps.difficulty.enemyDamage;
+    const arrowCap = ARROW_DPS_CAP * (this.deps.difficulty?.enemyDamage ?? 1);
     this.arrowBudget = Math.min(arrowCap * 1.5, this.arrowBudget + arrowCap * dt);
 
     // projectile collision targets
