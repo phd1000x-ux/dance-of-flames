@@ -92,6 +92,8 @@ export interface TerrainOptions {
   subdivisions?: number;
   groundColor: string;
   accentColor: string;
+  /** ridges and steep slopes (exposed rock / regional signature); defaults to no third tone */
+  highlandColor?: string;
 }
 
 export class Terrain {
@@ -111,6 +113,7 @@ export class Terrain {
     const colors: number[] = [];
     const base = Color3.FromHexString(opts.groundColor);
     const accent = Color3.FromHexString(opts.accentColor);
+    const highland = opts.highlandColor ? Color3.FromHexString(opts.highlandColor) : null;
 
 
     for (let i = 0; i < positions.length; i += 3) {
@@ -123,7 +126,17 @@ export class Terrain {
       const patch = fbm(x / 65, z / 65, seed + 13);
       const slope = Math.hypot(this.sampler.height(x + 3, z) - h, this.sampler.height(x, z + 3) - h);
       const t = Math.min(1, smoothstep(-6, 24, h) * 0.38 + patch * 0.52 + slope * 0.15);
-      colors.push(base.r + (accent.r - base.r) * t, base.g + (accent.g - base.g) * t, base.b + (accent.b - base.b) * t, 1);
+      let r = base.r + (accent.r - base.r) * t;
+      let g = base.g + (accent.g - base.g) * t;
+      let b = base.b + (accent.b - base.b) * t;
+      if (highland) {
+        // ridges and steep faces take the region's rock tone so relief reads from the air
+        const k = Math.min(1, smoothstep(4, 22, h) * 0.7 + Math.min(1, slope * 0.3) * 0.6);
+        r += (highland.r - r) * k;
+        g += (highland.g - g) * k;
+        b += (highland.b - b) * k;
+      }
+      colors.push(r, g, b, 1);
     }
     ground.setVerticesData("position", positions);
     ground.setVerticesData("color", colors);

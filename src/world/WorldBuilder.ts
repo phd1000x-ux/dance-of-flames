@@ -92,6 +92,7 @@ export class WorldBuilder {
     const terrain = new Terrain(this.scene, def.seed, env.waterLevel, {
       groundColor: env.groundColor,
       accentColor: env.groundAccent,
+      highlandColor: env.highlandColor,
     });
 
     buildSkyDome(this.scene, env);
