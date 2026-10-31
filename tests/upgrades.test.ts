@@ -53,8 +53,9 @@ describe("UpgradeSystem", () => {
 
   it("every shop upgrade has 4 levels and prices", () => {
     for (const u of SHOP_UPGRADES) {
-      expect(u.maxLevel).toBe(4);
-      expect(u.prices).toHaveLength(4);
+      // techniques are two-rank behaviour unlocks; every stat/consumable line has 4 levels
+      expect(u.maxLevel).toBe(u.category === "technique" ? 2 : 4);
+      expect(u.prices).toHaveLength(u.maxLevel);
       expect(u.id).toBeTruthy();
     }
   });

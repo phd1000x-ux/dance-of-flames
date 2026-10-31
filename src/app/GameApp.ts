@@ -260,6 +260,11 @@ export class GameApp {
       dragon,
       shopMods: this.upgrades.getStatMods(),
       consumables: { heal: healLvl, fireBoost: this.upgrades.getLevel("fireBoostStart"), armorWard: this.upgrades.getLevel("armorCharmStart") },
+      techniques: {
+        diveFury: this.upgrades.getLevel("diveFury"),
+        emberChain: this.upgrades.getLevel("emberChain"),
+        closeCall: this.upgrades.getLevel("closeCall"),
+      },
       settings: this.settings,
       input: this.input,
       audio: this.audio,

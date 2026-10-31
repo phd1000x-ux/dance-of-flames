@@ -1,7 +1,7 @@
 export interface ShopUpgradeDef {
   id: string;
   name: string;
-  category: "dragon" | "rider" | "consumable";
+  category: "dragon" | "rider" | "consumable" | "technique";
   stat: string;
   /** fractional bonus per level (0.10 = +10%/level) */
   perLevel: number;
@@ -30,6 +30,11 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
   { id: "startHeal", name: "Field Physick", category: "consumable", stat: "startHeal", perLevel: 0.34, maxLevel: 4, prices: [40, 90, 180, 350], description: "Begin each mission with a healing flask (+1 use/level)." },
   { id: "fireBoostStart", name: "Brazier Charm", category: "consumable", stat: "fireBoostStart", perLevel: 0.5, maxLevel: 4, prices: [40, 90, 180, 350], description: "Begin each mission with a fire boost charge." },
   { id: "armorCharmStart", name: "Ward Charm", category: "consumable", stat: "armorCharmStart", perLevel: 0.5, maxLevel: 4, prices: [40, 90, 180, 350], description: "Begin each mission with an armor ward charge." },
+
+  // techniques change how a pass pays off, not a flat stat (src/combat/Techniques.ts)
+  { id: "diveFury", name: "Stooping Strike", category: "technique", stat: "diveFury", perLevel: 0.25, maxLevel: 2, prices: [180, 420], description: "Fire burns hotter while diving at speed (nose down, near top speed)." },
+  { id: "emberChain", name: "Ember Chain", category: "technique", stat: "emberChain", perLevel: 0.5, maxLevel: 2, prices: [150, 380], description: "INFERNO streaks last 0.5s longer per level and pay +50% coins." },
+  { id: "closeCall", name: "Close Call", category: "technique", stat: "closeCall", perLevel: 0.3, maxLevel: 2, prices: [160, 400], description: "A scorpion bolt that narrowly misses refills 30% fire and charges your super." },
 ];
 
 export function getShopUpgrade(id: string): ShopUpgradeDef {

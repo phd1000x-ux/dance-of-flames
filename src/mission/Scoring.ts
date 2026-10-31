@@ -6,6 +6,8 @@ export interface MissionStats {
   damageTaken: number;
   dragonSurvived: boolean;
   timeSeconds: number;
+  /** scorpion bolts that grazed the dragon without hitting */
+  closeCalls?: number;
 }
 
 export function emptyStats(): MissionStats {

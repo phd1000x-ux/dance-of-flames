@@ -670,10 +670,12 @@ export class UIManager {
     if (!screen) return;
     (screen.querySelector("#shop-coins") as HTMLElement).innerHTML =
       `<span class="coin-icon"></span>${coins}`;
-    const cats: ShopUpgradeDef["category"][] = ["dragon", "rider", "consumable"];
+    const cats: ShopUpgradeDef["category"][] = ["dragon", "rider", "consumable", "technique"];
     for (const cat of cats) {
-      const col = screen.querySelector(`#shop-${cat}`) as HTMLElement;
-      col.innerHTML = `<div class="section-label">${cat.toUpperCase()}</div>`;
+      // techniques share the third column under their own label
+      const col = screen.querySelector(`#shop-${cat === "technique" ? "consumable" : cat}`) as HTMLElement;
+      if (cat === "technique") col.insertAdjacentHTML("beforeend", `<div class="section-label" style="margin-top:12px">TECHNIQUES</div>`);
+      else col.innerHTML = `<div class="section-label">${cat.toUpperCase()}</div>`;
       for (const u of SHOP_UPGRADES.filter((x) => x.category === cat)) {
         const lvl = levels[u.id] ?? 0;
         const maxed = lvl >= u.maxLevel;
@@ -1093,6 +1095,10 @@ export function shopEffectText(u: ShopUpgradeDef, lvl: number): string {
     // GameApp hands the level straight to the mission as the starting charge count
     const n = (l: number) => `${l} charge${l === 1 ? "" : "s"}`;
     return maxed ? `${n(lvl)} (max)` : `${n(lvl)} → ${n(lvl + 1)}`;
+  }
+  if (u.category === "technique") {
+    const t = (l: number) => (l === 0 ? "not learned" : `rank ${l}`);
+    return maxed ? `${t(lvl)} (max)` : `${t(lvl)} → ${t(lvl + 1)}`;
   }
   const pct = (l: number) => `+${Math.round(l * u.perLevel * 100)}%`;
   return maxed ? `${pct(lvl)} (max)` : `${pct(lvl)} → ${pct(lvl + 1)}`;

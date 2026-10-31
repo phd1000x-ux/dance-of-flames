@@ -42,7 +42,8 @@ import { emptyStats, type MissionStats } from "./Scoring";
 import { getRelic } from "../data/items";
 import { clamp } from "../core/MathUtils";
 import { assistCone, assistPull } from "../player/FlightFeel";
-import { FireStreak, STREAK_MIN, streakBonus } from "../combat/FireStreak";
+import { FireStreak, STREAK_MIN } from "../combat/FireStreak";
+import { CLOSE_CALL_MARGIN, NO_TECHNIQUES, closeCallReward, diveFuryMult, emberChainBonus, emberChainWindow, type TechniqueLevels } from "../combat/Techniques";
 import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
 export interface MissionSceneDeps {
@@ -53,6 +54,8 @@ export interface MissionSceneDeps {
   dragon: DragonDefinition;
   shopMods: Record<string, number>;
   consumables: { heal: number; fireBoost: number; armorWard: number };
+  /** shop technique ranks (optional so older harnesses keep working) */
+  techniques?: TechniqueLevels;
   settings: GameSettings;
   input: InputManager;
   audio: AudioManager;
@@ -139,7 +142,10 @@ export class MissionScene {
   /** remaining real seconds of impact hit-stop (see hitStop) */
   hitStopT = 0;
   /** flight fire-kill chain (×N INFERNO + coin bonus) */
-  private streak = new FireStreak();
+  private streak: FireStreak;
+  private techniques: TechniqueLevels;
+  /** technique feedback throttle (s) */
+  private stoopHintCd = 0;
   /** scaled sim dt of the latest update — visual layers animate on this so hit-stop/slow-mo apply */
   lastSimDt = 0;
   /** checkpoint-restore replay guard — suppresses minting side effects (loot/super/stats/relic sfx) */
@@ -160,6 +166,8 @@ export class MissionScene {
     this.castleAabbs = this.world.layout.castleAabbs;
 
     this.player = new PlayerState(d.dragon, d.rider, d.shopMods);
+    this.techniques = { ...NO_TECHNIQUES, ...(d.techniques ?? {}) };
+    this.streak = new FireStreak(emberChainWindow(this.techniques.emberChain));
     this.player.healCharges = d.consumables.heal;
     this.player.fireBoostCharges = d.consumables.fireBoost;
     this.player.armorWardCharges = d.consumables.armorWard;
@@ -237,6 +245,14 @@ export class MissionScene {
     this.buildings.panFromWorld = (p) => this.panFromWorld(p);
     // fire → damage
     this.fire.onFireHit = (origin, dir, range, halfAngle, dps, dt) => {
+      const fury = diveFuryMult(this.techniques.diveFury, this.dragonCtrl.pitch, this.dragonCtrl.speed, this.player.dragonStats.maxSpeed ?? 45);
+      if (fury > 1) {
+        dps *= fury;
+        if (this.stoopHintCd <= 0) {
+          this.stoopHintCd = 4;
+          d.bus.emit("hud-hint", { text: "STOOPING STRIKE" });
+        }
+      }
       this.enemies.applyFireDamage(origin, dir, range, halfAngle, dps, dt);
       this.buildings.applyFireDamage(origin, dir, range, halfAngle, dps, dt);
       if (this.finale) this.finale.applyFire(origin, dir, range, halfAngle, dps, dt);
@@ -497,13 +513,14 @@ export class MissionScene {
     this.lastSimDt = dt;
     const streakEnded = this.streak.update(dt);
     if (streakEnded >= STREAK_MIN && !this.restoring) {
-      const bonus = streakBonus(streakEnded);
+      const bonus = emberChainBonus(streakEnded, this.techniques.emberChain);
       this.stats.coinsCollected += bonus;
       d.onCoins(bonus);
       d.bus.emit("fire-streak", { count: streakEnded, bonus });
     }
     this.time += dt;
     this.stats.timeSeconds = this.time;
+    if (this.stoopHintCd > 0) this.stoopHintCd -= dt;
 
     // projectile collision targets
     this.projectiles.playerMode = this.phase === "ground" ? "ground" : "dragon";
@@ -512,6 +529,17 @@ export class MissionScene {
     this.projectiles.dragonRadius = this.player.dragonDef.hitRadius * 0.92;
     this.projectiles.riderPos = this.riderCtrl ? this.riderCtrl.pos : null;
     this.projectiles.invulnerable = this.dragonCtrl.invulnerable > 0 || (this.riderCtrl?.invulnerable ?? 0) > 0;
+    this.projectiles.closeCallMargin = CLOSE_CALL_MARGIN;
+    this.projectiles.onNearMiss = () => {
+      if (this.phase !== "dragon" || this.restoring) return;
+      this.stats.closeCalls = (this.stats.closeCalls ?? 0) + 1;
+      const r = closeCallReward(this.techniques.closeCall);
+      if (r.super <= 0) return;
+      const fe = this.player.fireEnergy;
+      fe.current = Math.min(fe.capacity, fe.current + fe.capacity * r.fireFraction);
+      this.player.addSuper(r.super);
+      d.bus.emit("hud-hint", { text: "CLOSE CALL · FIRE REFILLED" });
+    };
     this.projectiles.onPlayerHit = (damage, sx, sz, kind) => {
       if (this.phase === "ground") {
         if (!this.riderCtrl?.alive) return;

@@ -14,6 +14,8 @@ interface Projectile {
   life: number;
   mesh: AbstractMesh;
   whistled: boolean;
+  /** bolt came within close-call range of the dragon */
+  grazed: boolean;
   owner: "enemy";
 }
 
@@ -25,6 +27,9 @@ export class ProjectileSystem {
   private pool: Projectile[] = [];
   private arrowTpl: Mesh;
   private boltTpl: Mesh;
+  /** bolt passed within dragon hull + margin without hitting (Close Call technique) */
+  onNearMiss: (() => void) | null = null;
+  closeCallMargin = 7;
 
   /** set by mission scene: current player collision targets */
   dragonPos: Vector3 | null = null;
@@ -76,6 +81,7 @@ export class ProjectileSystem {
         life: 0,
         mesh,
         whistled: false,
+        grazed: false,
         owner: "enemy",
       });
     }
@@ -97,6 +103,7 @@ export class ProjectileSystem {
     p.damage = damage;
     p.life = kind === "bolt" ? 5 : 4;
     p.whistled = false;
+    p.grazed = false;
     p.mesh.isVisible = true;
     p.mesh.position.copyFrom(origin);
   }
@@ -143,10 +150,14 @@ export class ProjectileSystem {
               this.effects.explosion(p.pos, 1.4, [1, 0.5, 0.2]);
             }
             this.bus.emit("sfx", { name: "arrowHit" });
-            this.kill(p);
+            this.kill(p, true);
             continue;
           }
-        } else if (!p.whistled && Vector3.Distance(p.pos, this.dragonPos) < 9 + r) {
+        }
+        if (p.kind === "bolt" && !p.grazed && this.distToSegment(p.pos, c1, c2) < r + this.closeCallMargin) {
+          p.grazed = true;
+        }
+        if (!p.whistled && Vector3.Distance(p.pos, this.dragonPos) < 9 + r) {
           p.whistled = true;
           if (p.kind === "arrow") this.bus.emit("sfx", { name: "arrowWhistle" });
         }
@@ -164,7 +175,9 @@ export class ProjectileSystem {
     }
   }
 
-  private kill(p: Projectile): void {
+  private kill(p: Projectile, hit = false): void {
+    // a bolt that grazed the dragon and never connected is a dodged shot
+    if (p.kind === "bolt" && p.grazed && !hit && p.active) this.onNearMiss?.();
     p.active = false;
     p.mesh.isVisible = false;
   }
