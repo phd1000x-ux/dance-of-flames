@@ -376,7 +376,7 @@ export class UIManager {
           <div class="drag-hint">DRAG TO ROTATE · view adjusts to dragon size</div>
         </div>
         <div class="panel">
-          <div class="panel-title" id="cs-dragon-name">SYRAX</div>
+          <div class="panel-title" id="cs-dragon-name">ASHWYN</div>
           <div class="section-label">BATTLE STATS</div>
           <div class="stat-rows" id="cs-stats"></div>
           <div class="section-label" style="margin-top:14px">DRAGON</div>

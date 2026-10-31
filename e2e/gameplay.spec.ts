@@ -37,7 +37,7 @@ test("E2E 1: boot → main menu → character select → mission select → laun
 
   // pick Ivor → Morgrath auto-selected
   await page.locator("#rider-list .roster-item", { hasText: "Ivor Ashborne" }).click();
-  await expect(page.locator("#cs-dragon-name")).toHaveText("VHAGAR");
+  await expect(page.locator("#cs-dragon-name")).toHaveText("MORGRATH");
 
   // confirm → mission select
   await page.getByRole("button", { name: "CONFIRM" }).click();
