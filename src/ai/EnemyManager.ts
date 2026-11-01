@@ -267,13 +267,26 @@ export class EnemyManager {
   applyFireDamage(origin: Vector3, dir: Vector3, range: number, halfAngle: number, dps: number, dt: number): number {
     let hits = 0;
     const cosCone = Math.cos(halfAngle + 0.06);
+    const cosConeBig = Math.cos(halfAngle + 0.14); // ballistae are large frames
+    // Breath washes down and spreads under a low-hovering dragon: anything
+    // nearly beneath the jaws (and in front-ish of them) is engulfed even when
+    // the cone itself points over it. Fixes 0-kill hovers directly above targets.
+    const underWash = (p: Vector3, extra: number): boolean => {
+      const dy = origin.y - p.y;
+      if (dy < 0 || dy > Math.min(22, range * 0.6)) return false;
+      const dx = p.x - origin.x, dz = p.z - origin.z;
+      const r = 6 + extra + dy * 0.35;
+      if (dx * dx + dz * dz > r * r) return false;
+      const fwd = dx * dir.x + dz * dir.z;
+      return fwd > -3; // not behind the head
+    };
     for (const s of this.soldiers) {
       if (s.state === "dead") continue;
       const v = s.pos.add(new Vector3(0, 1.2, 0)).subtract(origin);
       const dist = v.length();
       if (dist > range + 2) continue;
       const cosA = Vector3.Dot(v.scale(1 / Math.max(0.001, dist)), dir);
-      if (cosA > cosCone || dist < 6) {
+      if (cosA > cosCone || dist < 6 || underWash(s.pos, 1.2)) {
         const falloff = 1 - 0.35 * (dist / range);
         this.damageSoldier(s, dps * Math.max(0.4, falloff) * dt, true);
         if ((s.state as SoldierState) !== "dead" && this.rng.chance(dt * 1.4)) {
@@ -291,7 +304,7 @@ export class EnemyManager {
       const dist = v.length();
       if (dist > range + 3) continue;
       const cosA = Vector3.Dot(v.scale(1 / Math.max(0.001, dist)), dir);
-      if (cosA > cosCone) {
+      if (cosA > cosConeBig || underWash(b.pos, 1.5)) {
         this.damageBallista(b, dps * dt, true);
         hits++;
       }

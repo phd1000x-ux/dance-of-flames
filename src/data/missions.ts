@@ -161,7 +161,7 @@ export const MISSIONS: MissionDefinition[] = [
     brief: "Break their supply lines. Watch the sky — they have scorpions now.",
     seed: 202,
     enemyPower: 1.4,
-    threat: { arrow: 1.8, bolt: 0.8 },
+    threat: { arrow: 1.5, bolt: 0.7 },
     recommendedPower: 2,
     coinBonus: 80,
     environment: {
@@ -239,7 +239,7 @@ export const MISSIONS: MissionDefinition[] = [
     brief: "Their siege park aims at our lines. Silence every scorpion. The old keep gives up its dead — and its treasures. Survivors speak of a second shadow over Blackstone, larger than any scorpion.",
     seed: 303,
     enemyPower: 1.9,
-    threat: { arrow: 2.0, bolt: 0.7 },
+    threat: { arrow: 1.8, bolt: 0.55 },
     recommendedPower: 3,
     coinBonus: 140,
     environment: {
@@ -335,7 +335,7 @@ export const MISSIONS: MissionDefinition[] = [
     brief: "No walls to break this time — strike the city itself. Silence the harbor scorpions, burn the granaries, topple the beacons before they light. The city falls — but their Castellan has already fled to Blackstone.",
     seed: 404,
     enemyPower: 2.6,
-    threat: { arrow: 1.6, bolt: 0.65 },
+    threat: { arrow: 1.5, bolt: 0.5 },
     recommendedPower: 4,
     coinBonus: 220,
     environment: {
@@ -440,7 +440,7 @@ export const MISSIONS: MissionDefinition[] = [
       "Their last citadel, and the Castellan who rules it. Silence their scorpions, shatter the walls, take the gate, hold the courtyard — then face him. End this, in fire or in blood.",
     seed: 505,
     enemyPower: 3.2,
-    threat: { arrow: 1.1, bolt: 0.5 },
+    threat: { arrow: 1.1, bolt: 0.35 },
     recommendedPower: 5,
     coinBonus: 320,
     environment: {

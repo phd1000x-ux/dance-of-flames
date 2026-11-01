@@ -85,6 +85,9 @@ const AIRBORNE_RESTORE_PHASES = ["CHASE", "DUEL_AIR", "RETURN", "FINAL_STAGGER",
  * Full mission runtime: world, player, AI, combat, loot, objectives,
  * dragon-death → ground conversion, tutorial, stats.
  */
+/** ranged (arrow/bolt) damage scale against the rider on foot */
+export const GROUND_RANGED_MULT = 0.5;
+
 export class MissionScene {
   readonly scene: Scene;
   readonly world: ReturnType<WorldBuilder["build"]>;
@@ -571,7 +574,8 @@ export class MissionScene {
       if (this.phase === "ground") {
         if (!this.riderCtrl?.alive) return;
         // Projectile velocity points into the rider; takeHit expects rider → attacker.
-        const res = this.riderCtrl.takeHit(damage, new Vector3(-sx, 0, -sz).normalize(), kind);
+        // ranged fire is tuned for a 900-HP dragon; on foot it must stay a pressure, not a sniper wall
+        const res = this.riderCtrl.takeHit(damage * GROUND_RANGED_MULT, new Vector3(-sx, 0, -sz).normalize(), kind);
         if (res.applied > 0) {
           d.bus.emit("player-damaged", { amount: res.applied, dirX: sx, dirZ: sz, source: kind });
         }
@@ -859,7 +863,9 @@ export class MissionScene {
       () => this.rng.range(0, 1)
     );
     const spawn = new Vector3(land.x, 0, land.z);
-    this.groundReinforceTimer = 3; // first squad shortly after the fallen overlay
+    // the rider crawls out of the wreck at full strength: dragon death already cost the run its air power
+    this.player.healRider(1);
+    this.groundReinforceTimer = 8; // first squad shortly after the fallen overlay
     const factory = new SoldierFactory(this.scene);
     const figure = factory.createRiderFigure(this.deps.rider);
     for (const m of figure.root.getChildMeshes()) {
