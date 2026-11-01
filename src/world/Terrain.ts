@@ -105,7 +105,7 @@ export class Terrain {
     this.size = opts.size ?? 1700;
     this.sampler = new TerrainHeightSampler(seed, 22, 1 / 150, 240, 380, waterLevel ?? 0);
 
-    const subdivisions = opts.subdivisions ?? 150;
+    const subdivisions = opts.subdivisions ?? 240;
     const ground = MeshBuilder.CreateGround("terrain", { width: this.size, height: this.size, subdivisions }, scene);
     ground.isPickable = false;
 
@@ -136,6 +136,16 @@ export class Terrain {
         g += (highland.g - g) * k;
         b += (highland.b - b) * k;
       }
+      // broad light/dark fields (sun-bleached vs. damp ground) and fine mottling,
+      // so the flattened battlefield doesn't read as one painted plane from the air
+      const macro = fbm(x / 230, z / 230, seed + 71) - 0.5;
+      const fine = fbm(x / 18, z / 18, seed + 29) - 0.5;
+      const lum = 1 + macro * 0.32 + fine * 0.14;
+      // worn bare-earth patches (trampled camps, old fields)
+      const worn = smoothstep(0.62, 0.74, fbm(x / 48, z / 48, seed + 503));
+      r = (r + (r * 1.06 + 0.03 - r) * worn) * lum;
+      g = (g + (g * 0.92 + 0.03 - g) * worn) * lum;
+      b = (b + (b * 0.85 + 0.01 - b) * worn) * lum;
       colors.push(r, g, b, 1);
     }
     ground.setVerticesData("position", positions);

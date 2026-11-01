@@ -212,6 +212,7 @@ export class MissionScene {
     this.dragonCam.reset(this.dragonCtrl);
 
     this.fire = new FireSystem(this.scene, this.player, this.dragonCtrl, this.rig, effects, d.bus);
+    this.fire.heightAt = (x, z) => this.world.terrain.heightAt(x, z);
     this.projectiles = new ProjectileSystem(this.scene, this.world.terrain, effects, d.bus);
 
     this.enemies = new EnemyManager(this.scene, this.world.terrain, this.projectiles, d.bus, d.difficulty, d.mission.seed);
