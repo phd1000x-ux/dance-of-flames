@@ -45,11 +45,14 @@ import { assistCone, assistPull } from "../player/FlightFeel";
 import { FireStreak, STREAK_MIN } from "../combat/FireStreak";
 
 /** seconds of bolt immunity after a bolt hit (volley stacking guard) */
-export const BOLT_GRACE = 1.2;
+export const BOLT_GRACE = 2.5;
 /** max sustained arrow damage per second to the dragon (× difficulty enemyDamage); bursts up to 1.5 s worth */
-export const ARROW_DPS_CAP = 5;
+export const ARROW_DPS_CAP = 4;
 /** Q/E dodge makes bolts fired within this many seconds miss (covers the Normal 1.35 s telegraph) */
 export const BOLT_EVADE_WINDOW = 1.45;
+/** dragon recovers this fraction of max HP per second after OUT_OF_COMBAT_S without damage */
+export const DRAGON_REGEN = 0.012;
+export const OUT_OF_COMBAT_S = 5;
 import { CLOSE_CALL_MARGIN, NO_TECHNIQUES, closeCallReward, diveFuryMult, emberChainBonus, emberChainWindow, type TechniqueLevels } from "../combat/Techniques";
 import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
@@ -157,6 +160,8 @@ export class MissionScene {
   private boltGraceT = 0;
   /** arrow damage token bucket (see ARROW_DPS_CAP) */
   private arrowBudget = 0;
+  /** mission time of the last damage the dragon took (out-of-combat regen) */
+  private lastDragonHitT = -999;
   private prevDodgeTimer = 0;
   /** scaled sim dt of the latest update — visual layers animate on this so hit-stop/slow-mo apply */
   lastSimDt = 0;
@@ -541,6 +546,8 @@ export class MissionScene {
     const arrowThreat = this.deps.mission?.threat?.arrow ?? 1;
     const arrowCap = ARROW_DPS_CAP * arrowThreat * (this.deps.difficulty?.enemyDamage ?? 1);
     this.arrowBudget = Math.min(arrowCap * 1.5, this.arrowBudget + arrowCap * dt);
+    // long missions must not be pure attrition: break contact and the dragon recovers
+    if (this.phase === "dragon" && this.time - this.lastDragonHitT > OUT_OF_COMBAT_S) this.player.healDragon(DRAGON_REGEN * dt);
 
     // projectile collision targets
     this.projectiles.playerMode = this.phase === "ground" ? "ground" : "dragon";
@@ -582,6 +589,7 @@ export class MissionScene {
         if (damage <= 0.01) return;
       }
       const stagger = kind === "bolt" ? 0.7 : 0.12;
+      this.lastDragonHitT = this.time;
       const died = this.player.damageDragon(damage);
       d.bus.emit("player-damaged", { amount: damage, dirX: sx, dirZ: sz, source: kind });
       d.audio.playerHurt();

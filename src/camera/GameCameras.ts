@@ -85,6 +85,16 @@ export class DragonCamera {
       }
     }
 
+    // occlusion: a tower or wall between dragon and camera pulls the camera in
+    // front of it (eval 4: camera buried inside a Blackstone tower)
+    const pivot = ctrl.pos.add(new Vector3(0, 2, 0));
+    const toCam = finalPos.subtract(pivot);
+    const full = toCam.length();
+    if (full > 0.5) {
+      const hit = this.camera.getScene().pickWithRay(new Ray(pivot, toCam.scale(1 / full), full), isCameraOccluder, true);
+      if (hit?.hit) finalPos.copyFrom(pivot.add(toCam.scale(Math.max(2.5, hit.distance - 0.8) / full)));
+    }
+
     this.camera.position.copyFrom(finalPos);
 
     // look at point ahead of the dragon; target lock gently biases the view

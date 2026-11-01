@@ -106,7 +106,7 @@ test("E2E 4: destroy building → hidden relic → dragon stat increases", async
   await bootMission(page);
   await page.evaluate(() => {
     const g = (window as any).__GAME;
-    for (let i = 0; i < 8; i++) g.api.killNearestEnemy(); // finish objective 1
+    for (let i = 0; i < 10; i++) g.api.killNearestEnemy(); // finish objective 1
     g.__fireBefore = g.player.dragonStats.fireDamage;
     g.api.collapseBuildingWithTag("watchtower"); // contains dragonfireCore (+15% fire dmg)
   });
@@ -192,7 +192,7 @@ test("E2E 6: complete final objective → victory screen", async ({ page }) => {
   // complete both objectives via gameplay hooks
   await page.evaluate(() => {
     const g = (window as any).__GAME;
-    for (let i = 0; i < 8; i++) g.api.killNearestEnemy();
+    for (let i = 0; i < 10; i++) g.api.killNearestEnemy();
     g.api.collapseBuildingWithTag("watchtower");
   });
   await page.waitForFunction(() => (window as any).__GAME.state === "VICTORY", null, { timeout: 15000 });

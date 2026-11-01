@@ -141,7 +141,9 @@ export function ballisticDir(origin: Vector3, target: Vector3, speed: number, gr
 /** balance pass 7 (measured): bolts were 85-90% of all dragon damage, the ground phase barely scratched the rider */
 export const ARROW_VS_DRAGON = 1.15;
 export const GROUND_ARCHER_RANGE = 52;
-export const GROUND_MELEE_MULT = 1.12;
+/** horizontal metres inside which a ballista cannot fire at the dragon */
+export const BALLISTA_DEAD_ZONE = 26;
+export const GROUND_MELEE_MULT = 1.0;
 
 /** coordinated volley plan: 2-3 ballistae firing inside a 0.6s window */
 export function planVolley(aliveCount: number, rng: { range: (a: number, b: number) => number }): { count: number; window: number } {
@@ -780,7 +782,10 @@ export class EnemyManager {
     if (b.cooldown > 0 && b.cooldown < warn) {
       b.railMat.emissiveColor = new Color3(glow * 0.9, glow * 0.35, 0);
     }
-    if (b.cooldown <= 0 && aimOk && dist < b.def.range) {
+    // dead zone: a scorpion cannot crank onto a dragon right on top of it —
+    // closing in is the counterplay (eval 4: point-blank bolt chains)
+    const tooClose = ctx.playerMode === "dragon" && Math.hypot(toT.x, toT.z) < BALLISTA_DEAD_ZONE;
+    if (b.cooldown <= 0 && aimOk && dist < b.def.range && !tooClose) {
       b.cooldown = b.def.attackCooldown / this.difficulty.aggression;
       b.state = "reload";
       b.railMat.emissiveColor = Color3.Black();
