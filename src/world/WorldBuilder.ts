@@ -1,3 +1,4 @@
+import { scatterGroundTufts } from "./GroundScatter";
 import {
   Color3,
   DirectionalLight,
@@ -183,6 +184,15 @@ export class WorldBuilder {
         }
       }
     }
+
+    // ground scatter: grass/scrub tufts (own RNG — mission layout stays deterministic)
+    scatterGroundTufts(this.scene, terrain, {
+      seed: def.seed,
+      groundColor: env.groundColor,
+      accentColor: env.groundAccent,
+      count: env.silhouette === "cliffs" ? 3500 : def.id === "blackstone" ? 1800 : 6500,
+      waterLevel: env.waterLevel,
+    });
 
     if ((env.rockCount ?? 0) > 0) {
       const templates = [0, 1, 2, 3].map((v) => weatheredRock(`rockTpl-${v}`, def.seed + v * 19, this.scene, 1.65));
