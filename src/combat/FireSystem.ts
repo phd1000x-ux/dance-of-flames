@@ -1,4 +1,4 @@
-import { Color3, PointLight, Scene, Vector3 } from "@babylonjs/core";
+import { Color3, Color4, PointLight, Scene, Vector3 } from "@babylonjs/core";
 import type { PlayerState } from "../player/PlayerState";
 import type { DragonController } from "../player/DragonController";
 import type { DragonRig } from "../world/DragonRig";
@@ -52,6 +52,11 @@ export class FireSystem {
     this.impactPs = effects.createBreathImpact("fireImpact", player.dragonDef.fireColor);
     this.emberPs = effects.createEmbers("fireEmbers");
     this.smokePs = effects.createSmokeColumn("fireSmoke");
+    // breath smoke sits right behind the flame on screen: the building-fire
+    // column's near-black read as a hole in the fire. Lighter, thinner, rising.
+    this.smokePs.color1 = new Color4(0.42, 0.38, 0.34, 0.22);
+    this.smokePs.color2 = new Color4(0.5, 0.47, 0.43, 0.16);
+    this.smokePs.colorDead = new Color4(0.55, 0.53, 0.5, 0);
     this.light = new PointLight("fireLight", new Vector3(0, 0, 0), scene);
     this.light.diffuse = Color3.FromHexString(player.dragonDef.fireColor);
     this.light.intensity = 0;
@@ -153,7 +158,7 @@ export class FireSystem {
 
     const end = hit ?? origin.add(dir.scale(range * 0.8));
     (this.smokePs.emitter as Vector3).copyFrom(end);
-    this.smokePs.emitRate = 26 * particleScale;
+    this.smokePs.emitRate = 12 * particleScale;
     if (!this.smokePs.isStarted()) this.smokePs.start();
 
     this.light.position.copyFrom(origin.add(dir.scale(3)));

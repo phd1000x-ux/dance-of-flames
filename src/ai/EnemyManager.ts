@@ -273,7 +273,7 @@ export class EnemyManager {
     // the cone itself points over it. Fixes 0-kill hovers directly above targets.
     const underWash = (p: Vector3, extra: number): boolean => {
       const dy = origin.y - p.y;
-      if (dy < 0 || dy > Math.min(22, range * 0.6)) return false;
+      if (dy < 0 || dy > Math.min(36, range * 0.6)) return false;
       const dx = p.x - origin.x, dz = p.z - origin.z;
       const r = 6 + extra + dy * 0.35;
       if (dx * dx + dz * dz > r * r) return false;
