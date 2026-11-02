@@ -39,9 +39,9 @@ export interface UiCallbacks {
 export class UIManager {
   private screens = new Map<string, HTMLElement>();
   hud: HudController;
-  private selectedRider = "rhaenyra";
-  private selectedDragon = "syrax";
-  private selectedMission = "dragonstone";
+  private selectedRider = "seren";
+  private selectedDragon = "ashwyn";
+  private selectedMission = "cinderhold";
   private selectedDifficulty: DifficultyId = "normal";
   private rendererInfo = "…";
   private musicButton!: HTMLButtonElement;
@@ -525,10 +525,10 @@ export class UIManager {
   private buildMissionSelect(): HTMLElement {
     const d = this.el("div", "");
     const markers: Record<string, { x: number; y: number }> = {
-      dragonstone: { x: 72, y: 68 },
-      riverlands: { x: 44, y: 48 },
-      harrenhal: { x: 40, y: 33 },
-      kingslanding: { x: 58, y: 66 },
+      cinderhold: { x: 72, y: 68 },
+      fenwater: { x: 44, y: 48 },
+      ashgrave: { x: 40, y: 33 },
+      portcalder: { x: 58, y: 66 },
       blackstone: { x: 24, y: 58 },
     };
     d.innerHTML = `
@@ -569,7 +569,7 @@ export class UIManager {
       }
     });
     // refs refreshed by populate
-    let unlockedRef: string[] = ["dragonstone"];
+    let unlockedRef: string[] = ["cinderhold"];
     let bestRef: Record<string, number> = {};
     (this as any)._missionRefs = {
       set: (unlocked: string[], best: Record<string, number>) => {

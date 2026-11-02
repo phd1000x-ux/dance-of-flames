@@ -198,10 +198,10 @@ export class MissionScene {
     }
     this.dragonCtrl = new DragonController(this.player, this.rig, this.world.terrain, d.bus, 760);
     this.dragonCtrl.inputTurnScale = d.settings.keyboardTurnSpeed ?? 1;
-    this.dragonCtrl.spawn(d.mission.id === "kingslanding"
+    this.dragonCtrl.spawn(d.mission.id === "portcalder"
       ? new Vector3(-80, 140, -420)
       : this.worldLayout.playerStart.clone(), this.worldLayout.playerStartYaw);
-    if (d.mission.id === "kingslanding") {
+    if (d.mission.id === "portcalder") {
       this.dragonCtrl.yaw = Math.PI * 0.02; // face the city
     }
 

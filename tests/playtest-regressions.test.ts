@@ -144,7 +144,7 @@ import { SaveSystem, MemoryStorage } from "../src/save/SaveSystem";
 
 describe("BUG-05 ground phase", () => {
   it("on-foot kill objectives ignore kills made from the dragon", () => {
-    const t = new ObjectiveTracker(MISSIONS.find((m) => m.id === "riverlands")!.objectives);
+    const t = new ObjectiveTracker(MISSIONS.find((m) => m.id === "fenwater")!.objectives);
     for (let i = 0; i < 10; i++) t.notifyKill("archer"); // burned from the air
     t.convertToGround();
     t.update(0.1);

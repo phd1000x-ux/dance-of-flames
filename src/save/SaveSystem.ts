@@ -94,6 +94,28 @@ export function defaultSettings(): GameSettings {
 }
 
 export const CURRENT_SAVE_VERSION = 1;
+
+/**
+ * Pre-rename content ids (borrowed names) → original ids. Saves written before
+ * the rename still carry the old ids; they are translated on load and in the
+ * best-score merge so no progress, selection or score is lost.
+ */
+export const LEGACY_ID_MAP: Readonly<Record<string, string>> = {
+  dragonstone: "cinderhold", riverlands: "fenwater", harrenhal: "ashgrave", kingslanding: "portcalder",
+  rhaenyra: "seren", daemon: "kael", aemond: "ivor", aegon: "edric", rhaenys: "maelis", baela: "lira",
+  syrax: "ashwyn", caraxes: "korrath", vhagar: "morgrath", sunfyre: "solenne", meleys: "vesska",
+  moondancer: "lunaris", dreamfyre: "velmora",
+};
+export const migrateId = (id: string): string => LEGACY_ID_MAP[id] ?? id;
+
+function migrateScores(scores: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(scores)) {
+    const nk = migrateId(k);
+    out[nk] = Math.max(out[nk] ?? 0, v);
+  }
+  return out;
+}
 export const SAVE_KEY = "dof-save";
 
 export interface SaveData {
@@ -114,7 +136,7 @@ export function defaultSave(): SaveData {
     version: CURRENT_SAVE_VERSION,
     coins: 0,
     upgrades: {},
-    unlockedMissions: ["dragonstone"],
+    unlockedMissions: ["cinderhold"],
     selectedRider: null,
     selectedDragon: null,
     selectedDifficulty: "normal",
@@ -152,7 +174,7 @@ export class SaveSystem {
       if (prevRaw) {
         const prev = JSON.parse(prevRaw) as SaveData;
         if (prev?.bestScores) {
-          for (const [k, v] of Object.entries(prev.bestScores)) {
+          for (const [k, v] of Object.entries(migrateScores(prev.bestScores))) {
             if ((data.bestScores[k] ?? 0) < v) data.bestScores[k] = v;
           }
         }
@@ -173,20 +195,20 @@ export class SaveSystem {
     if (!data || typeof data !== "object") return base;
     if (data.version === 0) {
       // v0 had placeholder mission ids — reset progression, keep coins
-      data = { ...data, unlockedMissions: ["dragonstone"], upgrades: {} };
+      data = { ...data, unlockedMissions: ["cinderhold"], upgrades: {} };
     }
     return {
       version: CURRENT_SAVE_VERSION,
       coins: typeof data.coins === "number" ? data.coins : base.coins,
       upgrades: data.upgrades ?? base.upgrades,
       unlockedMissions: Array.isArray(data.unlockedMissions) && data.unlockedMissions.length
-        ? data.unlockedMissions
+        ? [...new Set<string>(data.unlockedMissions.map(migrateId))]
         : base.unlockedMissions,
-      selectedRider: data.selectedRider ?? base.selectedRider,
-      selectedDragon: data.selectedDragon ?? base.selectedDragon,
+      selectedRider: data.selectedRider != null ? migrateId(data.selectedRider) : base.selectedRider,
+      selectedDragon: data.selectedDragon != null ? migrateId(data.selectedDragon) : base.selectedDragon,
       selectedDifficulty: data.selectedDifficulty ?? base.selectedDifficulty,
       settings: { ...base.settings, ...(data.settings ?? {}) },
-      bestScores: data.bestScores ?? base.bestScores,
+      bestScores: data.bestScores ? migrateScores(data.bestScores) : base.bestScores,
       campaignCompleted: !!data.campaignCompleted,
     };
   }

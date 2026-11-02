@@ -4,8 +4,8 @@ import { test, expect } from "@playwright/test";
  * Mid-mission beats: completing the Fenwater supply objective sends a relief
  * squad to the watchtowers with a subtitle. Polls game state only (SwiftShader).
  */
-test("riverlands: burning the supply camp triggers the relief column", async ({ page }) => {
-  await page.goto("/?test=1&autostart=1&mission=riverlands");
+test("fenwater: burning the supply camp triggers the relief column", async ({ page }) => {
+  await page.goto("/?test=1&autostart=1&mission=fenwater");
   await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 60000 });
 
   const liveSoldiers = () =>
@@ -26,7 +26,7 @@ test("riverlands: burning the supply camp triggers the relief column", async ({ 
 });
 
 test("king's landing: toppling the beacons inserts the commander's-guard objective", async ({ page }) => {
-  await page.goto("/?test=1&autostart=1&mission=kingslanding");
+  await page.goto("/?test=1&autostart=1&mission=portcalder");
   await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 60000 });
   const cur = () => page.evaluate(() => (window as any).__GAME.mission.tracker.current()?.id);
 

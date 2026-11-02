@@ -282,7 +282,7 @@ test("keyboard-only full flow: menu → rider → dragon → mission → flight"
 
 test("keyboard-only ground combat after dragon death (no mouse)", async ({ page }) => {
   test.setTimeout(180000);
-  await page.goto("/?test=1&autostart=1&mission=dragonstone");
+  await page.goto("/?test=1&autostart=1&mission=cinderhold");
   await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 30000 });
   await simWait(page, 1);
 

@@ -7,7 +7,7 @@ describe("SaveSystem", () => {
     const data = await s.load();
     expect(data.version).toBe(CURRENT_SAVE_VERSION);
     expect(data.coins).toBe(0);
-    expect(data.unlockedMissions).toEqual(["dragonstone"]);
+    expect(data.unlockedMissions).toEqual(["cinderhold"]);
   });
 
   it("persists and reloads data", async () => {
@@ -16,13 +16,13 @@ describe("SaveSystem", () => {
     const d = await s.load();
     d.coins = 250;
     d.upgrades["fireDamage"] = 2;
-    d.unlockedMissions.push("riverlands");
+    d.unlockedMissions.push("fenwater");
     await s.save(d);
     const s2 = new SaveSystem(storage);
     const d2 = await s2.load();
     expect(d2.coins).toBe(250);
     expect(d2.upgrades["fireDamage"]).toBe(2);
-    expect(d2.unlockedMissions).toContain("riverlands");
+    expect(d2.unlockedMissions).toContain("fenwater");
   });
 
   it("migrates version 0 saves (mission list renamed)", async () => {
@@ -39,7 +39,7 @@ describe("SaveSystem", () => {
     const d = await s.load();
     expect(d.version).toBe(CURRENT_SAVE_VERSION);
     expect(d.coins).toBe(100);
-    expect(d.unlockedMissions).toEqual(["dragonstone"]);
+    expect(d.unlockedMissions).toEqual(["cinderhold"]);
   });
 
   it("discards corrupted saves and returns defaults", async () => {
@@ -54,14 +54,14 @@ describe("SaveSystem", () => {
     const storage = new MemoryStorage();
     const s = new SaveSystem(storage);
     const d = await s.load();
-    d.bestScores["dragonstone"] = 500;
+    d.bestScores["cinderhold"] = 500;
     await s.save(d);
-    const better = { ...d, bestScores: { ...d.bestScores, dragonstone: 900 } };
+    const better = { ...d, bestScores: { ...d.bestScores, cinderhold: 900 } };
     await s.save(better);
-    const worse = { ...better, bestScores: { ...better.bestScores, dragonstone: 100 } };
+    const worse = { ...better, bestScores: { ...better.bestScores, cinderhold: 100 } };
     await s.save(worse);
     const final = await new SaveSystem(storage).load();
-    expect(final.bestScores["dragonstone"]).toBe(900);
+    expect(final.bestScores["cinderhold"]).toBe(900);
   });
 });
 
@@ -83,5 +83,31 @@ describe("music preference migration", () => {
     const loaded = await system.load();
     expect(loaded.settings.musicEnabled).toBe(false);
     expect(loaded.settings.musicVolume).toBe(0.42);
+  });
+});
+
+describe("legacy id migration (pre-rename saves)", () => {
+  it("translates old mission/rider/dragon ids and keeps best scores", async () => {
+    const { SaveSystem, SAVE_KEY } = await import("../src/save/SaveSystem");
+    const store = new Map<string, string>();
+    const storage = { get: async (k: string) => store.get(k) ?? null, set: async (k: string, v: string) => void store.set(k, v) };
+    store.set(SAVE_KEY, JSON.stringify({
+      version: 1, coins: 321, upgrades: { fireDamage: 2 },
+      unlockedMissions: ["dragonstone", "riverlands", "harrenhal"],
+      selectedRider: "daemon", selectedDragon: "caraxes", selectedDifficulty: "hard",
+      settings: {}, bestScores: { dragonstone: 2800, harrenhal: 1500 }, campaignCompleted: false,
+    }));
+    const sys = new SaveSystem(storage);
+    const d = await sys.load();
+    expect(d.unlockedMissions).toEqual(["cinderhold", "fenwater", "ashgrave"]);
+    expect(d.selectedRider).toBe("kael");
+    expect(d.selectedDragon).toBe("korrath");
+    expect(d.bestScores).toEqual({ cinderhold: 2800, ashgrave: 1500 });
+    expect(d.coins).toBe(321);
+    expect(d.upgrades.fireDamage).toBe(2);
+    // saving over the old raw save must not resurrect old keys
+    await sys.save(d);
+    const raw = JSON.parse(store.get(SAVE_KEY)!);
+    expect(Object.keys(raw.bestScores).sort()).toEqual(["ashgrave", "cinderhold"]);
   });
 });

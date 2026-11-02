@@ -9,9 +9,9 @@ async function bootMission(page: Page, opts: { mission?: string; rider?: string;
   const q = new URLSearchParams({
     test: "1",
     autostart: "1",
-    mission: opts.mission ?? "dragonstone",
-    rider: opts.rider ?? "daemon",
-    dragon: opts.dragon ?? "caraxes",
+    mission: opts.mission ?? "cinderhold",
+    rider: opts.rider ?? "kael",
+    dragon: opts.dragon ?? "korrath",
   });
   await page.goto(`/?${q.toString()}`);
   await page.waitForFunction(() => (window as any).__GAME?.mission != null, null, { timeout: 30000 });
@@ -220,7 +220,7 @@ test("console stays clean during gameplay", async ({ page }) => {
     if (msg.type() === "error") errors.push(msg.text());
   });
   page.on("pageerror", (err) => errors.push(String(err)));
-  await bootMission(page, { mission: "riverlands" });
+  await bootMission(page, { mission: "fenwater" });
   await page.waitForTimeout(6000);
   expect(errors).toEqual([]);
 });

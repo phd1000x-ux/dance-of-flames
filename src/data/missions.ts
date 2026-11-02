@@ -89,7 +89,7 @@ const groundRepel = (n: number): ObjectiveDef => ({
 
 export const MISSIONS: MissionDefinition[] = [
   {
-    id: "dragonstone",
+    id: "cinderhold",
     name: "Cinderhold Coast",
     location: "Cinderhold",
     description: "A cold volcanic shore. Enemy scouts hold the fishing village below the fortress.",
@@ -154,7 +154,7 @@ export const MISSIONS: MissionDefinition[] = [
     ],
   },
   {
-    id: "riverlands",
+    id: "fenwater",
     name: "Fenwater Raid",
     location: "The Fenwater",
     description: "Green fields split by rivers. A supply camp feeds the enemy war camp.",
@@ -232,7 +232,7 @@ export const MISSIONS: MissionDefinition[] = [
     ],
   },
     {
-    id: "harrenhal",
+    id: "ashgrave",
     name: "Ashgrave Outskirts",
     location: "Ashgrave",
     description: "Melted towers against a bruised sky. Rain, mud, and burned stone.",
@@ -263,7 +263,7 @@ export const MISSIONS: MissionDefinition[] = [
     buildings: [
       { kind: "fort", tag: "keep", count: 1, relicIds: ["dragonheartEssence"] },
       { kind: "house", tag: "ruin", count: 5 },
-      { kind: "barracks", tag: "camp", count: 2, relicIds: ["emberCapacitor", "valyrianSaddle"] },
+      { kind: "barracks", tag: "camp", count: 2, relicIds: ["emberCapacitor", "elderSaddle"] },
     ],
     events: [
       {
@@ -328,7 +328,7 @@ export const MISSIONS: MissionDefinition[] = [
     ],
   },
   {
-    id: "kingslanding",
+    id: "portcalder",
     name: "Port Calder Assault",
     location: "Port Calder",
     description: "The city that started the war. Saltmere smoke on the wind.",
@@ -364,7 +364,7 @@ export const MISSIONS: MissionDefinition[] = [
     ],
     events: [
       {
-        id: "ev-goldcloaks",
+        id: "ev-cityguards",
         afterObjective: "obj-scorpions",
         subtitle: "City guards pour from the city gates to guard the granaries!",
         reinforce: { swordsman: 4, shieldman: 3 },

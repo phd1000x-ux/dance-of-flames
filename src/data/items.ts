@@ -71,7 +71,7 @@ export const RELICS: RelicDefinition[] = [
     announce: "Fire damage heals your dragon",
   },
   {
-    id: "valyrianSaddle",
+    id: "elderSaddle",
     name: "Elder-Steel Saddle",
     flavor: "Woven before the Freehold fell.",
     effect: { damageTaken: 0.85 },

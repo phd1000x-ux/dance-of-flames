@@ -14,7 +14,7 @@ async function simWait(page: Page, seconds: number) {
 test("ground kill triggers hit-stop + camera jolt, then the sim resumes at full rate", async ({ page }) => {
   await page.goto("/?test=1");
   await page.waitForFunction(() => (window as any).__GAME?.api != null, undefined, { timeout: 60000 });
-  await page.evaluate(() => (window as any).__GAME.api.startMission("rhaenyra", "syrax", "riverlands"));
+  await page.evaluate(() => (window as any).__GAME.api.startMission("seren", "ashwyn", "fenwater"));
   await page.waitForFunction(() => (window as any).__GAME.mission?.time > 0.2, undefined, { timeout: 60000 });
 
   await page.evaluate(() => {

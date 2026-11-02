@@ -4,8 +4,8 @@ test("selection preview matches roster after leaving and entering through either
   await page.goto("/?test=1");
   await page.locator('#screen-main-menu.visible [data-act="new"]').click();
   for (const entry of ["new", "battle"]) {
-    await page.locator('[data-rider="baela"]').click();
-    await page.locator('[data-dragon="vhagar"]').click();
+    await page.locator('[data-rider="lira"]').click();
+    await page.locator('[data-dragon="morgrath"]').click();
     await page.locator('#screen-character-select [data-act="back"]').click();
     await page.locator(`#screen-main-menu [data-act="${entry}"]`).click();
     const view = await page.evaluate(() => {
@@ -68,13 +68,13 @@ test("continue uses saved characters and mission-map Escape is not stranded", as
   await page.waitForFunction(() => !!(window as any).__GAME);
   await page.evaluate(() => {
     const app = (window as any).__APP;
-    app.save.selectedRider = "daemon";
-    app.save.selectedDragon = "caraxes";
-    app.save.unlockedMissions = ["dragonstone", "riverlands"];
+    app.save.selectedRider = "kael";
+    app.save.selectedDragon = "korrath";
+    app.save.unlockedMissions = ["cinderhold", "fenwater"];
     app.ui.setContinueEnabled(true);
   });
   await page.locator('#screen-main-menu [data-act="continue"]').click();
-  expect(await page.evaluate(() => (window as any).__APP.ui.getCharacterSelection())).toEqual({ rider: "daemon", dragon: "caraxes" });
+  expect(await page.evaluate(() => (window as any).__APP.ui.getCharacterSelection())).toEqual({ rider: "kael", dragon: "korrath" });
   await page.keyboard.press("Escape");
   await expect(page.locator("#screen-character-select")).toHaveClass(/visible/);
 });

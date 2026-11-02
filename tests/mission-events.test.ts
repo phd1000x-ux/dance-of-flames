@@ -24,7 +24,7 @@ describe("mission events data", () => {
   }
 
   it("every non-finale combat mission after the tutorial has a mid-mission beat", () => {
-    for (const id of ["riverlands", "harrenhal", "kingslanding"]) {
+    for (const id of ["fenwater", "ashgrave", "portcalder"]) {
       expect(MISSIONS.find((m) => m.id === id)!.events?.length ?? 0).toBeGreaterThan(0);
     }
   });

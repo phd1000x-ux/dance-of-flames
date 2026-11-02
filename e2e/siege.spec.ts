@@ -233,7 +233,7 @@ test("siege: finale music override clears on next mission (§10 regression)", as
   await page.waitForFunction(() => (window as any).__GAME.app.music.currentState === "boss", null, { timeout: 5000 });
   // leave mid-finale — no "resolve" finale-music event ever fires on this path,
   // so only the startMission reset (GameApp.loadMission) can clear the override
-  await page.evaluate(() => (window as any).__APP.startMission("dragonstone", "rhaenyra", "syrax", "normal"));
+  await page.evaluate(() => (window as any).__APP.startMission("cinderhold", "seren", "ashwyn", "normal"));
   await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 60000 });
   // adaptive music selection must be live again: state should be one of the adaptive
   // set, not stuck on boss/chase. Override handler runs at ~1 Hz — poll with timeout

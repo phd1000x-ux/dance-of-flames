@@ -157,7 +157,7 @@ export class GameApp {
         characters: !this.opts.testMode || new URLSearchParams(location.search).get("characters") === "1",
       });
     }
-    this.showcase.setDragon(getDragon(this.save.selectedDragon ?? "syrax"), getRider(this.save.selectedRider ?? "rhaenyra"));
+    this.showcase.setDragon(getDragon(this.save.selectedDragon ?? "ashwyn"), getRider(this.save.selectedRider ?? "seren"));
     this.showcase.setMode("menu");
   }
 
@@ -455,8 +455,8 @@ export class GameApp {
         this.ui.showScreen("mission-select");
       },
       onStartMission: (missionId: string, difficulty: DifficultyId) => {
-        const riderId = this.save.selectedRider ?? "rhaenyra";
-        const dragonId = this.save.selectedDragon ?? "syrax";
+        const riderId = this.save.selectedRider ?? "seren";
+        const dragonId = this.save.selectedDragon ?? "ashwyn";
         // pull latest selection from UI via DOM
         const sel = (window as any).__UI?.getSelection?.();
         this.startMission(missionId, sel?.rider ?? riderId, sel?.dragon ?? dragonId, difficulty);
@@ -562,7 +562,7 @@ export class GameApp {
   }
 
   private selectedDragonForShowcase(): string {
-    return this.save.selectedDragon ?? "syrax";
+    return this.save.selectedDragon ?? "ashwyn";
   }
 
   private musicAmbientTimer = 0;

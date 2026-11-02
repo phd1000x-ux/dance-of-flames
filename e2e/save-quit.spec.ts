@@ -7,7 +7,7 @@ async function visible(page: Page, id: string): Promise<boolean> {
 test("pause → SAVE & MAIN MENU keeps the selection and banks picked-up coins", async ({ page }) => {
   await page.goto("/?test=1");
   await page.waitForFunction(() => (window as any).__GAME?.api, undefined, { timeout: 90000 });
-  await page.evaluate(() => (window as any).__GAME.api.startMission("rhaenyra", "syrax", "riverlands"));
+  await page.evaluate(() => (window as any).__GAME.api.startMission("seren", "ashwyn", "fenwater"));
   await page.waitForFunction(() => (window as any).__GAME?.mission?.time > 0.3, undefined, { timeout: 90000 });
 
   const before = await page.evaluate(() => {
@@ -28,8 +28,8 @@ test("pause → SAVE & MAIN MENU keeps the selection and banks picked-up coins",
   });
   expect(after.coins).toBe(before + 20); // 50 picked up × 0.4 defeat rate
   expect(after.saved).toBe(after.coins);
-  expect(after.rider).toBe("rhaenyra");
-  expect(after.dragon).toBe("syrax");
+  expect(after.rider).toBe("seren");
+  expect(after.dragon).toBe("ashwyn");
   expect(after.mission).toBeNull();
 });
 

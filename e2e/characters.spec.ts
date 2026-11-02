@@ -50,7 +50,7 @@ test("imported GLB characters render through menu, flight, ground and remount", 
   expect(menu.dragon).toBeGreaterThan(0);
   expect(menu.knight).toBeGreaterThan(0);
 
-  await page.evaluate(() => (window as any).__GAME.api.startMission("rhaenyra", "syrax", "riverlands"));
+  await page.evaluate(() => (window as any).__GAME.api.startMission("seren", "ashwyn", "fenwater"));
   await page.waitForFunction(() => (window as any).__CHARACTER_PROTOTYPE?.enabled === true, undefined, { timeout: 90000 });
   await simWait(page, 0.5);
 

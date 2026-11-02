@@ -216,7 +216,7 @@ mouse gameplay input for manual keyboard-purity testing.
 ```bash
 npm run dev                      # in one terminal (server)
 npm run benchmark                # in another — 30s scripted stress run
-npm run benchmark -- mission=harrenhal seconds=20
+npm run benchmark -- mission=ashgrave seconds=20
 ```
 
 Launches headed Chrome (real GPU), flies and fires automatically through the

@@ -4,6 +4,7 @@ import { GameState } from "./core/GameState";
 import { getDragon } from "./data/dragons";
 import { getRider } from "./data/riders";
 import { rankFor, scoreMission } from "./mission/Scoring";
+import { migrateId } from "./save/SaveSystem";
 
 const params = new URLSearchParams(location.search);
 const testMode = params.get("test") === "1";
@@ -76,7 +77,7 @@ async function boot(): Promise<void> {
       },
       fps: () => app.engine.getFps(),
       api: {
-        async startMission(riderId = "rhaenyra", dragonId = "syrax", missionId = "dragonstone", difficulty = "normal") {
+        async startMission(riderId = "seren", dragonId = "ashwyn", missionId = "cinderhold", difficulty = "normal") {
           await app.startMission(missionId, riderId, dragonId, difficulty as any);
           return app.mission !== null;
         },
@@ -195,14 +196,14 @@ async function boot(): Promise<void> {
 
   // autostart for tests
   if (params.get("autostart") === "1") {
-    const rider = params.get("rider") ?? "rhaenyra";
-    const dragon = params.get("dragon") ?? "syrax";
-    const mission = params.get("mission") ?? "dragonstone";
+    const rider = migrateId(params.get("rider") ?? "seren");
+    const dragon = migrateId(params.get("dragon") ?? "ashwyn");
+    const mission = migrateId(params.get("mission") ?? "cinderhold");
     const difficulty = params.get("difficulty") ?? "normal";
     await app.startMission(mission, rider, dragon, difficulty as any);
   } else if (benchmark) {
     const seconds = Number(params.get("seconds") ?? 30);
-    await app.startMission(params.get("mission") ?? "riverlands", "daemon", "caraxes", "normal");
+    await app.startMission(migrateId(params.get("mission") ?? "fenwater"), "kael", "korrath", "normal");
     // wait for mission to exist, then start measuring
     setTimeout(() => app.startBenchmark(seconds), 1000);
   }
