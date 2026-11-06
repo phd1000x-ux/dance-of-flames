@@ -71,23 +71,18 @@ test("minimap regression: A/D steering + arrow agreement + enemy markers (§7/§
   await page.keyboard.down("a");
   await page.waitForFunction(() => (window as any).__GAME.mission.dragonCtrl.yaw < -0.3, null, { timeout: 20000 });
   await page.keyboard.up("a");
-  const afterA = await readMinimap(page);
   const yawA = await page.evaluate(() => (window as any).__GAME.mission.dragonCtrl.yaw);
   expect(yawA).toBeLessThan(-0.3); // turned left in world (verified convention)
-  expect(afterA.arrow!.dx).toBeLessThan(-1); // arrow tip now left-ish
+  // the canvas redraws on HUD ticks, so it can lag the sim: poll instead of reading once
+  await expect.poll(async () => (await readMinimap(page)).arrow!.dx).toBeLessThan(-1); // arrow tip now left-ish
 
   // D returns past center to the right
   await page.keyboard.down("d");
-  await page.waitForFunction(
-    ([target]) => (window as any).__GAME.mission.dragonCtrl.yaw > target,
-    [yawA + 0.6] as any,
-    { timeout: 20000 }
-  );
+  await page.waitForFunction(() => (window as any).__GAME.mission.dragonCtrl.yaw > 0.3, null, { timeout: 20000 });
   await page.keyboard.up("d");
-  const afterD = await readMinimap(page);
   const yawD = await page.evaluate(() => (window as any).__GAME.mission.dragonCtrl.yaw);
-  expect(yawD).toBeGreaterThan(yawA + 0.3);
-  expect(afterD.arrow!.dx).toBeGreaterThan(1); // arrow tip right-ish
+  expect(yawD).toBeGreaterThan(0.3);
+  await expect.poll(async () => (await readMinimap(page)).arrow!.dx).toBeGreaterThan(1); // arrow tip right-ish
 
   // 360° sweep: arrow angle tracks heading continuously (no flips)
   const sweep = await page.evaluate(async () => {
