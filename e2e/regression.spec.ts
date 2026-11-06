@@ -7,7 +7,7 @@ import { test, expect, type Page } from "@playwright/test";
  *  §90/91 castle mission completion + castle dragon-death path
  */
 
-async function bootMission(page: Page, mission = "dragonstone") {
+async function bootMission(page: Page, mission = "cinderhold") {
   await page.goto(`/?test=1&autostart=1&mission=${mission}`);
   await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 40000 });
   await page.waitForTimeout(1800); // shader-compile settle
@@ -241,7 +241,7 @@ test("castle mission: full phased completion → VICTORY (§90)", async ({ page 
 });
 
 test("dragon never becomes invisible across scene/mission cycles (material cache poisoning)", async ({ page }) => {
-  await bootMission(page, "dragonstone");
+  await bootMission(page, "cinderhold");
   /**
    * Root cause regression: the dragon material set was cached module-level by
    * dragon id and shared across the menu-showcase scene and mission scenes.
@@ -276,7 +276,7 @@ test("dragon never becomes invisible across scene/mission cycles (material cache
   // menu (disposes the mission scene) then a second mission with another dragon
   await page.evaluate(() => (window as any).__APP.backToMenu());
   await page.waitForSelector("#screen-main-menu.visible");
-  await page.evaluate(() => (window as any).__APP.startMission("riverlands", "daemon", "caraxes", "normal"));
+  await page.evaluate(() => (window as any).__APP.startMission("fenwater", "kael", "korrath", "normal"));
   await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 40000 });
   await page.waitForTimeout(1500);
   const m2 = await audit();
@@ -287,7 +287,7 @@ test("dragon never becomes invisible across scene/mission cycles (material cache
   // and back to the FIRST dragon again (double-cycle)
   await page.evaluate(() => (window as any).__APP.backToMenu());
   await page.waitForSelector("#screen-main-menu.visible");
-  await page.evaluate(() => (window as any).__APP.startMission("dragonstone", "rhaenyra", "syrax", "normal"));
+  await page.evaluate(() => (window as any).__APP.startMission("cinderhold", "seren", "ashwyn", "normal"));
   await page.waitForFunction(() => (window as any).__GAME?.mission?.phase === "dragon", null, { timeout: 40000 });
   await page.waitForTimeout(1500);
   const m3 = await audit();
@@ -336,7 +336,7 @@ test("dragon never becomes invisible across scene/mission cycles (material cache
     const sh = app.showcase;
     const alive = (m: any) => !!m.diffuseTexture && !!m.diffuseTexture._texture;
     const results: boolean[] = [];
-    for (const id of ["caraxes", "syrax", "vhagar", "caraxes", "syrax"]) {
+    for (const id of ["korrath", "ashwyn", "morgrath", "korrath", "ashwyn"]) {
       sh.setDragon(getDragon(id));
       await new Promise((r) => setTimeout(r, 80));
       results.push([sh.rig.materials.body, sh.rig.materials.wing, sh.rig.materials.jaw].every(alive));

@@ -9,9 +9,9 @@ async function bootMission(page: Page, opts: { mission?: string; rider?: string;
   const q = new URLSearchParams({
     test: "1",
     autostart: "1",
-    mission: opts.mission ?? "dragonstone",
-    rider: opts.rider ?? "daemon",
-    dragon: opts.dragon ?? "caraxes",
+    mission: opts.mission ?? "cinderhold",
+    rider: opts.rider ?? "kael",
+    dragon: opts.dragon ?? "korrath",
   });
   await page.goto(`/?${q.toString()}`);
   await page.waitForFunction(() => (window as any).__GAME?.mission != null, null, { timeout: 30000 });
@@ -35,16 +35,16 @@ test("E2E 1: boot → main menu → character select → mission select → laun
   const dragons = page.locator("#dragon-list .roster-item");
   await expect(dragons).toHaveCount(7);
 
-  // pick Aemond → Vhagar auto-selected
-  await page.locator("#rider-list .roster-item", { hasText: "Aemond Targaryen" }).click();
-  await expect(page.locator("#cs-dragon-name")).toHaveText("VHAGAR");
+  // pick Ivor → Morgrath auto-selected
+  await page.locator("#rider-list .roster-item", { hasText: "Ivor Ashborne" }).click();
+  await expect(page.locator("#cs-dragon-name")).toHaveText("MORGRATH");
 
   // confirm → mission select
   await page.getByRole("button", { name: "CONFIRM" }).click();
   await page.waitForSelector("#screen-mission-select.visible");
   await expect(page.locator(".map-marker")).toHaveCount(5);
 
-  // launch Dragonstone
+  // launch Cinderhold
   await page.getByRole("button", { name: "LAUNCH" }).click();
   await page.waitForFunction(() => (window as any).__GAME?.state === "DRAGON_GAMEPLAY", null, { timeout: 30000 });
   const g = await game(page);
@@ -99,14 +99,14 @@ test("E2E 3: damage → healing pickup → HP increases", async ({ page }) => {
     { timeout: 10000 }
   );
   const hp = await page.evaluate(() => (window as any).__GAME.player.dragonHp);
-  expect(hp).toBeCloseTo(400 + 0.2 * 950, -1); // Caraxes maxHp 950
+  expect(hp).toBeCloseTo(400 + 0.2 * 950, -1); // Korrath maxHp 950
 });
 
 test("E2E 4: destroy building → hidden relic → dragon stat increases", async ({ page }) => {
   await bootMission(page);
   await page.evaluate(() => {
     const g = (window as any).__GAME;
-    for (let i = 0; i < 8; i++) g.api.killNearestEnemy(); // finish objective 1
+    for (let i = 0; i < 10; i++) g.api.killNearestEnemy(); // finish objective 1
     g.__fireBefore = g.player.dragonStats.fireDamage;
     g.api.collapseBuildingWithTag("watchtower"); // contains dragonfireCore (+15% fire dmg)
   });
@@ -192,7 +192,7 @@ test("E2E 6: complete final objective → victory screen", async ({ page }) => {
   // complete both objectives via gameplay hooks
   await page.evaluate(() => {
     const g = (window as any).__GAME;
-    for (let i = 0; i < 8; i++) g.api.killNearestEnemy();
+    for (let i = 0; i < 10; i++) g.api.killNearestEnemy();
     g.api.collapseBuildingWithTag("watchtower");
   });
   await page.waitForFunction(() => (window as any).__GAME.state === "VICTORY", null, { timeout: 15000 });
@@ -220,7 +220,7 @@ test("console stays clean during gameplay", async ({ page }) => {
     if (msg.type() === "error") errors.push(msg.text());
   });
   page.on("pageerror", (err) => errors.push(String(err)));
-  await bootMission(page, { mission: "riverlands" });
+  await bootMission(page, { mission: "fenwater" });
   await page.waitForTimeout(6000);
   expect(errors).toEqual([]);
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Headed ground-combat benchmark for the imported-character path: dismount,
- * crowd the riverlands soldiers around the knight, measure frame times.
+ * crowd the fenwater soldiers around the knight, measure frame times.
  * Needs the dev server. Usage: node scripts/bench-ground.mjs [seconds=15]
  *   variants: mocap (imported characters + mocap soldiers) vs procedural (test=1 only)
  */
@@ -21,7 +21,7 @@ async function run(label, query) {
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.goto(`${base}/?test=1${query}`);
   await page.waitForFunction(() => window.__GAME?.api, undefined, { timeout: 90000 });
-  await page.evaluate(() => window.__GAME.api.startMission("rhaenyra", "syrax", "riverlands"));
+  await page.evaluate(() => window.__GAME.api.startMission("seren", "ashwyn", "fenwater"));
   await page.waitForFunction(() => window.__GAME?.mission?.time > 0.5, undefined, { timeout: 90000 });
   if (query.includes("characters=1")) await page.waitForFunction(() => window.__CHARACTER_PROTOTYPE?.enabled === true, undefined, { timeout: 90000 });
   await page.evaluate(() => {

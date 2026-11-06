@@ -40,6 +40,7 @@ export class UpgradeSystem {
   getStatMods(): StatModSource {
     const totals: Record<string, number> = {};
     for (const def of SHOP_UPGRADES) {
+      if (def.category === "technique") continue; // behaviour, not a stat multiplier
       const lvl = this.getLevel(def.id);
       if (lvl > 0) totals[def.stat] = (totals[def.stat] ?? 0) + def.perLevel * lvl;
     }

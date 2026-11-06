@@ -39,9 +39,9 @@ export interface UiCallbacks {
 export class UIManager {
   private screens = new Map<string, HTMLElement>();
   hud: HudController;
-  private selectedRider = "rhaenyra";
-  private selectedDragon = "syrax";
-  private selectedMission = "dragonstone";
+  private selectedRider = "seren";
+  private selectedDragon = "ashwyn";
+  private selectedMission = "cinderhold";
   private selectedDifficulty: DifficultyId = "normal";
   private rendererInfo = "…";
   private musicButton!: HTMLButtonElement;
@@ -324,7 +324,7 @@ export class UIManager {
       <button class="menu-btn" data-act="settings">SETTINGS</button>
       <button class="menu-btn" data-act="credits">CREDITS</button>
       <div class="menu-kb-hint"><span class="key">W / S</span> NAVIGATE &nbsp;&nbsp; <span class="key">ENTER</span> SELECT</div>
-      <div class="menu-footer">An independent fan-made battle game.<br>Original world &amp; music · free, credited character models.</div>`;
+      <div class="menu-footer">An independent dragon battle game.<br>Original world &amp; music · free, credited character models.</div>`;
     d.addEventListener("click", (e) => {
       const t = (e.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
       if (!t) return;
@@ -376,7 +376,7 @@ export class UIManager {
           <div class="drag-hint">DRAG TO ROTATE · view adjusts to dragon size</div>
         </div>
         <div class="panel">
-          <div class="panel-title" id="cs-dragon-name">SYRAX</div>
+          <div class="panel-title" id="cs-dragon-name">ASHWYN</div>
           <div class="section-label">BATTLE STATS</div>
           <div class="stat-rows" id="cs-stats"></div>
           <div class="section-label" style="margin-top:14px">DRAGON</div>
@@ -525,10 +525,10 @@ export class UIManager {
   private buildMissionSelect(): HTMLElement {
     const d = this.el("div", "");
     const markers: Record<string, { x: number; y: number }> = {
-      dragonstone: { x: 72, y: 68 },
-      riverlands: { x: 44, y: 48 },
-      harrenhal: { x: 40, y: 33 },
-      kingslanding: { x: 58, y: 66 },
+      cinderhold: { x: 72, y: 68 },
+      fenwater: { x: 44, y: 48 },
+      ashgrave: { x: 40, y: 33 },
+      portcalder: { x: 58, y: 66 },
       blackstone: { x: 24, y: 58 },
     };
     d.innerHTML = `
@@ -569,7 +569,7 @@ export class UIManager {
       }
     });
     // refs refreshed by populate
-    let unlockedRef: string[] = ["dragonstone"];
+    let unlockedRef: string[] = ["cinderhold"];
     let bestRef: Record<string, number> = {};
     (this as any)._missionRefs = {
       set: (unlocked: string[], best: Record<string, number>) => {
@@ -670,10 +670,12 @@ export class UIManager {
     if (!screen) return;
     (screen.querySelector("#shop-coins") as HTMLElement).innerHTML =
       `<span class="coin-icon"></span>${coins}`;
-    const cats: ShopUpgradeDef["category"][] = ["dragon", "rider", "consumable"];
+    const cats: ShopUpgradeDef["category"][] = ["dragon", "rider", "consumable", "technique"];
     for (const cat of cats) {
-      const col = screen.querySelector(`#shop-${cat}`) as HTMLElement;
-      col.innerHTML = `<div class="section-label">${cat.toUpperCase()}</div>`;
+      // techniques share the third column under their own label
+      const col = screen.querySelector(`#shop-${cat === "technique" ? "consumable" : cat}`) as HTMLElement;
+      if (cat === "technique") col.insertAdjacentHTML("beforeend", `<div class="section-label" style="margin-top:12px">TECHNIQUES</div>`);
+      else col.innerHTML = `<div class="section-label">${cat.toUpperCase()}</div>`;
       for (const u of SHOP_UPGRADES.filter((x) => x.category === cat)) {
         const lvl = levels[u.id] ?? 0;
         const maxed = lvl >= u.maxLevel;
@@ -1051,8 +1053,8 @@ export class UIManager {
       <div class="modal-center"><div class="panel credits-panel">
         <div class="panel-title">CREDITS</div>
         <p>DANCE OF FLAMES: DRAGONRIDER</p>
-        <p>A fan-made 3D browser action game inspired by the world and lore of
-        <i>House of the Dragon</i>. Not affiliated with HBO or George R. R. Martin.</p>
+        <p>An independent 3D browser action game set in an original world of rival dragonriders.
+        Not affiliated with any film, TV or book franchise.</p>
         <p>Original procedural environments, effects and synthesized music.</p>
         <p>Character models under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>:<br>
         <a href="https://sketchfab.com/3d-models/animated-dragon-three-motion-loops-eca98cf6cd084c1596cecf716e110c29" target="_blank" rel="noopener">Animated Dragon Three Motion Loops</a> — LasquetiSpice.<br>
@@ -1093,6 +1095,10 @@ export function shopEffectText(u: ShopUpgradeDef, lvl: number): string {
     // GameApp hands the level straight to the mission as the starting charge count
     const n = (l: number) => `${l} charge${l === 1 ? "" : "s"}`;
     return maxed ? `${n(lvl)} (max)` : `${n(lvl)} → ${n(lvl + 1)}`;
+  }
+  if (u.category === "technique") {
+    const t = (l: number) => (l === 0 ? "not learned" : `rank ${l}`);
+    return maxed ? `${t(lvl)} (max)` : `${t(lvl)} → ${t(lvl + 1)}`;
   }
   const pct = (l: number) => `+${Math.round(l * u.perLevel * 100)}%`;
   return maxed ? `${pct(lvl)} (max)` : `${pct(lvl)} → ${pct(lvl + 1)}`;

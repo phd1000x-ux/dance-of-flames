@@ -32,6 +32,7 @@ export function fireStreamColors(fireColor: string): { core: Color4; body: Color
 export class EffectsLibrary {
   private glowTex: Texture | null = null;
   private smokeTex: Texture | null = null;
+  private flameTex: Texture | null = null;
   private rng = new SeededRng(4242);
   particleBudget = 1; // scaled by PerformanceGovernor
 
@@ -93,6 +94,107 @@ export class EffectsLibrary {
     ps.colorDead = colors.dead;
     ps.updateSpeed = 0.016;
     this.applyBudget(ps);
+    return ps;
+  }
+
+  /** noisy flame-tongue texture (soft lobed blob instead of a perfect disc) */
+  private flameTexture(): Texture {
+    if (this.flameTex) return this.flameTex;
+    const size = 128;
+    const dt = new DynamicTexture("flameTex", { width: size, height: size }, this.scene, false);
+    const ctx = dt.getContext() as unknown as CanvasRenderingContext2D;
+    ctx.clearRect(0, 0, size, size);
+    const rng = new SeededRng(777);
+    for (let i = 0; i < 14; i++) {
+      const r = size * (0.16 + rng.range(0, 0.2));
+      const x = size / 2 + rng.range(-0.18, 0.18) * size;
+      const y = size / 2 + rng.range(-0.18, 0.18) * size;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, "rgba(255,255,255,0.55)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, size, size);
+    }
+    dt.update();
+    dt.hasAlpha = true;
+    this.flameTex = dt;
+    return dt;
+  }
+
+  /**
+   * Dragon breath body: flame tongues that swell from mouth-size to a wide
+   * billow and cool from white-hot through the dragon's color to soot-red
+   * (the old fixed 1.2–3.2 m sprites read as a thin string over a 60 m range).
+   */
+  createBreath(name: string, fireColor: string): ParticleSystem {
+    const ps = new ParticleSystem(name, 1400, this.scene);
+    ps.particleTexture = this.flameTexture();
+    ps.emitter = new Vector3(0, 0, 0);
+    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+    ps.minSize = 1;
+    ps.maxSize = 1.6;
+    ps.minLifeTime = 0.42;
+    ps.maxLifeTime = 0.62;
+    ps.emitRate = 0;
+    ps.gravity = new Vector3(0, 6, 0);
+    ps.minAngularSpeed = -3;
+    ps.maxAngularSpeed = 3;
+    ps.minInitialRotation = 0;
+    ps.maxInitialRotation = Math.PI * 2;
+    ps.addSizeGradient(0, 0.5, 0.8);
+    ps.addSizeGradient(0.35, 2.2, 3);
+    ps.addSizeGradient(1, 5.5, 7);
+    const c = fireStreamColors(fireColor);
+    ps.addColorGradient(0, new Color4(c.core.r, c.core.g, c.core.b, 0.35));
+    ps.addColorGradient(0.25, new Color4(c.body.r, c.body.g, c.body.b, 0.42));
+    ps.addColorGradient(0.7, new Color4(c.body.r * 0.7, c.body.g * 0.4, c.body.b * 0.3, 0.22));
+    ps.addColorGradient(1, c.dead);
+    ps.updateSpeed = 0.016;
+    return ps;
+  }
+
+  /** short, tight white-hot jet right at the jaws — gives the breath a bright origin */
+  createBreathCore(name: string, fireColor: string): ParticleSystem {
+    const ps = new ParticleSystem(name, 500, this.scene);
+    ps.particleTexture = this.glow();
+    ps.emitter = new Vector3(0, 0, 0);
+    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+    ps.minLifeTime = 0.12;
+    ps.maxLifeTime = 0.2;
+    ps.emitRate = 0;
+    ps.gravity = Vector3.Zero();
+    ps.addSizeGradient(0, 0.35, 0.5);
+    ps.addSizeGradient(1, 1.2, 1.6);
+    const c = fireStreamColors(fireColor);
+    ps.addColorGradient(0, new Color4(1, 0.95, 0.85, 0.5));
+    ps.addColorGradient(0.5, new Color4(c.core.r, c.core.g, c.core.b, 0.35));
+    ps.addColorGradient(1, new Color4(c.body.r, c.body.g, c.body.b, 0));
+    ps.updateSpeed = 0.016;
+    return ps;
+  }
+
+  /** splash where the breath meets the ground: flames licking outward and up */
+  createBreathImpact(name: string, fireColor: string): ParticleSystem {
+    const ps = new ParticleSystem(name, 600, this.scene);
+    ps.particleTexture = this.flameTexture();
+    ps.emitter = new Vector3(0, 0, 0);
+    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+    ps.createCylinderEmitter(4, 0.5, 2.5, 0);
+    ps.minLifeTime = 0.35;
+    ps.maxLifeTime = 0.8;
+    ps.emitRate = 0;
+    ps.gravity = new Vector3(0, 9, 0);
+    ps.minEmitPower = 3;
+    ps.maxEmitPower = 9;
+    ps.minAngularSpeed = -2;
+    ps.maxAngularSpeed = 2;
+    ps.addSizeGradient(0, 1.5, 2.2);
+    ps.addSizeGradient(1, 4.5, 6);
+    const c = fireStreamColors(fireColor);
+    ps.addColorGradient(0, new Color4(c.core.r, c.core.g, c.core.b, 0.45));
+    ps.addColorGradient(0.4, new Color4(c.body.r, c.body.g, c.body.b, 0.4));
+    ps.addColorGradient(1, c.dead);
+    ps.updateSpeed = 0.016;
     return ps;
   }
 
@@ -199,7 +301,7 @@ export class EffectsLibrary {
     setTimeout(() => ps.stop(), 80);
   }
 
-  /** Rain that follows the camera (Harrenhal). */
+  /** Rain that follows the camera (Ashgrave). */
   createRain(followTarget: () => Vector3): ParticleSystem {
     const ps = new ParticleSystem("rain", 900, this.scene);
     ps.particleTexture = this.smoke();

@@ -58,10 +58,10 @@ describe("mission definitions", () => {
   it("defines five playable missions (four battlefields + the castle)", () => {
     expect(MISSIONS.length).toBe(5);
     expect(MISSIONS.map((m) => m.id)).toEqual([
-      "dragonstone",
-      "riverlands",
-      "harrenhal",
-      "kingslanding",
+      "cinderhold",
+      "fenwater",
+      "ashgrave",
+      "portcalder",
       "blackstone",
     ]);
   });

@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Flight tutorial progression (Dragonstone). Real keyboard input; the test API
+ * Flight tutorial progression (Cinderhold). Real keyboard input; the test API
  * is used only to start the mission and read the current step label. Waits are
  * on game state (step label / mission time), never wall-clock.
  */
@@ -18,7 +18,7 @@ async function holdUntilStepChanges(page: Page, key: string) {
 test("tutorial teaches Space/C and never parks on the optional aim step", async ({ page }) => {
   await page.goto("/?test=1");
   await page.waitForFunction(() => (window as any).__GAME?.api, null, { timeout: 60000 });
-  await page.evaluate(() => (window as any).__GAME.api.startMission("rhaenyra", "syrax", "dragonstone", "normal"));
+  await page.evaluate(() => (window as any).__GAME.api.startMission("seren", "ashwyn", "cinderhold", "normal"));
   await page.waitForFunction(() => (window as any).__GAME.state === "DRAGON_GAMEPLAY", null, { timeout: 60000 });
 
   expect(await label(page)).toContain("Accelerate");

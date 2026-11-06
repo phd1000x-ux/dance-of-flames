@@ -10,6 +10,8 @@ export interface EnvironmentDef {
   sunDirection: [number, number, number];
   groundColor: string;
   groundAccent: string;
+  /** ridge / steep-slope rock tone — the region's signature from the air */
+  highlandColor?: string;
   waterLevel?: number;
   waterColor?: string;
   rain?: boolean;
@@ -56,6 +58,9 @@ export interface MissionDefinition {
   objectives: ObjectiveDef[];
   /** mid-mission beats keyed to objective completion (reinforcements + subtitle) */
   events?: MissionEventDef[];
+  /** per-mission threat to the dragon (multiplies arrow damage + arrow DPS cap, and bolt damage).
+   *  Shapes the campaign curve: early fields sting, the Blackstone bolt storm stays survivable. */
+  threat?: { arrow?: number; bolt?: number };
 }
 
 const groundKillSoldiers = (n: number): ObjectiveDef => ({
@@ -84,25 +89,27 @@ const groundRepel = (n: number): ObjectiveDef => ({
 
 export const MISSIONS: MissionDefinition[] = [
   {
-    id: "dragonstone",
-    name: "Dragonstone Coast",
-    location: "Dragonstone",
+    id: "cinderhold",
+    name: "Cinderhold Coast",
+    location: "Cinderhold",
     description: "A cold volcanic shore. Enemy scouts hold the fishing village below the fortress.",
     brief: "Learn the feel of wing and flame. Clear the shore, break their watchtower, claim what hides inside.",
     seed: 101,
     enemyPower: 1.0,
+    threat: { arrow: 2.0, bolt: 1 },
     recommendedPower: 1,
     coinBonus: 40,
     tutorial: true,
     environment: {
-      skyTop: "#3a4a58",
-      skyBottom: "#8a97a0",
-      fogColor: "#9aa5ac",
-      fogDensity: 0.0016,
-      sunColor: "#cfd8dd",
+      skyTop: "#34495c",
+      skyBottom: "#93a6b2",
+      fogColor: "#8fa2ad",
+      fogDensity: 0.0009,
+      sunColor: "#e2e9ee",
       sunDirection: [-0.4, -0.7, -0.5],
-      groundColor: "#4a4a46",
-      groundAccent: "#5a5148",
+      groundColor: "#3e4a38",
+      groundAccent: "#55603f",
+      highlandColor: "#1f1f22",
       waterLevel: 0.5,
       waterColor: "#2c4a5c",
       treeCount: 30,
@@ -129,11 +136,11 @@ export const MISSIONS: MissionDefinition[] = [
       {
         id: "obj-burn",
         type: "kill",
-        description: "Burn 8 enemy soldiers",
+        description: "Burn 10 enemy soldiers",
         targetType: "soldier",
-        count: 8,
+        count: 10,
         hint: "Hold F to breathe fire (or left mouse)",
-        groundAlternative: groundKillSoldiers(8),
+        groundAlternative: groundKillSoldiers(10),
       },
       {
         id: "obj-tower",
@@ -147,24 +154,26 @@ export const MISSIONS: MissionDefinition[] = [
     ],
   },
   {
-    id: "riverlands",
-    name: "Riverlands Raid",
-    location: "The Riverlands",
+    id: "fenwater",
+    name: "Fenwater Raid",
+    location: "The Fenwater",
     description: "Green fields split by rivers. A supply camp feeds the enemy war camp.",
     brief: "Break their supply lines. Watch the sky — they have scorpions now.",
     seed: 202,
     enemyPower: 1.4,
+    threat: { arrow: 1.5, bolt: 0.7 },
     recommendedPower: 2,
     coinBonus: 80,
     environment: {
-      skyTop: "#4a5a68",
-      skyBottom: "#a8b098",
-      fogColor: "#a8ac9a",
-      fogDensity: 0.0012,
-      sunColor: "#e8e0c8",
+      skyTop: "#4a6a88",
+      skyBottom: "#c9c6a4",
+      fogColor: "#bdbb9c",
+      fogDensity: 0.0008,
+      sunColor: "#f4e2b8",
       sunDirection: [0.5, -0.6, -0.3],
-      groundColor: "#4a5a3a",
-      groundAccent: "#5c6a42",
+      groundColor: "#4c6a34",
+      groundAccent: "#8a8442",
+      highlandColor: "#6b6650",
       treeCount: 140,
       treeColor: "#2a4a2e",
       rockCount: 40,
@@ -193,7 +202,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Eliminate 12 archers",
         targetType: "archer",
         count: 12,
-        hint: "Archers shoot back — keep moving",
+        hint: "The archers hold the village to the west — keep moving",
         groundAlternative: groundKillSoldiers(12),
       },
       {
@@ -223,24 +232,26 @@ export const MISSIONS: MissionDefinition[] = [
     ],
   },
     {
-    id: "harrenhal",
-    name: "Harrenhal Outskirts",
-    location: "Harrenhal",
+    id: "ashgrave",
+    name: "Ashgrave Outskirts",
+    location: "Ashgrave",
     description: "Melted towers against a bruised sky. Rain, mud, and burned stone.",
     brief: "Their siege park aims at our lines. Silence every scorpion. The old keep gives up its dead — and its treasures. Survivors speak of a second shadow over Blackstone, larger than any scorpion.",
     seed: 303,
     enemyPower: 1.9,
+    threat: { arrow: 1.8, bolt: 0.55 },
     recommendedPower: 3,
     coinBonus: 140,
     environment: {
       skyTop: "#20242c",
-      skyBottom: "#3c4148",
+      skyBottom: "#4a4f58",
       fogColor: "#41464e",
-      fogDensity: 0.0035,
-      sunColor: "#8a8f96",
+      fogDensity: 0.0015,
+      sunColor: "#a4a9b2",
       sunDirection: [-0.3, -0.8, -0.2],
-      groundColor: "#3a3a38",
-      groundAccent: "#46423c",
+      groundColor: "#3b3833",
+      groundAccent: "#4f463b",
+      highlandColor: "#24221f",
       rain: true,
       treeCount: 70,
       treeColor: "#26302a",
@@ -252,7 +263,7 @@ export const MISSIONS: MissionDefinition[] = [
     buildings: [
       { kind: "fort", tag: "keep", count: 1, relicIds: ["dragonheartEssence"] },
       { kind: "house", tag: "ruin", count: 5 },
-      { kind: "barracks", tag: "camp", count: 2, relicIds: ["emberCapacitor", "valyrianSaddle"] },
+      { kind: "barracks", tag: "camp", count: 2, relicIds: ["emberCapacitor", "elderSaddle"] },
     ],
     events: [
       {
@@ -317,24 +328,26 @@ export const MISSIONS: MissionDefinition[] = [
     ],
   },
   {
-    id: "kingslanding",
-    name: "King's Landing Assault",
-    location: "King's Landing",
-    description: "The city that started the war. Blackwater smoke on the wind.",
+    id: "portcalder",
+    name: "Port Calder Assault",
+    location: "Port Calder",
+    description: "The city that started the war. Saltmere smoke on the wind.",
     brief: "No walls to break this time — strike the city itself. Silence the harbor scorpions, burn the granaries, topple the beacons before they light. The city falls — but their Castellan has already fled to Blackstone.",
     seed: 404,
     enemyPower: 2.6,
+    threat: { arrow: 1.5, bolt: 0.5 },
     recommendedPower: 4,
     coinBonus: 220,
     environment: {
-      skyTop: "#2e2438",
-      skyBottom: "#8a5a3a",
-      fogColor: "#584438",
-      fogDensity: 0.0022,
-      sunColor: "#d8a068",
+      skyTop: "#2e2846",
+      skyBottom: "#a8765a",
+      fogColor: "#6c5e58",
+      fogDensity: 0.0011,
+      sunColor: "#e6c29e",
       sunDirection: [0.6, -0.35, 0.4],
-      groundColor: "#4c4438",
-      groundAccent: "#584e40",
+      groundColor: "#57533f",
+      groundAccent: "#6d6447",
+      highlandColor: "#8f8068",
       waterLevel: 0.4,
       waterColor: "#28404c",
       treeCount: 20,
@@ -351,9 +364,9 @@ export const MISSIONS: MissionDefinition[] = [
     ],
     events: [
       {
-        id: "ev-goldcloaks",
+        id: "ev-cityguards",
         afterObjective: "obj-scorpions",
-        subtitle: "Gold cloaks pour from the city gates to guard the granaries!",
+        subtitle: "City guards pour from the city gates to guard the granaries!",
         reinforce: { swordsman: 4, shieldman: 3 },
         anchor: "granary",
       },
@@ -381,7 +394,7 @@ export const MISSIONS: MissionDefinition[] = [
         description: "Silence the harbor scorpions",
         targetType: "ballista",
         count: 5,
-        hint: "Scorpions line the Blackwater quays",
+        hint: "Scorpions line the Saltmere quays",
         groundAlternative: groundKillSoldiers(12),
       },
       {
@@ -427,17 +440,19 @@ export const MISSIONS: MissionDefinition[] = [
       "Their last citadel, and the Castellan who rules it. Silence their scorpions, shatter the walls, take the gate, hold the courtyard — then face him. End this, in fire or in blood.",
     seed: 505,
     enemyPower: 3.2,
+    threat: { arrow: 1.1, bolt: 0.35 },
     recommendedPower: 5,
     coinBonus: 320,
     environment: {
-      skyTop: "#1c2028",
-      skyBottom: "#4a4038",
-      fogColor: "#3a3833",
-      fogDensity: 0.0028,
-      sunColor: "#c8b8a0",
+      skyTop: "#1a1820",
+      skyBottom: "#6a3a2a",
+      fogColor: "#4a3430",
+      fogDensity: 0.0017,
+      sunColor: "#e0a878",
       sunDirection: [-0.5, -0.6, -0.4],
-      groundColor: "#3c3a34",
-      groundAccent: "#484438",
+      groundColor: "#34332e",
+      groundAccent: "#463f34",
+      highlandColor: "#17161a",
       treeCount: 90,
       treeColor: "#24301f",
       rockCount: 120,

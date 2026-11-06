@@ -5,7 +5,7 @@ import { KnightAnimator } from "./KnightAnimator";
 import { KnightClipPlayer, loadKnightClips, type KnightClipData } from "./KnightClips";
 import { attackDuration } from "../player/RiderController";
 
-export async function installCharacterVisuals(mission: MissionScene, options: { debugPanel?: boolean } = {}): Promise<void> {
+export async function installCharacterVisuals(mission: MissionScene, options: { debugPanel?: boolean; testHook?: boolean } = {}): Promise<void> {
   const scene = mission.scene;
   const originalDragonMeshes = mission.rig.root.getChildMeshes();
   const containers = await loadCharacterAssets(scene);
@@ -175,6 +175,18 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
   scene.onDisposeObservable.addOnce(() => {
     for (const model of [dragon, mounted, ground]) if (!model.root.isDisposed()) model.root.dispose(false, false);
   });
+  if (options.testHook) {
+    // E2E hook — independent of the on-screen review panel
+    (window as any).__CHARACTER_PROTOTYPE = {
+      dragon, mounted, ground, mission, setEnabled,
+      get enabled() { return enabled; },
+      get simulatedTime() { return simulatedTime; },
+      /** true once the Mixamo mocap clips drive the ground knight */
+      get mocap() { return clipPlayer !== null; },
+      clips: { dragon: flightClip?.name, knight: ground.clips[0]?.name },
+    };
+    scene.onDisposeObservable.addOnce(() => { delete (window as any).__CHARACTER_PROTOTYPE; });
+  }
   if (!options.debugPanel) return;
   const panel = document.createElement("aside");
   panel.id = "character-prototype-panel";
@@ -210,19 +222,10 @@ export async function installCharacterVisuals(mission: MissionScene, options: { 
   for (const event of ["mousedown", "mousemove", "wheel"]) {
     panel.addEventListener(event, e => e.stopPropagation());
   }
-  (window as any).__CHARACTER_PROTOTYPE = {
-    dragon, mounted, ground, mission, setEnabled,
-    get enabled() { return enabled; },
-    get simulatedTime() { return simulatedTime; },
-    /** true once the Mixamo mocap clips drive the ground knight */
-    get mocap() { return clipPlayer !== null; },
-    clips: { dragon: flightClip?.name, knight: ground.clips[0]?.name },
-  };
   scene.onDisposeObservable.addOnce(() => {
     panel.remove();
     for (const model of [dragon, mounted, ground]) if (!model.root.isDisposed()) model.root.dispose(false, false);
 
-    delete (window as any).__CHARACTER_PROTOTYPE;
   });
 }
 
@@ -272,5 +275,5 @@ export function swingPose(attack: string, t: number): SwingPose {
 
 /** Backwards-compatible opt-in comparison tools. */
 export function installCharacterPrototype(mission: MissionScene): Promise<void> {
-  return installCharacterVisuals(mission, { debugPanel: true });
+  return installCharacterVisuals(mission, { debugPanel: true, testHook: true });
 }

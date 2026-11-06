@@ -157,7 +157,7 @@ export class GameApp {
         characters: !this.opts.testMode || new URLSearchParams(location.search).get("characters") === "1",
       });
     }
-    this.showcase.setDragon(getDragon(this.save.selectedDragon ?? "syrax"), getRider(this.save.selectedRider ?? "rhaenyra"));
+    this.showcase.setDragon(getDragon(this.save.selectedDragon ?? "ashwyn"), getRider(this.save.selectedRider ?? "seren"));
     this.showcase.setMode("menu");
   }
 
@@ -260,6 +260,11 @@ export class GameApp {
       dragon,
       shopMods: this.upgrades.getStatMods(),
       consumables: { heal: healLvl, fireBoost: this.upgrades.getLevel("fireBoostStart"), armorWard: this.upgrades.getLevel("armorCharmStart") },
+      techniques: {
+        diveFury: this.upgrades.getLevel("diveFury"),
+        emberChain: this.upgrades.getLevel("emberChain"),
+        closeCall: this.upgrades.getLevel("closeCall"),
+      },
       settings: this.settings,
       input: this.input,
       audio: this.audio,
@@ -288,7 +293,9 @@ export class GameApp {
       status.textContent = "Loading Characters…";
       try {
         const { installCharacterVisuals } = await import("../world/CharacterPrototype");
-        await installCharacterVisuals(mission, { debugPanel: characterDebug });
+        // the Korean asset-review panel covers the HUD; opt in with &charpanel=1
+        const charPanel = new URLSearchParams(location.search).get("charpanel") === "1";
+        await installCharacterVisuals(mission, { debugPanel: characterDebug && charPanel, testHook: characterDebug });
       } catch (error) {
         console.warn("[characters] using procedural fallback", error);
       }
@@ -448,8 +455,8 @@ export class GameApp {
         this.ui.showScreen("mission-select");
       },
       onStartMission: (missionId: string, difficulty: DifficultyId) => {
-        const riderId = this.save.selectedRider ?? "rhaenyra";
-        const dragonId = this.save.selectedDragon ?? "syrax";
+        const riderId = this.save.selectedRider ?? "seren";
+        const dragonId = this.save.selectedDragon ?? "ashwyn";
         // pull latest selection from UI via DOM
         const sel = (window as any).__UI?.getSelection?.();
         this.startMission(missionId, sel?.rider ?? riderId, sel?.dragon ?? dragonId, difficulty);
@@ -555,7 +562,7 @@ export class GameApp {
   }
 
   private selectedDragonForShowcase(): string {
-    return this.save.selectedDragon ?? "syrax";
+    return this.save.selectedDragon ?? "ashwyn";
   }
 
   private musicAmbientTimer = 0;

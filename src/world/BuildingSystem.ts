@@ -109,7 +109,11 @@ export class BuildingSystem {
     for (const b of this.buildings) {
       if (b.collapsed) continue;
       const radius = Math.max(b.size.w, b.size.d) * 0.55;
-      const v = b.pos.subtract(origin);
+      // aim at the nearest point on the building's vertical span, not its base —
+      // flame from just above a roof must still land (eval 4: 0 damage for 5 s)
+      const h = b.size.h ?? 10;
+      const aimY = Math.min(b.pos.y + h, Math.max(b.pos.y, origin.y - 2));
+      const v = new Vector3(b.pos.x, aimY, b.pos.z).subtract(origin);
       const dist = v.length() - radius;
       if (dist > range) continue;
       const cosA = Vector3.Dot(v.scale(1 / Math.max(0.001, v.length())), dir);

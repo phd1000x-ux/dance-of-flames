@@ -643,12 +643,14 @@ html, body {
 .shop-layout {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
+  /* header · scrolling columns · footer: the columns must not push past the panel */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
   width: min(1500px, 96vw);
-  max-height: 86vh;
+  height: min(86vh, 900px);
   margin: 7vh auto 0;
 }
-.shop-col { overflow-y: auto; padding-right: 4px; }
+.shop-col { overflow-y: auto; padding-right: 4px; min-height: 0; }
 .shop-item {
   display: flex;
   align-items: center;

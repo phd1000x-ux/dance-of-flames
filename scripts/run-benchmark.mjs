@@ -4,7 +4,7 @@
  * runs the scripted stress scenario (fire, troops, ballistae, buildings),
  * and prints the measured report.
  *
- * Usage: npm run benchmark [-- mission=harrenhal seconds=30]
+ * Usage: npm run benchmark [-- mission=ashgrave seconds=30]
  * Set BENCH_HEADLESS=1 for CI (SwiftShader — not representative of real hardware).
  */
 import { chromium } from "@playwright/test";
@@ -12,7 +12,7 @@ import { chromium } from "@playwright/test";
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => a.split("=")).map(([k, v]) => [k, v])
 );
-const mission = args.mission ?? "riverlands";
+const mission = args.mission ?? "fenwater";
 const seconds = Number(args.seconds ?? 30);
 const base = args.url ?? "http://localhost:5173";
 const headless = process.env.BENCH_HEADLESS === "1";
@@ -23,7 +23,7 @@ page.on("console", (msg) => {
   if (msg.text().includes("[benchmark]")) console.log(msg.text());
 });
 console.log(`[benchmark] launching ${mission} for ${seconds}s (${headless ? "headless" : "headed"})…`);
-await page.goto(`${base}/?benchmark=1&test=1&mission=${mission}&seconds=${seconds}&rider=daemon&dragon=caraxes`);
+await page.goto(`${base}/?benchmark=1&test=1&mission=${mission}&seconds=${seconds}&rider=kael&dragon=korrath`);
 
 const result = await page.waitForFunction(() => window.__BENCH, null, { timeout: (seconds + 60) * 1000 });
 const report = await result.jsonValue();

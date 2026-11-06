@@ -15,10 +15,12 @@ export class FireStreak {
   count = 0;
   private timer = 0;
 
+  constructor(private window = STREAK_WINDOW) {}
+
   /** a fire kill landed; returns the running streak length */
   kill(): number {
     this.count = this.timer > 0 ? this.count + 1 : 1;
-    this.timer = STREAK_WINDOW;
+    this.timer = this.window;
     return this.count;
   }
 

@@ -23,6 +23,14 @@ export interface ObjectiveState extends ObjectiveDef {
   completed: boolean;
 }
 
+/** does killing `enemyType` count toward a kill objective with this targetType? */
+export function killTargetMatches(targetType: string | undefined, enemyType: string): boolean {
+  if (!targetType || targetType === "any") return true;
+  if (targetType === enemyType) return true;
+  if (targetType === "soldier") return ["swordsman", "archer", "spearman", "shieldman"].includes(enemyType);
+  return false;
+}
+
 type CompleteCallback = (o: ObjectiveState) => void;
 
 /**
@@ -235,13 +243,7 @@ export class ObjectiveTracker {
   }
 
   private matchesTarget(obj: ObjectiveState, enemyType: string): boolean {
-    const t = obj.targetType;
-    if (!t || t === "any") return true;
-    if (t === enemyType) return true;
-    if (t === "soldier") {
-      return ["swordsman", "archer", "spearman", "shieldman"].includes(enemyType);
-    }
-    return false;
+    return killTargetMatches(obj.targetType, enemyType);
   }
 
   private checkDone(o: ObjectiveState): void {

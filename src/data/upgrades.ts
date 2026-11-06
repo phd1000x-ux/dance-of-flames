@@ -1,7 +1,7 @@
 export interface ShopUpgradeDef {
   id: string;
   name: string;
-  category: "dragon" | "rider" | "consumable";
+  category: "dragon" | "rider" | "consumable" | "technique";
   stat: string;
   /** fractional bonus per level (0.10 = +10%/level) */
   perLevel: number;
@@ -21,7 +21,7 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
   { id: "boost", name: "Rage of Wings", category: "dragon", stat: "boostSpeed", perLevel: 0.07, maxLevel: 4, prices: P, description: "Boost speed." },
   { id: "turnRate", name: "Keen Instinct", category: "dragon", stat: "turnRate", perLevel: 0.06, maxLevel: 4, prices: P, description: "Turning agility." },
 
-  { id: "swordDamage", name: "Valyrian Edge", category: "rider", stat: "swordDamage", perLevel: 0.12, maxLevel: 4, prices: P, description: "Sword damage." },
+  { id: "swordDamage", name: "Elder-steel Edge", category: "rider", stat: "swordDamage", perLevel: 0.12, maxLevel: 4, prices: P, description: "Sword damage." },
   { id: "riderMaxHp", name: "Hardened Rider", category: "rider", stat: "riderHp", perLevel: 0.1, maxLevel: 4, prices: P, description: "Rider max health." },
   { id: "riderArmor", name: "Half-Plate", category: "rider", stat: "riderArmor", perLevel: 0.12, maxLevel: 4, prices: P, description: "Rider armor." },
   { id: "blockEfficiency", name: "Shield Drill", category: "rider", stat: "riderBlock", perLevel: 0.08, maxLevel: 4, prices: P, description: "Block efficiency." },
@@ -30,6 +30,11 @@ export const SHOP_UPGRADES: ShopUpgradeDef[] = [
   { id: "startHeal", name: "Field Physick", category: "consumable", stat: "startHeal", perLevel: 0.34, maxLevel: 4, prices: [40, 90, 180, 350], description: "Begin each mission with a healing flask (+1 use/level)." },
   { id: "fireBoostStart", name: "Brazier Charm", category: "consumable", stat: "fireBoostStart", perLevel: 0.5, maxLevel: 4, prices: [40, 90, 180, 350], description: "Begin each mission with a fire boost charge." },
   { id: "armorCharmStart", name: "Ward Charm", category: "consumable", stat: "armorCharmStart", perLevel: 0.5, maxLevel: 4, prices: [40, 90, 180, 350], description: "Begin each mission with an armor ward charge." },
+
+  // techniques change how a pass pays off, not a flat stat (src/combat/Techniques.ts)
+  { id: "diveFury", name: "Stooping Strike", category: "technique", stat: "diveFury", perLevel: 0.25, maxLevel: 2, prices: [180, 420], description: "Fire burns hotter while diving at speed (nose down, near top speed)." },
+  { id: "emberChain", name: "Ember Chain", category: "technique", stat: "emberChain", perLevel: 0.5, maxLevel: 2, prices: [150, 380], description: "INFERNO streaks last 0.5s longer per level and pay +50% coins." },
+  { id: "closeCall", name: "Close Call", category: "technique", stat: "closeCall", perLevel: 0.3, maxLevel: 2, prices: [160, 400], description: "A scorpion bolt that narrowly misses refills 30% fire and charges your super." },
 ];
 
 export function getShopUpgrade(id: string): ShopUpgradeDef {

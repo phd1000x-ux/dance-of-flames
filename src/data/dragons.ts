@@ -52,8 +52,8 @@ export interface DragonDefinition {
 
 export const DRAGONS: DragonDefinition[] = [
   {
-    id: "syrax",
-    name: "Syrax",
+    id: "ashwyn",
+    name: "Ashwyn",
     epithet: "The Queen's Dragon",
     description: "Quick to turn, eager to climb. A responsive mount with a mean streak when provoked.",
     scale: 1.0,
@@ -82,8 +82,8 @@ export const DRAGONS: DragonDefinition[] = [
     hitRadius: 4.0,
   },
   {
-    id: "caraxes",
-    name: "Caraxes",
+    id: "korrath",
+    name: "Korrath",
     epithet: "The Blood Wyrm",
     description: "Lean and merciless. Long-reaching flames and a devastating dive.",
     scale: 1.08,
@@ -112,8 +112,8 @@ export const DRAGONS: DragonDefinition[] = [
     hitRadius: 4.2,
   },
   {
-    id: "vhagar",
-    name: "Vhagar",
+    id: "morgrath",
+    name: "Morgrath",
     epithet: "The Last Ember of the Conquest",
     description: "A living fortress. Turns like a castle, burns like a furnace.",
     scale: 1.45,
@@ -142,8 +142,8 @@ export const DRAGONS: DragonDefinition[] = [
     hitRadius: 5.6,
   },
   {
-    id: "sunfyre",
-    name: "Sunfyre",
+    id: "solenne",
+    name: "Solenne",
     epithet: "The Golden",
     description: "Golden wings, even temper. Efficient flame and remarkable recovery.",
     scale: 1.05,
@@ -172,8 +172,8 @@ export const DRAGONS: DragonDefinition[] = [
     hitRadius: 4.2,
   },
   {
-    id: "meleys",
-    name: "Meleys",
+    id: "vesska",
+    name: "Vesska",
     epithet: "The Red Queen",
     description: "No dragon on wing is faster. Scarlet terror of the skies.",
     scale: 1.1,
@@ -202,8 +202,8 @@ export const DRAGONS: DragonDefinition[] = [
     hitRadius: 4.2,
   },
   {
-    id: "moondancer",
-    name: "Moondancer",
+    id: "lunaris",
+    name: "Lunaris",
     epithet: "The Pale Huntress",
     description: "Slim as a knife, turns on a copper coin. Fragile as glass when caught.",
     scale: 0.88,
@@ -232,8 +232,8 @@ export const DRAGONS: DragonDefinition[] = [
     hitRadius: 3.5,
   },
   {
-    id: "dreamfyre",
-    name: "Dreamfyre",
+    id: "velmora",
+    name: "Velmora",
     epithet: "The Patient Storm",
     description: "Slow to anger, slower to tire. Long, cool breath and a hide that shrugs off bolts.",
     scale: 1.05,

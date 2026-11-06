@@ -53,8 +53,9 @@ describe("UpgradeSystem", () => {
 
   it("every shop upgrade has 4 levels and prices", () => {
     for (const u of SHOP_UPGRADES) {
-      expect(u.maxLevel).toBe(4);
-      expect(u.prices).toHaveLength(4);
+      // techniques are two-rank behaviour unlocks; every stat/consumable line has 4 levels
+      expect(u.maxLevel).toBe(u.category === "technique" ? 2 : 4);
+      expect(u.prices).toHaveLength(u.maxLevel);
       expect(u.id).toBeTruthy();
     }
   });
@@ -69,14 +70,14 @@ describe("stat composition", () => {
   });
 
   it("rider bond bonus applies to dragon stats", () => {
-    const syrax = DRAGONS.find((d) => d.id === "syrax")!;
-    const rhaenyra = RIDERS.find((r) => r.id === "rhaenyra")!;
+    const ashwyn = DRAGONS.find((d) => d.id === "ashwyn")!;
+    const seren = RIDERS.find((r) => r.id === "seren")!;
     const out = computeFinalStats(
-      { maxSpeed: syrax.maxSpeed, turnRate: syrax.turnRate },
-      [rhaenyra.dragonBonus]
+      { maxSpeed: ashwyn.maxSpeed, turnRate: ashwyn.turnRate },
+      [seren.dragonBonus]
     );
-    expect(out.maxSpeed).toBeGreaterThan(syrax.maxSpeed);
-    expect(out.turnRate).toBeGreaterThan(syrax.turnRate);
+    expect(out.maxSpeed).toBeGreaterThan(ashwyn.maxSpeed);
+    expect(out.turnRate).toBeGreaterThan(ashwyn.turnRate);
   });
 
   it("relic effects stack multiplicatively and are mission-scoped", () => {
@@ -103,14 +104,14 @@ describe("stat composition", () => {
     const sigs = DRAGONS.map((d) => `${d.wingShape.span}/${d.wingShape.chord}/${d.wingShape.fingers}/${d.wingShape.membraneNotch}/${d.wingShape.sweepAngle}`);
     expect(new Set(sigs).size).toBe(DRAGONS.length); // all unique
     // canonical identities preserved:
-    const vhagar = DRAGONS.find((d) => d.id === "vhagar")!;
-    const moondancer = DRAGONS.find((d) => d.id === "moondancer")!;
-    const caraxes = DRAGONS.find((d) => d.id === "caraxes")!;
-    expect(vhagar.wingShape.chord).toBeGreaterThan(1.2); // broad battle-planes
-    expect(vhagar.wingShape.fingers).toBe(5);
-    expect(moondancer.wingShape.chord).toBeLessThan(0.75); // slim slivers
-    expect(moondancer.wingShape.membraneNotch).toBeGreaterThan(0.6); // deep scallops
-    expect(caraxes.wingShape.chord).toBeLessThan(0.8); // narrow serpentine
+    const morgrath = DRAGONS.find((d) => d.id === "morgrath")!;
+    const lunaris = DRAGONS.find((d) => d.id === "lunaris")!;
+    const korrath = DRAGONS.find((d) => d.id === "korrath")!;
+    expect(morgrath.wingShape.chord).toBeGreaterThan(1.2); // broad battle-planes
+    expect(morgrath.wingShape.fingers).toBe(5);
+    expect(lunaris.wingShape.chord).toBeLessThan(0.75); // slim slivers
+    expect(lunaris.wingShape.membraneNotch).toBeGreaterThan(0.6); // deep scallops
+    expect(korrath.wingShape.chord).toBeLessThan(0.8); // narrow serpentine
     for (const d of DRAGONS) {
       expect(d.wingShape.fingers).toBeGreaterThanOrEqual(3);
       expect(d.wingShape.fingers).toBeLessThanOrEqual(5);
@@ -119,13 +120,13 @@ describe("stat composition", () => {
     }
   });
 
-  it("Vhagar is tankier but slower than Moondancer", () => {
-    const vhagar = DRAGONS.find((d) => d.id === "vhagar")!;
-    const moondancer = DRAGONS.find((d) => d.id === "moondancer")!;
-    expect(vhagar.maxHealth).toBeGreaterThan(moondancer.maxHealth);
-    expect(vhagar.armor).toBeGreaterThan(moondancer.armor);
-    expect(moondancer.turnRate).toBeGreaterThan(vhagar.turnRate);
-    expect(moondancer.maxSpeed).toBeGreaterThan(vhagar.maxSpeed);
+  it("Morgrath is tankier but slower than Lunaris", () => {
+    const morgrath = DRAGONS.find((d) => d.id === "morgrath")!;
+    const lunaris = DRAGONS.find((d) => d.id === "lunaris")!;
+    expect(morgrath.maxHealth).toBeGreaterThan(lunaris.maxHealth);
+    expect(morgrath.armor).toBeGreaterThan(lunaris.armor);
+    expect(lunaris.turnRate).toBeGreaterThan(morgrath.turnRate);
+    expect(lunaris.maxSpeed).toBeGreaterThan(morgrath.maxSpeed);
   });
 
   it("all relics have valid stat effects", () => {

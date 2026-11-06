@@ -1,3 +1,4 @@
+import { scatterGroundTufts } from "./GroundScatter";
 import {
   Color3,
   DirectionalLight,
@@ -92,6 +93,7 @@ export class WorldBuilder {
     const terrain = new Terrain(this.scene, def.seed, env.waterLevel, {
       groundColor: env.groundColor,
       accentColor: env.groundAccent,
+      highlandColor: env.highlandColor,
     });
 
     buildSkyDome(this.scene, env);
@@ -183,6 +185,15 @@ export class WorldBuilder {
       }
     }
 
+    // ground scatter: grass/scrub tufts (own RNG — mission layout stays deterministic)
+    scatterGroundTufts(this.scene, terrain, {
+      seed: def.seed,
+      groundColor: env.groundColor,
+      accentColor: env.groundAccent,
+      count: env.silhouette === "cliffs" ? 3500 : def.id === "blackstone" ? 1800 : 6500,
+      waterLevel: env.waterLevel,
+    });
+
     if ((env.rockCount ?? 0) > 0) {
       const templates = [0, 1, 2, 3].map((v) => weatheredRock(`rockTpl-${v}`, def.seed + v * 19, this.scene, 1.65));
       const rc = Color3.FromHexString(env.groundAccent).scale(0.85);
@@ -249,7 +260,7 @@ export class WorldBuilder {
 
     // ---- per-mission zones ----
     switch (def.id) {
-      case "dragonstone": {
+      case "cinderhold": {
         placeBuildingGroup("house", "house", 4, { cx: 170, cz: 60, spread: 60 }, []);
         placeBuildingGroup("tower", "watchtower", 1, { cx: 260, cz: -140, spread: 20 }, ["dragonfireCore"]);
         squads.push({ type: "archer", count: 6, center: new Vector3(170, 0, 60), radius: 55 });
@@ -257,7 +268,7 @@ export class WorldBuilder {
         squads.push({ type: "spearman", count: 2, center: new Vector3(260, 0, -140), radius: 25 });
         break;
       }
-      case "riverlands": {
+      case "fenwater": {
         placeBuildingGroup("barracks", "supply", 2, { cx: 120, cz: 150, spread: 40 }, ["windriderSpurs"]);
         placeBuildingGroup("house", "village", 5, { cx: -180, cz: 80, spread: 80 }, []);
         placeBuildingGroup("tower", "watchtower", 2, { cx: 0, cz: -220, spread: 90 }, ["obsidianScale"]);
@@ -273,8 +284,8 @@ export class WorldBuilder {
         commanderPos = findFlat(120, 150, 30, 3);
         break;
       }
-      case "harrenhal": {
-        placeBuildingGroup("fort", "keep", 1, { cx: 0, cz: 0, spread: 0 }, ["dragonheartEssence", "valyrianSaddle"]);
+      case "ashgrave": {
+        placeBuildingGroup("fort", "keep", 1, { cx: 0, cz: 0, spread: 0 }, ["dragonheartEssence", "elderSaddle"]);
         placeBuildingGroup("house", "ruin", 5, { cx: -40, cz: 120, spread: 90 }, []);
         placeBuildingGroup("barracks", "camp", 2, { cx: 200, cz: -160, spread: 50 }, ["emberCapacitor"]);
         squads.push({ type: "archer", count: 18, center: new Vector3(0, 0, 0), radius: 110 });
@@ -290,7 +301,7 @@ export class WorldBuilder {
         );
         break;
       }
-      case "kingslanding": {
+      case "portcalder": {
         // a city raid, not a wall siege (Blackstone owns the castle assault):
         // streets in the middle, granaries by the docks, beacon towers on the heights
         placeBuildingGroup("house", "district", 8, { cx: 0, cz: 180, spread: 90 }, []);

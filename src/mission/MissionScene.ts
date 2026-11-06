@@ -32,7 +32,7 @@ import { ProjectileSystem } from "../combat/ProjectileSystem";
 import { EnemyManager, type CombatContext, type Soldier } from "../ai/EnemyManager";
 import { BuildingSystem } from "../world/BuildingSystem";
 import { LootSystem } from "../world/LootSystem";
-import { ObjectiveTracker } from "./Objectives";
+import { ObjectiveTracker, killTargetMatches } from "./Objectives";
 import { MissionEventDirector, aheadOfPlayer, reinforcementPoints, type MissionEventDef } from "./MissionEvents";
 import { BlackstoneFinale } from "./blackstone/BlackstoneFinale";
 import type { FinalePhase } from "./blackstone/FinalePhases";
@@ -42,7 +42,18 @@ import { emptyStats, type MissionStats } from "./Scoring";
 import { getRelic } from "../data/items";
 import { clamp } from "../core/MathUtils";
 import { assistCone, assistPull } from "../player/FlightFeel";
-import { FireStreak, STREAK_MIN, streakBonus } from "../combat/FireStreak";
+import { FireStreak, STREAK_MIN } from "../combat/FireStreak";
+
+/** seconds of bolt immunity after a bolt hit (volley stacking guard) */
+export const BOLT_GRACE = 2.5;
+/** max sustained arrow damage per second to the dragon (× difficulty enemyDamage); bursts up to 1.5 s worth */
+export const ARROW_DPS_CAP = 4;
+/** Q/E dodge makes bolts fired within this many seconds miss (covers the Normal 1.35 s telegraph) */
+export const BOLT_EVADE_WINDOW = 1.45;
+/** dragon recovers this fraction of max HP per second after OUT_OF_COMBAT_S without damage */
+export const DRAGON_REGEN = 0.012;
+export const OUT_OF_COMBAT_S = 5;
+import { CLOSE_CALL_MARGIN, NO_TECHNIQUES, closeCallReward, diveFuryMult, emberChainBonus, emberChainWindow, type TechniqueLevels } from "../combat/Techniques";
 import { PostPipeline, postConfigForTier } from "../engine/PostPipeline";
 
 export interface MissionSceneDeps {
@@ -53,6 +64,8 @@ export interface MissionSceneDeps {
   dragon: DragonDefinition;
   shopMods: Record<string, number>;
   consumables: { heal: number; fireBoost: number; armorWard: number };
+  /** shop technique ranks (optional so older harnesses keep working) */
+  techniques?: TechniqueLevels;
   settings: GameSettings;
   input: InputManager;
   audio: AudioManager;
@@ -72,6 +85,9 @@ const AIRBORNE_RESTORE_PHASES = ["CHASE", "DUEL_AIR", "RETURN", "FINAL_STAGGER",
  * Full mission runtime: world, player, AI, combat, loot, objectives,
  * dragon-death → ground conversion, tutorial, stats.
  */
+/** ranged (arrow/bolt) damage scale against the rider on foot */
+export const GROUND_RANGED_MULT = 0.5;
+
 export class MissionScene {
   readonly scene: Scene;
   readonly world: ReturnType<WorldBuilder["build"]>;
@@ -139,7 +155,17 @@ export class MissionScene {
   /** remaining real seconds of impact hit-stop (see hitStop) */
   hitStopT = 0;
   /** flight fire-kill chain (×N INFERNO + coin bonus) */
-  private streak = new FireStreak();
+  private streak: FireStreak;
+  private techniques: TechniqueLevels;
+  /** technique feedback throttle (s) */
+  private stoopHintCd = 0;
+  /** after a bolt connects, further bolts glance off for BOLT_GRACE s */
+  private boltGraceT = 0;
+  /** arrow damage token bucket (see ARROW_DPS_CAP) */
+  private arrowBudget = 0;
+  /** mission time of the last damage the dragon took (out-of-combat regen) */
+  private lastDragonHitT = -999;
+  private prevDodgeTimer = 0;
   /** scaled sim dt of the latest update — visual layers animate on this so hit-stop/slow-mo apply */
   lastSimDt = 0;
   /** checkpoint-restore replay guard — suppresses minting side effects (loot/super/stats/relic sfx) */
@@ -160,6 +186,8 @@ export class MissionScene {
     this.castleAabbs = this.world.layout.castleAabbs;
 
     this.player = new PlayerState(d.dragon, d.rider, d.shopMods);
+    this.techniques = { ...NO_TECHNIQUES, ...(d.techniques ?? {}) };
+    this.streak = new FireStreak(emberChainWindow(this.techniques.emberChain));
     this.player.healCharges = d.consumables.heal;
     this.player.fireBoostCharges = d.consumables.fireBoost;
     this.player.armorWardCharges = d.consumables.armorWard;
@@ -170,10 +198,10 @@ export class MissionScene {
     }
     this.dragonCtrl = new DragonController(this.player, this.rig, this.world.terrain, d.bus, 760);
     this.dragonCtrl.inputTurnScale = d.settings.keyboardTurnSpeed ?? 1;
-    this.dragonCtrl.spawn(d.mission.id === "kingslanding"
+    this.dragonCtrl.spawn(d.mission.id === "portcalder"
       ? new Vector3(-80, 140, -420)
       : this.worldLayout.playerStart.clone(), this.worldLayout.playerStartYaw);
-    if (d.mission.id === "kingslanding") {
+    if (d.mission.id === "portcalder") {
       this.dragonCtrl.yaw = Math.PI * 0.02; // face the city
     }
 
@@ -184,6 +212,7 @@ export class MissionScene {
     this.dragonCam.reset(this.dragonCtrl);
 
     this.fire = new FireSystem(this.scene, this.player, this.dragonCtrl, this.rig, effects, d.bus);
+    this.fire.heightAt = (x, z) => this.world.terrain.heightAt(x, z);
     this.projectiles = new ProjectileSystem(this.scene, this.world.terrain, effects, d.bus);
 
     this.enemies = new EnemyManager(this.scene, this.world.terrain, this.projectiles, d.bus, d.difficulty, d.mission.seed);
@@ -237,6 +266,14 @@ export class MissionScene {
     this.buildings.panFromWorld = (p) => this.panFromWorld(p);
     // fire → damage
     this.fire.onFireHit = (origin, dir, range, halfAngle, dps, dt) => {
+      const fury = diveFuryMult(this.techniques.diveFury, this.dragonCtrl.pitch, this.dragonCtrl.speed, this.player.dragonStats.maxSpeed ?? 45);
+      if (fury > 1) {
+        dps *= fury;
+        if (this.stoopHintCd <= 0) {
+          this.stoopHintCd = 4;
+          d.bus.emit("hud-hint", { text: "STOOPING STRIKE" });
+        }
+      }
       this.enemies.applyFireDamage(origin, dir, range, halfAngle, dps, dt);
       this.buildings.applyFireDamage(origin, dir, range, halfAngle, dps, dt);
       if (this.finale) this.finale.applyFire(origin, dir, range, halfAngle, dps, dt);
@@ -497,13 +534,24 @@ export class MissionScene {
     this.lastSimDt = dt;
     const streakEnded = this.streak.update(dt);
     if (streakEnded >= STREAK_MIN && !this.restoring) {
-      const bonus = streakBonus(streakEnded);
+      const bonus = emberChainBonus(streakEnded, this.techniques.emberChain);
       this.stats.coinsCollected += bonus;
       d.onCoins(bonus);
       d.bus.emit("fire-streak", { count: streakEnded, bonus });
     }
     this.time += dt;
     this.stats.timeSeconds = this.time;
+    if (this.stoopHintCd > 0) this.stoopHintCd -= dt;
+    if (this.boltGraceT > 0) this.boltGraceT -= dt;
+    // a fresh Q/E dodge (timer just set to its full 0.55 s) reads the scorpions
+    const dodging = this.dragonCtrl.dodgeTimer;
+    if (this.phase === "dragon" && dodging > this.prevDodgeTimer + 0.2) this.projectiles.evadeBolts(BOLT_EVADE_WINDOW);
+    this.prevDodgeTimer = dodging;
+    const arrowThreat = this.deps.mission?.threat?.arrow ?? 1;
+    const arrowCap = ARROW_DPS_CAP * arrowThreat * (this.deps.difficulty?.enemyDamage ?? 1);
+    this.arrowBudget = Math.min(arrowCap * 1.5, this.arrowBudget + arrowCap * dt);
+    // long missions must not be pure attrition: break contact and the dragon recovers
+    if (this.phase === "dragon" && this.time - this.lastDragonHitT > OUT_OF_COMBAT_S) this.player.healDragon(DRAGON_REGEN * dt);
 
     // projectile collision targets
     this.projectiles.playerMode = this.phase === "ground" ? "ground" : "dragon";
@@ -512,17 +560,41 @@ export class MissionScene {
     this.projectiles.dragonRadius = this.player.dragonDef.hitRadius * 0.92;
     this.projectiles.riderPos = this.riderCtrl ? this.riderCtrl.pos : null;
     this.projectiles.invulnerable = this.dragonCtrl.invulnerable > 0 || (this.riderCtrl?.invulnerable ?? 0) > 0;
+    this.projectiles.closeCallMargin = CLOSE_CALL_MARGIN;
+    this.projectiles.onNearMiss = () => {
+      if (this.phase !== "dragon" || this.restoring) return;
+      this.stats.closeCalls = (this.stats.closeCalls ?? 0) + 1;
+      const r = closeCallReward(this.techniques.closeCall);
+      if (r.super <= 0) return;
+      const fe = this.player.fireEnergy;
+      fe.current = Math.min(fe.capacity, fe.current + fe.capacity * r.fireFraction);
+      this.player.addSuper(r.super);
+      d.bus.emit("hud-hint", { text: "CLOSE CALL · FIRE REFILLED" });
+    };
     this.projectiles.onPlayerHit = (damage, sx, sz, kind) => {
       if (this.phase === "ground") {
         if (!this.riderCtrl?.alive) return;
         // Projectile velocity points into the rider; takeHit expects rider → attacker.
-        const res = this.riderCtrl.takeHit(damage, new Vector3(-sx, 0, -sz).normalize(), kind);
+        // ranged fire is tuned for a 900-HP dragon; on foot it must stay a pressure, not a sniper wall
+        const res = this.riderCtrl.takeHit(damage * GROUND_RANGED_MULT, new Vector3(-sx, 0, -sz).normalize(), kind);
         if (res.applied > 0) {
           d.bus.emit("player-damaged", { amount: res.applied, dirX: sx, dirZ: sz, source: kind });
         }
         return;
       }
+      // a coordinated volley lands as ONE punishing hit, not 2-3 stacked kills
+      if (kind === "bolt") {
+        if (this.boltGraceT > 0) return;
+        this.boltGraceT = BOLT_GRACE;
+        damage *= d.mission?.threat?.bolt ?? 1;
+      } else if (kind === "arrow") {
+        // arrows are pressure, not an execution: a token bucket caps sustained arrow DPS
+        damage = Math.min(damage * (d.mission?.threat?.arrow ?? 1), this.arrowBudget);
+        this.arrowBudget -= damage;
+        if (damage <= 0.01) return;
+      }
       const stagger = kind === "bolt" ? 0.7 : 0.12;
+      this.lastDragonHitT = this.time;
       const died = this.player.damageDragon(damage);
       d.bus.emit("player-damaged", { amount: damage, dirX: sx, dirZ: sz, source: kind });
       d.audio.playerHurt();
@@ -792,7 +864,9 @@ export class MissionScene {
       () => this.rng.range(0, 1)
     );
     const spawn = new Vector3(land.x, 0, land.z);
-    this.groundReinforceTimer = 3; // first squad shortly after the fallen overlay
+    // the rider crawls out of the wreck at full strength: dragon death already cost the run its air power
+    this.player.healRider(1);
+    this.groundReinforceTimer = 8; // first squad shortly after the fallen overlay
     const factory = new SoldierFactory(this.scene);
     const figure = factory.createRiderFigure(this.deps.rider);
     for (const m of figure.root.getChildMeshes()) {
@@ -1168,9 +1242,11 @@ export class MissionScene {
       const t = obj.targetType;
       if (t === "ballista") {
         for (const b of this.enemies.ballistae) if (!b.dead) worlds.push(b.pos.add(new Vector3(0, 3, 0)));
-      } else if (t && t !== "any" && t !== "soldier") {
+      } else if (t) {
+        // "soldier"/"any" objectives mark every matching foot soldier too — the last
+        // stragglers of a "burn 8" count must be findable (eval: stuck at 7/8 for 100 s)
         for (const so of this.enemies.soldiers) {
-          if (so.state !== "dead" && !so.aboard && so.def.id === t) worlds.push(so.pos.add(new Vector3(0, 2.5, 0)));
+          if (so.state !== "dead" && !so.aboard && killTargetMatches(t, so.def.id)) worlds.push(so.pos.add(new Vector3(0, 2.5, 0)));
         }
       }
     } else if (obj.targetTag && obj.targetTag !== "any" && obj.targetTag !== "relic-building") {
@@ -1178,9 +1254,11 @@ export class MissionScene {
         if (!b.collapsed && b.tag === obj.targetTag) worlds.push(b.pos.add(new Vector3(0, b.size.h ?? 10, 0)));
       }
     }
+    // with only a few targets left, mark them at any distance (no "plainly visible" cut)
+    const few = worlds.length <= 3;
     return worlds
       .map((w) => ({ w, d: Math.hypot(w.x - me.x, w.z - me.z) }))
-      .filter((e) => e.d > 70 && e.d < 600)
+      .filter((e) => (few ? e.d > 12 : e.d > 70 && e.d < 600))
       .sort((a, b) => a.d - b.d)
       .slice(0, 8)
       .map((e) => this.projectToScreen(e.w))

@@ -1,4 +1,4 @@
-import { Color3, PointLight, Scene, Vector3 } from "@babylonjs/core";
+import { Color3, Color4, PointLight, Scene, Vector3 } from "@babylonjs/core";
 import type { PlayerState } from "../player/PlayerState";
 import type { DragonController } from "../player/DragonController";
 import type { DragonRig } from "../world/DragonRig";
@@ -22,6 +22,10 @@ export class FireSystem {
   private firePs: ParticleSystem;
   private emberPs: ParticleSystem;
   private smokePs: ParticleSystem;
+  private corePs: ParticleSystem;
+  private impactPs: ParticleSystem;
+  /** terrain height for the ground-impact splash (set by MissionScene) */
+  heightAt: ((x: number, z: number) => number) | null = null;
   private light: PointLight;
   private flicker = 0;
   private queryTimer = 0;
@@ -43,9 +47,16 @@ export class FireSystem {
     private effects: EffectsLibrary,
     private bus: EventBus<GameEvents>
   ) {
-    this.firePs = effects.createFireStream("fireStream", player.dragonDef.fireColor);
+    this.firePs = effects.createBreath("fireStream", player.dragonDef.fireColor);
+    this.corePs = effects.createBreathCore("fireCore", player.dragonDef.fireColor);
+    this.impactPs = effects.createBreathImpact("fireImpact", player.dragonDef.fireColor);
     this.emberPs = effects.createEmbers("fireEmbers");
     this.smokePs = effects.createSmokeColumn("fireSmoke");
+    // breath smoke sits right behind the flame on screen: the building-fire
+    // column's near-black read as a hole in the fire. Lighter, thinner, rising.
+    this.smokePs.color1 = new Color4(0.42, 0.38, 0.34, 0.22);
+    this.smokePs.color2 = new Color4(0.5, 0.47, 0.43, 0.16);
+    this.smokePs.colorDead = new Color4(0.55, 0.53, 0.5, 0);
     this.light = new PointLight("fireLight", new Vector3(0, 0, 0), scene);
     this.light.diffuse = Color3.FromHexString(player.dragonDef.fireColor);
     this.light.intensity = 0;
@@ -112,35 +123,74 @@ export class FireSystem {
     const u = up.scale(spread * 0.6);
     this.firePs.direction1 = dir.subtract(s).subtract(u);
     this.firePs.direction2 = dir.add(s).add(u);
-    this.firePs.minEmitPower = range * 0.5;
-    this.firePs.maxEmitPower = range * 0.95;
-    this.firePs.emitRate = 380 * particleScale;
+    // particles are world-space: add the dragon's own speed so the breath
+    // reaches its range instead of bunching on the jaws in level flight
+    const carry = Math.max(0, this.ctrl.speed);
+    this.firePs.minEmitPower = range * 1.1 + carry;
+    this.firePs.maxEmitPower = range * 1.6 + carry;
+    this.firePs.emitRate = 300 * particleScale;
     if (!this.firePs.isStarted()) this.firePs.start();
+
+    // white-hot jet at the jaws
+    (this.corePs.emitter as Vector3).copyFrom(origin);
+    const cs = side.scale(0.06);
+    this.corePs.direction1 = dir.subtract(cs);
+    this.corePs.direction2 = dir.add(cs);
+    this.corePs.minEmitPower = range * 0.6 + carry;
+    this.corePs.maxEmitPower = range * 0.8 + carry;
+    this.corePs.emitRate = 140 * particleScale;
+    if (!this.corePs.isStarted()) this.corePs.start();
+
+    // ground splash where the breath reaches terrain within range
+    const hit = this.groundHit(origin, dir, range);
+    if (hit) {
+      (this.impactPs.emitter as Vector3).copyFrom(hit);
+      this.impactPs.emitRate = 110 * particleScale;
+      if (!this.impactPs.isStarted()) this.impactPs.start();
+    } else {
+      this.impactPs.emitRate = 0;
+    }
 
     const mid = origin.add(dir.scale(range * 0.55));
     (this.emberPs.emitter as Vector3).copyFrom(mid);
     this.emberPs.emitRate = 120 * particleScale;
     if (!this.emberPs.isStarted()) this.emberPs.start();
 
-    const end = origin.add(dir.scale(range * 0.8));
+    const end = hit ?? origin.add(dir.scale(range * 0.8));
     (this.smokePs.emitter as Vector3).copyFrom(end);
-    this.smokePs.emitRate = 26 * particleScale;
+    this.smokePs.emitRate = 12 * particleScale;
     if (!this.smokePs.isStarted()) this.smokePs.start();
 
     this.light.position.copyFrom(origin.add(dir.scale(3)));
     this.flicker += 0.37;
-    this.light.intensity = 1.6 + Math.sin(this.flicker) * 0.5 + Math.random() * 0.3;
+    this.light.intensity = 2.4 + Math.sin(this.flicker) * 0.6 + Math.random() * 0.4;
     this.light.range = Math.max(40, range);
+  }
+
+  /** first point along the breath that dips below the terrain (coarse march) */
+  private groundHit(origin: Vector3, dir: Vector3, range: number): Vector3 | null {
+    if (!this.heightAt || dir.y > -0.05) return null;
+    const steps = 24;
+    for (let i = 1; i <= steps; i++) {
+      const p = origin.add(dir.scale((range * i) / steps));
+      const gy = this.heightAt(p.x, p.z);
+      if (p.y <= gy + 0.5) return new Vector3(p.x, gy + 0.3, p.z);
+    }
+    return null;
   }
 
   private setVisual(rate: number, particleScale: number): void {
     this.firePs.emitRate = rate * particleScale;
+    this.corePs.emitRate = rate * 0.6 * particleScale;
+    this.impactPs.emitRate = 0;
     this.emberPs.emitRate = rate * 0.4 * particleScale;
     this.smokePs.emitRate = rate * 0.15 * particleScale;
     if (rate === 0) {
       this.light.intensity = Math.max(0, this.light.intensity - 0.4);
       if (this.light.intensity < 0.12) {
         this.firePs.stop();
+        this.corePs.stop();
+        this.impactPs.stop();
         this.emberPs.stop();
         this.smokePs.stop();
       }
@@ -149,6 +199,8 @@ export class FireSystem {
 
   dispose(): void {
     this.firePs.dispose();
+    this.corePs.dispose();
+    this.impactPs.dispose();
     this.emberPs.dispose();
     this.smokePs.dispose();
     this.light.dispose();

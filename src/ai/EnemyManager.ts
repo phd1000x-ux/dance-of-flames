@@ -138,6 +138,13 @@ export function ballisticDir(origin: Vector3, target: Vector3, speed: number, gr
   return new Vector3(dirH.x * cos, Math.sin(elev), dirH.z * cos);
 }
 
+/** balance pass 7 (measured): bolts were 85-90% of all dragon damage, the ground phase barely scratched the rider */
+export const ARROW_VS_DRAGON = 1.15;
+export const GROUND_ARCHER_RANGE = 52;
+/** horizontal metres inside which a ballista cannot fire at the dragon */
+export const BALLISTA_DEAD_ZONE = 26;
+export const GROUND_MELEE_MULT = 1.0;
+
 /** coordinated volley plan: 2-3 ballistae firing inside a 0.6s window */
 export function planVolley(aliveCount: number, rng: { range: (a: number, b: number) => number }): { count: number; window: number } {
   if (aliveCount < 2) return { count: 0, window: 0.6 };
@@ -260,13 +267,26 @@ export class EnemyManager {
   applyFireDamage(origin: Vector3, dir: Vector3, range: number, halfAngle: number, dps: number, dt: number): number {
     let hits = 0;
     const cosCone = Math.cos(halfAngle + 0.06);
+    const cosConeBig = Math.cos(halfAngle + 0.14); // ballistae are large frames
+    // Breath washes down and spreads under a low-hovering dragon: anything
+    // nearly beneath the jaws (and in front-ish of them) is engulfed even when
+    // the cone itself points over it. Fixes 0-kill hovers directly above targets.
+    const underWash = (p: Vector3, extra: number): boolean => {
+      const dy = origin.y - p.y;
+      if (dy < 0 || dy > Math.min(36, range * 0.6)) return false;
+      const dx = p.x - origin.x, dz = p.z - origin.z;
+      const r = 6 + extra + dy * 0.35;
+      if (dx * dx + dz * dz > r * r) return false;
+      const fwd = dx * dir.x + dz * dir.z;
+      return fwd > -3; // not behind the head
+    };
     for (const s of this.soldiers) {
       if (s.state === "dead") continue;
       const v = s.pos.add(new Vector3(0, 1.2, 0)).subtract(origin);
       const dist = v.length();
       if (dist > range + 2) continue;
       const cosA = Vector3.Dot(v.scale(1 / Math.max(0.001, dist)), dir);
-      if (cosA > cosCone || dist < 6) {
+      if (cosA > cosCone || dist < 6 || underWash(s.pos, 1.2)) {
         const falloff = 1 - 0.35 * (dist / range);
         this.damageSoldier(s, dps * Math.max(0.4, falloff) * dt, true);
         if ((s.state as SoldierState) !== "dead" && this.rng.chance(dt * 1.4)) {
@@ -284,7 +304,7 @@ export class EnemyManager {
       const dist = v.length();
       if (dist > range + 3) continue;
       const cosA = Vector3.Dot(v.scale(1 / Math.max(0.001, dist)), dir);
-      if (cosA > cosCone) {
+      if (cosA > cosConeBig || underWash(b.pos, 1.5)) {
         this.damageBallista(b, dps * dt, true);
         hits++;
       }
@@ -613,7 +633,7 @@ export class EnemyManager {
             this.moveForward(s, s.def.moveSpeed, dt);
             return;
           }
-          if (dist < 46 && s.cooldown <= 0) {
+          if (dist < GROUND_ARCHER_RANGE && s.cooldown <= 0) {
             s.cooldown = s.def.attackCooldown / this.difficulty.aggression;
             this.fireArrow(s, targetPos.add(new Vector3(0, 1, 0)), s.def.damage, 0.12);
           }
@@ -629,7 +649,8 @@ export class EnemyManager {
           const aimPoint = targetPos
             .add(lead)
             .add(new Vector3((Math.random() - 0.5) * aimError, (Math.random() - 0.5) * aimError * 0.6 + 2, (Math.random() - 0.5) * aimError));
-          this.fireArrow(s, aimPoint, s.def.damage, 0.05);
+          // arrows are the steady pressure between scorpion shots, not decoration
+          this.fireArrow(s, aimPoint, s.def.damage * ARROW_VS_DRAGON, 0.05);
         } else {
           s.state = "alert";
         }
@@ -705,7 +726,7 @@ export class EnemyManager {
           s.cooldown = s.def.attackCooldown / this.difficulty.aggression;
           const fromDir = Vector3.Normalize(ctx.riderPos.subtract(s.pos));
           if (dist < s.def.range + 1.2) {
-            this.onMeleeHitRider?.(s.def.damage * this.difficulty.enemyDamage, fromDir.x, fromDir.z);
+            this.onMeleeHitRider?.(s.def.damage * this.difficulty.enemyDamage * GROUND_MELEE_MULT, fromDir.x, fromDir.z);
           }
         }
       }
@@ -774,7 +795,10 @@ export class EnemyManager {
     if (b.cooldown > 0 && b.cooldown < warn) {
       b.railMat.emissiveColor = new Color3(glow * 0.9, glow * 0.35, 0);
     }
-    if (b.cooldown <= 0 && aimOk && dist < b.def.range) {
+    // dead zone: a scorpion cannot crank onto a dragon right on top of it —
+    // closing in is the counterplay (eval 4: point-blank bolt chains)
+    const tooClose = ctx.playerMode === "dragon" && Math.hypot(toT.x, toT.z) < BALLISTA_DEAD_ZONE;
+    if (b.cooldown <= 0 && aimOk && dist < b.def.range && !tooClose) {
       b.cooldown = b.def.attackCooldown / this.difficulty.aggression;
       b.state = "reload";
       b.railMat.emissiveColor = Color3.Black();

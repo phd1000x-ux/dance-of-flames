@@ -20,7 +20,7 @@ export interface PostConfig {
  * tier 0/1 add vignette + high-threshold bloom.
  * Tone mapping is off at every tier: ACES lifted midtones into bright fog and
  * hid distant dark detail (smoke columns, rocks, structures) — visual QA
- * finding on dragonstone; scenes are lit for the untonemapped look.
+ * finding on cinderhold; scenes are lit for the untonemapped look.
  */
 export function postConfigForTier(tier: QualityTier, enabled: boolean): PostConfig {
   if (!enabled) return { fxaa: false, imageProcessing: false, toneMapping: false, vignette: false, bloom: false };
